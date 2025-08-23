@@ -1,0 +1,351 @@
+To: dexmation@mit.edu
+Subject: on schemas (Evolution of the Pinkdex)
+From: Karl Ramm <kcr@1ts.org>
+--text follows this line--
+(Some of you may be surprised to be receiving this, but I figured you as
+interested or relevantly opinionated; feel free to remove yourself from
+dexmation@mit.edu if you really don't care.)
+
+I had a passing conversation with kevinr after the meeting riday night where
+I commented that once we have a dexmaster replacement sufficient for
+day-to-day needs, we (I, really, but..) can slap together a basic schema
+that lets us import the basic pinkdex and get unique book ids and figure
+out clever stuff later, and he said something like "You know how difficult
+database schema upgrades can be, right?" and I said "Yes" and then he went
+on the dinner mob.
+
+This left me feeling like I should explain myself more fully.  In this
+particular instance, we can easily control 99% of the client installs that
+would be dependent on the schema; and given that n is about 3, that's
+probably sufficient. :-) So here is a long discontinuous ramble about
+database schemas.  See if you can spot where I went off for two hours of
+grappling.
+
+For the rest of this document a "book" is a platonic object represented by
+a line of the pinkdex, an "edition" is a specific subset of the objects
+represented by book with common text, publisher, form factor, errors, cover
+art, and most importantly ISBN, and a "volume" is a concrete instantiation
+of the above abstract concepts.  I would use "title" for "book" and "book"
+for "volume" except, well, you'll see.  Also, this assumes a recent version
+of Postgres, for reasons which will become clear.
+
+Let's start with a close representation of the pinkdex plus an accession
+date:
+
+create table book (
+       book_id serial primary key,
+       author text not null,
+       title text not null,
+       series text not null default '',
+       shelfcodes text not null, -- set to '' for lost titles
+       accession timestamp with time zone default current_timestamp not null
+);
+
+This would represent author, title, and series as | separated strings,
+which is clearly bonkers in this context. So:
+
+create table book_author (
+       book_id integer references book,
+       sortkey integer not null default 0,
+       author text not null
+);
+
+(etc. for book_title and book_series)
+
+Actually, book_series should look more like:
+
+create table book_series (
+       book_id integer not null references book,
+       sortkey integer not null default 0,
+       visible boolean not null default FALSE, -- series visible from spine (@)
+       numbered boolean not null default FALSE, -- number visible frome spine (#)
+       series text not null
+);
+
+Since we really want to unpack the @ and # flags into their own columns.
+(Actually, more on that later.)
+
+Also, instead of book.shelfcodes, let's have a volumes table:
+create table volume (
+       volume_id serial primary key,
+       book_id integer references book,
+       visible not null default False, -- @ on a shelfcode
+       shelfcode text not null,
+       barcode text unique not null
+);  
+
+And here we get a field for our per-volume barcodes.  (Actually, there
+should probably be a separate barcodes table that can refer back to, say,
+members or control codes or something, but that's for later.)
+
+This can obviously be elaborated on, but I want to step back a moment, and
+talk about logging and ids (this is where we start getting particularly
+postgres specific; there are ways you could do this sort of thing in other
+databases, and their similarity varies considerably;  I think the leve of
+lock-in is acceptable given the current shape of the database market and
+the expected lifetime of this schema.)
+
+First of all, I want the unique ids (book_id and volume_id so far, but I'm
+obviously going to want to break out things like authors as their own "first
+class" objects) to come out of the same namespace to simplify logging.
+Logging, you ask?  Well, consider the following:
+
+create table log (
+       generation bigserial primary key,
+       id integer not null, -- references entity id
+       stamp timestamp with time zone default current_timestamp not null,
+       username varchar(64) default current_user not null,
+       ip inet default inet_client_addr(),
+       relid oid not null, -- the table that we changed in postgresese
+       change text not null
+);
+
+And the following database trigger function and setup:
+
+create function log_function() returns trigger as $$
+    GD['TD'] = dict(TD)
+    if 'log_plan' not in SD:
+        SD['log_plan'] = plpy.prepare("INSERT INTO LOG (id, relid, change) VALUES ($1,$2,$3)",
+                                      ['int4', 'oid', 'text'])
+    plpy.execute(SD['log_plan'], [TD['old']['book_id'], TD['relid'], repr(TD)])
+    return 'OK'
+$$ language plpython3u;
+create trigger log_trigger before insert or update or delete on book
+       for each row execute procedure log_function();
+
+This will log every change to the book table.
+
+I would accomplish the common id namespace with postgres's table inheritance:
+
+create table entity (
+       id serial primary key,
+       comment text -- because every "first class object" should have a comment field
+);
+
+create table book (
+       accession timestamp with time zone default current_timestamp not null
+) inherits (entity);
+
+(and change 'book_id' back to 'id' in log_function and the referring
+columns names) Note that the book table is now kind of small because
+everything in it has moved into other tables.
+
+Postgres's access control allows us to make the log table insert-only for
+pretty much everyone. We can use the generation number to keep track of
+whether we've stashed the current version of the database or an
+update-to-date version of the log.  Postgres bigserials are good for 2^63
+positive serial numbers, which I will assert will be sufficient for the
+foreseeable lifetime of this software.
+
+Ending the digression, here are some further elaborations on the data
+model.  Clearly, authors deserve a life of their own, so let's give them
+their own table with no pesky book associations:
+
+create table author (
+       fullname text not null,
+       aka integer references author(id)
+) inherits (entity);
+
+create table book_author(
+       id integer not null references book,
+       sortkey integer default 0 not null,
+       author_id integer not null references author(id)
+);
+
+The aka field lets us handle pen names, maiden names, etc.
+
+Titles (representing the same material), obviously can be found in multiple
+books:
+
+create table title (
+       title text not null,
+       sortas text -- the stuff after the =
+) inherits (entity);
+
+create table book_title (
+       id integer not null references book,
+       sortas integer default 0 not null,
+       title_id integer not null references title(id)
+);
+
+Pretty straightforward.  These might also have an aka field or a versionof
+field, but I'll leave those for later in this document, for reasons that
+will become clear.  Now, at this point, the series information starts
+looking like it most naturally attaches to a title:
+
+create table series (
+       series text not null,
+);
+
+create table title_series (
+       id integer not null references title,
+       index text not null default '', -- 1 or 2,3  or 1B or whatever
+       sortkey integer not null default 0,
+       series_id integer not null references series(id)
+);
+
+This seems like it will begin to handle the omnibus problem, if you, say,
+make book_title.sortkey < 0 mean "contains but does not display" or
+something like, but it's still sort of clunky.  It doesn't account for
+original-to-the-book connecting material that you might find in omnibuses,
+and it doesn't really represent what's actually going on.  (This may be an
+unfinished thought that doesn't actually solve much.)
+
+(Warning, we are getting baroque now.)
+
+My next thought is that we have a catalog of books.  Books have single
+(sets of) titles, and a reasonably well-defined set of authors/editors.  Books are
+containers for stories.  Stories have at least one title (Even if it's
+"Untitle Story #2", and at least one author.  Most books have one story in
+them, with story title and authorship congruent with the book.  Stories are
+in series, not books.  (Except... wait..)
+
+-- let's regress a bit
+create table book_title (
+       id integer not null references book,
+       title text not null,
+       sortas integer default 0 not null,
+);
+
+create table story (
+       versionof references story(id)
+) inherits (entity);
+
+create table story_title (
+       id integer not null references story;
+       title text not null
+);
+
+create table story_author (
+       id integer not null references story;
+       sortkey integer not null default 0,
+       author_id integer not null references author(id)
+);
+
+create table story_series (
+       id integer not null references title,    
+       series text not null,
+       index text not null default '',
+       sortkey integer not null default 0,
+);
+
+create table book_story (
+       id integer not null references book,
+       story_id integer not null references story(id);
+       start_page integer,
+       end_page integer
+);
+
+I liked this idea for a while.  However, after I'd considered it for a
+while, I don't think it's of primary use.  For one thing, books are in
+series.  For another, there's an enormous duplication of data.
+
+So.  My current proposal is to keep the story infrastructure, so that we
+can perhaps someday keep indexes of our anthologies and collections, but
+for now only use it for significant short stories (that, for instance, we'd
+want to mention in the seriesdex), and add
+
+create table book_contains (
+       id integer not null references book,
+       contains integer not null references book(id)
+); 
+
+to indicate that a book wholly contains the contents of another book.
+
+All that being said, our approach to individual volumes deserves a little
+bit of elaboration.  The extremely attentive reader will notice that I
+mentioned the concept of an "edition"; the attentive reader who is familiar
+with the pinkdex format will note that I never completely handled the @ and
+# series flags (series visible on spine, series numbered on spine).  
+So, I'd like to formally introduce the concept of an "edition", as well as
+an amendment to volume, and a quick introduction of "shelfcode" and
+"format":
+
+create table shelfcode (
+       code text not null,
+       description text not null
+) inherits (entity);
+
+insert into shelfcode (code, description) values ('H', 'Circulating Hardcover');
+insert into shelfcode (code, description) values ('C/P', 'Circulating Paperback');
+-- &c;
+
+create table format (
+       fcode text not null,
+       description text not null
+) inherits (entity);
+
+insert into format (fcode, description) values ('P', 'Paperback');
+insert into format (fcode, description) values ('H', 'Hardcover');
+insert into format (fcode, description) values ('L', 'Ambiguous Large Book');
+insert into format (fcode, description) values ('LP', 'Large Paperback');
+-- &c;
+
+create table edition (
+       book_id integer not null references book(id),
+       concrete boolean default FALSE not null,
+       series_id integer references series(id),
+       series_numbered boolean default FALSE not null,
+       series_visible boolean default FALSE not null,
+       format_id references format(id),
+       shelfcode_id references shelfcode(id),
+       double text, -- double index number crap
+       isbn text,
+       upc text
+) inherits (entity);
+
+create table volume (
+       edition_id integer not null references edition(id),
+       shelfcode_id integer not null references shelfcode(id),
+       barcode text
+);
+
+Okay, that was a lot.  The shelfcode table is self-explanatory; it
+describes generally where a book lives in the library.   (The shelf sorting
+rules and some data about how much each actual shelf-unit holds would give
+the user a much better guess.)  Format is "what sort of object is this";
+things like 'L' are because we don't actually know whether a volume in the
+H shelfcode is an actual hardcover, or a circulating large paperback.  (I
+suspect there are other ambiguities as well.)
+
+An edition is an abstract description of a particular specimen of book.  I
+*hope* that only books identical between the covers (except possible for
+"nth printing" data) have the same isbn.  (There's a UPC field there
+because it will speed up processing of some older books that don't yet have
+our barcode on the outside.)  Other interesting notes are this is where we
+find the # and @ flags from the old series field (and a link to the
+relevant series) and that this is where we stash the index number from
+doubles.  (There's no reason to leave it conflated with the shelfcode in
+the New World Order).  The concrete boolean is to indicate whether the
+record represents a sort of book that we've gathered data on, or an
+unexamined import from the datadex.
+
+A volume is a an obvious elaboration on an edition, for all that what it
+represents is the main thrust of the Library.
+
+I'm not actually convinced that inheriting from entity is the right way to
+handle a common id namespace.   Another option is to use postgress
+sequences more explicitly:
+
+create sequence id_seq;
+
+create sometable (
+       id bigint default nextval('id_seq') not null primary key,
+       ...
+);
+
+This means that the id field in the log entry can't have a constraint to
+restrict it to valid ids, but that also means that we can't delete things
+that are referenced in the logs, which means we can't delete things; your
+typos would live forever!  However, the id field in the log is more so we
+can present historical data to the end user more than anything else, so
+this might not be a big loss.
+
+This is in no way intended to be complete or finished, but more a
+chart of the current direction of my thinking.  I almost hope that I or
+someone else will come up with a better, simplifying ideas.
+
+I hope you have either not been bored too much by this extended musing, or
+have found it useful as a sleep aid.
+--
+kcr (Dalek, Dalek, Dalek, Dalek, That's a bloody lot of Daleks)

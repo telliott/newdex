@@ -1,0 +1,331 @@
+\documentclass[12pt]{article}
+\usepackage[normalem]{ulem}
+\setlength{\textheight}{9.5in}
+\setlength{\topmargin}{-1in}
+
+\setlength{\textwidth}{6.5in}
+\setlength{\oddsidemargin}{0.0in}
+\setlength{\evensidemargin}{0.0in}
+
+\newcommand{\TODO}[1]{\textbf{TODO: } \emph{#1}}
+
+\newenvironment{tightlist}%
+{\begin{list}{$\bullet$}{%
+    \setlength{\topsep}{0in}
+    \setlength{\partopsep}{0in}
+    \setlength{\itemsep}{0in}
+    \setlength{\parsep}{0em}
+    \setlength{\leftmargin}{1.5em}
+    \setlength{\rightmargin}{0in}
+    \setlength{\itemindent}{0in}
+}
+}%
+{ \end{list} }
+
+\begin{document}
+
+\begin{center} \def\baselinestretch{1.25}
+\huge
+The Sacred and Solemn Rites of the \\
+GREENDEX\\
+\vfil
+\Large
+Being a description of the  \\
+Operation of the Digital \\ 
+Checkout System of the Library. \\
+\vfil
+\normalsize
+\today
+\end{center}
+
+\thispagestyle{empty}
+
+\newpage
+
+\addtocounter{page}{-1}
+
+\section{Getting Started}
+
+Connect to Athena somehow (psi-phi, the computer on the Other Desk, may be
+useful in this respect), and run \texttt{athrun mitsfs greendex} to start
+Greendex.
+
+You should be looking at a screen that looks like:
+
+\begin{verbatim}
+This is greendex 1.1
+
+Main Menu
+
+S. Select Patron/Member
+I. Check In Books by Author or Barcode
+N. New Patron
+D. Display Book
+A. Book Drop/Fancy Check In
+Q. Quit
+selection: 
+\end{verbatim}
+
+If you're not looking at such a screen (or if you later encounter
+difficulties with Greendex that you cannot overcome otherwise), contact
+OokComm (\texttt{ookcomm@mit.edu}) and the Star Chamber
+(\texttt{star-chamber@mit.edu}) for help.  If you aren't able to resolve
+the issue in a sufficiently timely manner, use the paper log
+book\footnote{I'm not sure this exists, and it really should.}
+located with the Money Book and Keyholder Notes to record any
+transactions that occur while you're unable to use the Greendex.
+
+As should be obvious, typing the first character of a line selects that
+option.
+
+If you have any bug reports or feature requests please contact
+(\texttt{ookcomm@mit.edu})
+
+\section{Overview}
+
+The Greendex's menus form a maze of twisty passages, some alike.
+Fortunately, most menus will allow you to return to the Main Menu in a
+single keystroke.
+
+The Start Menu contains all of the options available when no patron is
+selected.  The menus not directly linked to from there require a patron
+to be selected, and navigating from one of those menus to another will
+retain that patron as selected.
+
+These Rites do not exhaustively list all options provided in the menus,
+but rather focus on providing information that may not be apparent
+from the interface itself.
+
+\section{General Information}
+
+Control-C will cancel the current operation.
+
+A single \texttt{?} on a line by itself is a prompt to type the number
+of an option provided on the lines preceding.  (This may not always be
+obvious when there's only a single option provided.)  If you don't want
+to select any of the provided options, use Control-C to cancel.
+
+When revisiting a menu, you can use the up and down arrow to cycle
+through previously-made selections.
+
+\section{Start Menu}
+
+As mentioned earlier, this menu contains the options available when
+no patron is selected.  This is also the menu from which you can quit the
+application.
+
+\section{New Patron}
+
+This option creates a new patron.
+
+Of particular note is the ``Nickname'' field, which permits an
+additional name to be associated with the patron.  When selecting a patron
+(see below), any nicknames will be included in the search.\footnote{Additional
+nicknames can be added from the \texttt{Edit Patron and Membership} menu
+under the \texttt{Main Menu}.}
+
+It's important that the email field is valid.
+
+While you don't have to enter an ID number into Greendex, you should
+still check the patron's information against a photo ID.
+
+You should have the patron fill out a membership and transfer it when
+they are reading the rules. Have them sign it and file it away with
+the other old sheets.
+
+\section{Select Patron/Member}
+
+Selecting a patron performs a search on patron names, and provides a
+list of matches to select from.  Each set of letters separated by spaces
+will be treated as a substring to search for, in order -- ``hin hrog''
+will match to ``Phineas Phrogg'' or, for that matter, to ``Wendy
+Shinthroge''.
+
+Once you have selected a patron, you arrive at the \texttt{Main Menu}.
+
+\section{Main Menu}
+
+The \texttt{Main Menu} is the central navigation point in Greendex's menus, and
+provides access to the bulk of the available functions.
+
+At the top of this menu, there is a line of information provided
+about that patron:
+
+\begin{verbatim}
+Member:  Phineas Phrogg <phrogg@mit.edu> $0.00
+Membership: Year Expires: 2016-07-19
+\end{verbatim}
+
+The dollar value is their current balance with MITSFS -- if they owe
+fines, it's negative; if they have credit, it's positive.
+
+To renew a patron's membership, use the \texttt{E. Edit Patron and
+  Membership} option -- do \textbf{not} use the \texttt{Membership} option
+under \texttt{Financial Transactions}.
+
+The \texttt{Unselect Patron} option will return you to the \texttt{Start
+  Menu}.
+
+
+\section{Checking Books In And Out}
+
+\sout{Check for a barcode. If there isn't one on checkout, add one and scan
+it.}  \emph{We're not using barcodes just yet.}
+
+Searches for author and title are both start-of-field searches.
+``Heinl'' matches ``Heinlein, Robert A.'', but ``Robert'' does not.  Tab
+completion is supported as well.
+
+Remember that a leading ``The '', ``A '', and ``An '' is put at the end of
+the title field in PinkDex, so ``A Dance'' does \emph{not} match ``Dance
+With Dragons, A''.
+
+If you enter partial information, Greendex will do its best to find books
+matching the prefixes you gave it, and give you a list to select from.  If
+you get something that is unambiguous, it will go ahead and select it for
+you\footnote{For instance, author
+  ``\texttt{Z}'', title ``\texttt{NEV}'' uniquely identifies a pretty
+  good book!}.
+
+Greendex will automatically levy fines for overdue books that are
+returned.
+
+The Winter Time Warp is handled automatically by Greendex.  However, the
+details of the Time Warp do not currently appear in the interface.
+
+\subsection{Declare Books Lost}
+
+Just select the book the patron has lost; an appropriate fine will be
+assessed.  It will continue to appear on their checked out book list, but
+not count against their eight checked out books.  If they then find or
+replace it, just check it back in (if they replace it with a different
+format, write a note to that effect and leave it in the book, and leave the
+book on the Panthercomm shelf).
+
+\subsection{Fancy Checkin/Checkout}
+
+These options are used for checkins and checkouts that violate the
+normal rules, for example:
+\begin{tightlist}
+\item Checking out a reserve copy of a book\footnote{We'll assume you have
+  Skinnerial Authorization or a really good reason}.
+\item Manually specifying the checkin fine to be other than would
+  normally be assessed.
+\item Specifying the checkin/checkout date to be other than the current
+  date.
+\end{tightlist}
+
+The last above is particularly useful when checking in books in the
+bookdrop.
+
+Don't use these options for normal checkin or checkout.
+
+\section{Financial Transactions}
+
+All of the options in the \texttt{Financial Transactions} menu and its
+submenus generally do the same thing -- they add to or subtract money
+from the patron's balance.  In general, the different options are for
+the different categories of credits and fees.
+
+\texttt{Void Previous} selects an un-voided transaction to undo. It
+should always be selected to undo a transaction.
+
+Positive values are credits and added to the patron's balance; negative
+sums are fees and subtracted from the patron's balance.  \textbf{Note:}
+when crediting a patron with a positive dollar value, the UI will assert
+that you are ``Charging'' the patron the money -- do not be alarmed, they
+will actually end up with more money in their balance at the end of the
+operation.
+
+In general, \textbf{any actual transfer of money to or from the Library}
+should use the Payment or Reimbursement options -- those are different
+from the others in that they also are recorded against the Library's
+current cash.
+
+
+\section{View Patron}
+
+This menu displays assorted account information and has options for
+displaying the Checkout, Financial, and Membership histories of the
+patron.
+
+\section{Edit Patron and Membership}
+
+This is the menu to use to renew a patron's membership, as well as to
+update their account information.
+
+Additional entries can be added to the patron's Names field. The
+defaults are shown in most views.
+
+\section{Rites}
+
+These Rites are in \verb$/mit/mitsfs/rites/greendex.tex$ (also as .ps
+and .pdf), which as a Keyholder (or Prentice) you can read.  There
+should be hardcopy near the Keyholder Notes and Moneybook.
+
+
+\appendix
+\section{Menus}
+\begin{verbatim}
+
+Main Menu:
+S. Select Patron
+I. Check In Books
+N. New Patron
+D. Display Book
+A. Book Drop/Fancy Check In
+   B. Book Drop Check In
+   I. Fancy Check In
+   Q. Main Menu
+Q. Quit
+
+Patron Menu:
+O. Check Out Books by Author or Barcode
+I. Check In Books by Patron/Member
+L. Declare Books Lost
+V. View Patron
+   C. Check Out History
+   F. Financial History
+   M. Membership History
+   Q. Main Menu
+E. Edit Patron and Membership
+   M. New/Renew Membership
+   A. Add Info
+      N. Add Name
+      E. Add Email
+      A. Add Address
+      Q. Back to Edit Membership
+   R. Remove Info
+      N. Remove Name
+      E. Remove Email
+      A. Remove Address
+      Q. Back to Edit Membership
+   D. Set Default Info
+      N. Set Default Name
+      E. Set Default Email
+      A. Set Default Address
+      Q. Back to Edit Membership
+   Q. Main Menu
+F. Financial Transaction
+   D. Donation for Fine Credit
+   F. Asssess Fine
+   K. Asssess Keyfine
+   P. Payment
+   A. Advanced Transactions
+      L. LHE
+      M. Membership
+      O. Other
+      R. Reimbursement
+      V. Void Previous
+      Q. Back to Financial Transactions
+   Q. Back to Main Menu
+A. Advanced (Book Drop/Fancy Check In/Check Out)
+   B. Book Drop Check In
+   I. Fancy Check In
+   O. Fancy Check Out
+   Q. Main Menu
+Q. Unselect Member
+
+\end{verbatim}
+
+\end{document}

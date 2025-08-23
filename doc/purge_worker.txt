@@ -1,0 +1,13 @@
+* Initial the parts of the packet that you worked on.
+* Do not use black pen, there are red pens in the inventory drawer. Put
+  them back in the inventory drawer when you're done.
+* Mark clearly when a box begins and a box ends, drawing a line between them.
+* Write down what box you're in at the tops and bottoms of each page.
+* This is like inventory, circle M for books you can't find; if there's
+  more than one called for and you can't find all the one called for,
+  indicate down clearly how many were missing.  If you belive the book was
+  miscatalogued, circle the wavy lines and indicate what should change.  If
+  you wish to communicate anything for posterity that doesn't match the
+  above, WRITE IT CLEARLY AND WITHOUT ANY ASSUMPTIONS OF SHARED KNOWLEDGE.
+  Don't write mysterious, vague things on the sheet; we'll have to hunt you
+  down later and figure out what you meant.
