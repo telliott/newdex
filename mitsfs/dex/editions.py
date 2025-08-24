@@ -5,7 +5,7 @@ from mitsfs.dex import shelfcodes
 
 
 '''
-Useful exception for when a shelfcode doesn't parse'
+Useful exception for when a shelfcode doesn't parse
 '''
 
 
@@ -19,11 +19,17 @@ An edition is the association of a shelfcode with a book. It represents
 a concrete volume that the library owns, and may encompass multiple copies
 of that particular book.
 
-If there is metainformation beyong the shelfcode (such as for a box or a
-double) the it keeps that information as well.
+If there is metainformation beyond the shelfcode (such as for a box or a
+double) it keeps that information as well.
 
 It also contains information about series visibility, though I have a
 suspicion that this may be vestigial.
+
+Editions contain the following fields:
+    * series_visible
+    * shelfcode - the shelfcode that belongs to this edition
+    * double_info - any extra information for the code (for doubles, etc)
+    * count - the number of copies of this edition
 '''
 
 
@@ -123,6 +129,8 @@ in the collection.
 They're keyed on the shelfcode for easy lookup, though the shelfcode is also
 in the edition object. We also don't track the counts at this level. If you
 need a count, grab it from the edition itself.
+
+Implemented as a normal dictionary of shelfcode: Edition.
 '''
 
 
@@ -134,7 +142,7 @@ class Editions(dict):
         * Another editions object - copy it all to this one (as a deep copy)
         * A dictionary of shelfcodes and counts - create sparse editions (be
             careful using this one, as it may be lossy if you need doubles)
-        * A dexstring of shelfcodes (e.g. 'L:2,S,SR-L') it will parse each
+        * A dexstring of shelfcodes (e.g. 'L:2,S,SR-L'). It will parse each
             type into an edition.
     '''
 
@@ -163,9 +171,14 @@ class Editions(dict):
             raise InvalidShelfcode('Bad input to editions', s)
 
     '''
-    Helper method to give you a joinable list of editions
+    Helper method to give you a joinable list of editions.
 
-    @return: list of editions in dex format ('L:2', 'D400' etc)
+    For now, I've made the editorial decision to leave out the double info
+    from the generic export. This might be wrong, but is pretty easy to put
+    back. If you want the full shelfcode string, use the str representation
+    from the Edition directly.
+
+    @return: list of editions in dex format ('L:2', 'D' etc)
     '''
 
     def list(self):
@@ -243,7 +256,7 @@ class Editions(dict):
     starting object. Uses a deep copy, so leaves the original Editions
     object intact
 
-    @return: Editions object
+    @return: Editions object with inverted counts
     '''
 
     def __neg__(self):
