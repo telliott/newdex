@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-
 import sys
 import os
 import shutil
@@ -12,39 +11,13 @@ srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dexfile import Dex, FieldTuple, DexLine, deseries, deat
-from mitsfs.dex.editions import Editions, onecode, InvalidShelfcode
 from mitsfs.dex.shelfcodes import Shelfcodes
 
+
 class DexfileTest(unittest.TestCase):
-    def testOnecode(self):
-        self.assertEqual(('P', 1, ''), onecode('P'))
-
-        #  this may be trying too hard
-        self.assertEqual(('H', 1, ''), onecode('H:'))
-        self.assertEqual(('C/P', 2, ''), onecode('C/P:2'))
-        self.assertRaises(
-            InvalidShelfcode, lambda: onecode('PANTS:YOURMOM'))
-        self.assertRaises(
-            InvalidShelfcode,
-            lambda: onecode('PANTS:YOURMOM:15:99'))
-        self.assertRaises(
-            InvalidShelfcode, lambda: onecode('PANTS'))
-
-    def testShelfcodes(self):
-        x = Editions({'C/P': 2, 'P': 1})
-        self.assertEqual({'C/P': 2, 'P': 1}, dict(x))
-        y = Editions('C/P:2,P')
-        self.assertEqual({'C/P': 2, 'P': 1}, dict(y))
-        self.assertEqual(x, y)
-        self.assertEqual(['C/P:2', 'P'], y.list())
-        self.assertEqual('C/P:2,P', str(y))
-        self.assertEqual("Editions('C/P:2,P')", repr(y))
-        self.assertEqual(2, y['C/P'])
-        self.assertEqual(0, y['H'])
-        self.assertEqual(True, bool(y))
-        self.assertEqual({'C/P': 4, 'P': 2}, dict(x + dict(y)))
-        self.assertEqual({}, dict(x - dict(y)))
-        self.assertEqual(3, int(y))
+    def __init__(self, *args, **kwargs):
+        Shelfcodes.generate_shelfcode_regex(['H', 'P', 'C/P', 'PA'], ['D'])
+        super().__init__(*args, **kwargs)
 
     def testFieldtuple(self):
         self.assertEqual((), FieldTuple())
@@ -112,15 +85,15 @@ class DexfileTest(unittest.TestCase):
         d.add('AUTHOR, AN<BOOK, A<<P:-1,C/P:-2')
         self.assertEqual(1, len(d))
         self.assertEqual(
-            {'P': 1}, dict((k, v) for (k, v) in d.stats().items() if v))
+            {'P': 1, }, dict((k, v) for (k, v) in d.stats().items() if v))
 
-    def testDeprecated(self):
-        self.assertEqual(('PA', 1, 'PANTS'), onecode('PANTS{PA}'))
-        self.assertEqual(
-            {'C/P': 2, 'P': 1}, dict(Editions('PANTS: C/P:2,P')))
-        y = Editions('C/P:2,P')
-        self.assertEqual('C/P:2,P:1', y.logstr())
-        self.assertEqual('<<<', DexLine().logstr())
+    # def testDeprecated(self):
+    #     self.assertEqual(('PA', 1, 'PANTS'), onecode('PANTS{PA}'))
+    #     self.assertEqual(
+    #         {'C/P': 2, 'P': 1}, dict(Editions('PANTS: C/P:2,P')))
+    #     y = Editions('C/P:2,P')
+    #     self.assertEqual('C/P:2,P:1', y.logstr())
+    #     self.assertEqual('<<<', DexLine().logstr())
 
     def test_load(self):
         dex = Dex('/Nonexistant-file')

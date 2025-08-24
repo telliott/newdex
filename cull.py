@@ -38,7 +38,7 @@ def main():
         if not shelfcode or shelfcode.strip().lower() == 'q':
             break
 
-        code = shelfcodes.get_from_code(shelfcode)
+        code = shelfcodes[shelfcode].code
         if not code:
             print('Unknown shelfcode')
             continue
@@ -52,23 +52,22 @@ def main():
             ' natural join shelfcode where not withdrawn '
             'and shelfcode = %s group by title_id having count(*) > 1',
             (shelfcode,))
-        
+
         books = [Title(d, x) for (x, _) in c.fetchall()]
         books.sort(key=lambda line: (line.placeauthor, line.placetitle))
         for (title) in books:
             print(title)
-    
+
             try:
                 mstr = read(
                     'How many culled? ', history='count').strip()
-                if mstr == '' or mstr == '0':
+                if mstr in ('','0'):
                     continue
-                else:
-                    missing = int(mstr)
+                missing = int(mstr)
             except (ValueError, KeyboardInterrupt):
                 print('?')
                 continue
-    
+
             print("removing 1")
 
             if missing >= 0:

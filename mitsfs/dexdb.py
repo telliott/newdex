@@ -5,7 +5,6 @@ code for manipulating pinkdexen stored in postgres databases
 
 '''
 
-
 import collections
 import datetime
 import difflib
@@ -13,6 +12,7 @@ import itertools
 import os
 import re
 import warnings
+import copy
 
 import psycopg2
 
@@ -24,7 +24,7 @@ from mitsfs import lock_file
 from mitsfs import membership
 from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
-from mitsfs.dex.editions import Editions, InvalidShelfcode, splitcode
+from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 
 # if we ever switch away from postgres, we may need to export a different
 # exception type as DataError
@@ -90,7 +90,7 @@ class Series(db.Entry):
 
     def __iter__(self):
         # sort this properly 'cus it's convenient
-        c = self.db.getcursor()     
+        c = self.db.getcursor()
         c.execute(
             'select title_id' +
             ' from title' +
@@ -104,7 +104,7 @@ class Series(db.Entry):
             (self.id,))
         if c.rowcount == 0:
             return []
-        
+
         return [Title(self.db, x[0]) for x in c.fetchall()]
 
 
@@ -126,10 +126,10 @@ class Shelfcode(db.Entry):
                 shelfcode_id = shelfcode_result[0]
             except ValueError:
                 raise KeyError('No such shelfcode')
-        
+
         super(Shelfcode, self).__init__(
             'shelfcode', 'shelfcode_id', db, shelfcode_id)
- 
+
     name = db.StaticField('shelfcode')
     description = db.StaticField('shelfcode_description')
     type = db.StaticField('shelfcode_type')
@@ -175,7 +175,7 @@ class Book(db.Entry):
 
     comment = db.Field('book_comment')
 
-    #would love to replace this with the shelfcode class, but haven't 
+    #would love to replace this with the shelfcode class, but haven't
     #figured out how to get it in here.
     shelfcode = db.Field(
         'shelfcode_id', coercer=Shelfcode,
@@ -628,19 +628,21 @@ class CodeIndex(object):
     def __init__(self, dex):
         self.dex = dex
 
-    # def iterkeys(self):
-    #     c = self.dex.getcursor()
-    #     return (
-    #         code + (doublecrap or '')
-    #         for code, doublecrap
-    #         in c.execute(
-    #             'select distinct shelfcode, doublecrap'
-    #             ' from book natural join shelfcode'))
+    def iterkeys(self):
+        c = self.dex.getcursor()
+        return (
+            code + (doublecrap or '')
+            for code, doublecrap
+            in c.execute(
+                'select distinct shelfcode, doublecrap'
+                ' from book natural join shelfcode'))
 
     def __getitem__(self, key):
         c = self.dex.getcursor()
         try:
-            at, code, doublecrap = splitcode(key)
+            e = Edition(key)
+            code = e.code
+            doublecrap = e.double_info
         except InvalidShelfcode:
             code, doublecrap = key, None
         # sort this properly 'cus we sort of need it
@@ -723,7 +725,7 @@ class DexDB(db.Database):
     #             '|'.join(reversed(sorted(dcodes))) +
     #             r')([-A-Z]?[\d.]+))$'
     #             )
-        
+
     def xsearch(self, ops, conjunction='and'):
         fields = {
             'title': (
@@ -1422,57 +1424,58 @@ class DexDB(db.Database):
         DOES NOT COMMIT'''
         if c is None:
             c = self.cursor
-        series, code, doublecrap = splitcode(shelfcode)
+        e = Edition(shelfcode)
         c.execute(
             "insert into book"
             " (title_id, book_series_visible,"
             "  shelfcode_id, doublecrap, review, book_comment)"
             " values (%s, %s, %s, %s, %s, %s)",
             (
-                title_id, series,
-                self.shelfcodes[code].shelfcode_id, doublecrap, review, comment),
+                title_id, 't' if e.series_visible else 'f',
+                self.shelfcodes[e.shelfcode].shelfcode_id, e.double_info,
+                review, comment),
             )
         return self.lastseq()
 
-    def add(self, l, review=False, lost=False, c=None, comment=None):
+    def add(self, line, review=False, lost=False, c=None, comment=None):
         if c is None:
             c = self.cursor
-        victim = self.get(l)
+        victim = self.get(line)
         if victim:
-            codes = l.codes
-            removed = Editions(
-                (code, -count)
-                for (code, count) in codes.items()
-                if count < 0)
-            added = Editions(
-                (code, count)
-                for (code, count) in codes.items()
-                if count > 0)
+            codes = line.codes
+            removed = {}
+            added = {}
+
+            for edition in codes.values():
+                if edition.count < 0:
+                    new_edition = copy.deepcopy(edition)
+                    new_edition.count = 0 - new_edition.count
+                    removed[edition.shelfcode] = new_edition
+                elif edition.count > 0:
+                    added[edition.shelfcode] = edition
+
             if removed:
                 if added and (len(added) > 1 or int(added) != int(removed)):
                     raise Ambiguity('Please try a simpler operation for now.')
-                count = int(removed)
+                count = len(removed)
 
                 q = 'update book set'
                 a = []
 
                 if added:
-                    series_visible, destcode, todoublecrap = (
-                        splitcode(list(added.keys())[0]))
+                    edition = added(list(added.keys())[0])
                     q += (' shelfcode_id=%s, doublecrap=%s,'
                           ' book_series_visible=%s')
                     a += [
-                        self.shelfcodes[destcode].shelfcode_id,
-                        todoublecrap or None,
-                        series_visible]
+                        self.shelfcodes[edition.code].shelfcode_id,
+                        edition.double_info or None,
+                        't' if edition.series_visible else 'f']
                 else:
                     q += ' withdrawn=true'
 
                 q += ' where book_id in ('
 
-                for (i, (code, count)) in enumerate(removed.items()):
-                    series_visible, fromcode, fromdoublecrap = (
-                        splitcode(code))
+                for (i, edition) in enumerate(removed.values()):
                     if i:
                         q += ' union '
                     q += ("(select book_id"
@@ -1483,11 +1486,12 @@ class DexDB(db.Database):
                           "  title_id=%s and"
                           "  shelfcode=%s and"
                           "  book_series_visible=%s")
-                    a += [victim.title_id, fromcode, series_visible]
+                    a += [victim.title_id, edition.shelfcode,
+                          edition.series_visible]
 
-                    if fromdoublecrap:
+                    if edition.double_info:
                         q += ' and doublecrap=%s'
-                        a += [fromdoublecrap]
+                        a += [edition.double_info]
                     else:
                         q += ' and doublecrap is null'
 
@@ -1496,27 +1500,30 @@ class DexDB(db.Database):
 
                 q += ')'
                 c.execute(q, a)
-                if lost and not (l.codes + victim.codes):
+                if lost and not (line.codes + victim.codes):
                     c.execute(
                         "update title"
                         " set title_lost=true"
                         " where title_id=%s",
                         (victim.title_id,))
             else:  # added
-                for (code, count) in added.items():
-                    for i in range(0, count):
+                for edition in added.values():
+                    for i in range(0, edition.count):
                         self.newbook(
-                            victim.title_id, code, review, c=c,
+                            victim.title_id, edition.shelfcode, review, c=c,
                             comment=comment)
         else:
             victim = self.newtitle(
-                [('=' if eq else '?', name) for (eq, name) in uneq(l.authors)],
-                [('=' if eq else 'T', name) for (eq, name) in uneq(l.titles)],
-                [munge_series(i) for i in l.series])
-            for (code, count) in l.codes.items():
-                for i in range(0, count):
+                [('=' if eq else '?', name) for (eq, name)
+                 in uneq(line.authors)],
+                [('=' if eq else 'T', name) for (eq, name)
+                 in uneq(line.titles)],
+                [munge_series(i) for i in line.series])
+            for edition in line.codes.values():
+                for i in range(0, edition.count):
                     self.newbook(
-                        victim.title_id, code, review, c=c, comment=comment)
+                        victim.title_id, edition.shelfcode, review, 
+                        c=c, comment=comment)
         self.db.commit()
 
     def merge(self, d):
@@ -1833,7 +1840,7 @@ class Title(dexfile.DexLine, db.Entry):
             '  checkin_stamp is null and'
             '  title_id = %s',
             (self.id,))
-        
+
         return c.fetchone()[0] > 0
 
     created = db.ReadField('title_created')

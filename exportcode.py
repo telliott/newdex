@@ -5,6 +5,7 @@ import csv
 
 from mitsfs.dexdb import DexDB
 
+
 def main():
     _, code = sys.argv
     dumpcode(code)

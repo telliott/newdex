@@ -16,7 +16,7 @@ from mitsfs.dexdb import DexDB, Title
 from mitsfs.inventory import Inventory, InventoryUnknown
 from mitsfs.tex import TEXBASE, texquote
 from mitsfs.dexfile import Dex, DexLine
-from mitsfs.dex.editions import splitcode
+from mitsfs.dex.editions import Edition, InvalidShelfcode
 
 __version__ = '0'
 
@@ -126,22 +126,18 @@ def nicetitle(line):
 def book(line):
     if noboxed:
         unboxed = [
-            (code, count)
-            for (code, count) in line.codes.items()
-            if DexDB.codes[splitcode(code)[1]].get('box')
-                not in ('all', 'kbx')]
+            edition
+            for edition in line.codes.values()
+            if DexDB.codes[edition.shelfcode].get('box') not in ('all', 'kbx')]
         nboxed = [
-            (code, count)
-            for (code, count) in line.codes.items()
-            if DexDB.codes[splitcode(code)[1]].get('box') == 'all']
+            edition
+            for edition in line.codes.values()
+            if DexDB.codes[edition.shelfcode].get('box') == 'all']
         if unboxed:
-            codes = ','.join((
-                count == 1 and code or r'%s\:%d' % (code, count)
-                for (code, count) in unboxed))
+            codes = ','.join((str(edition) for edition in unboxed))
         elif nboxed:
-            codes = r'\[' + ','.join((
-                count == 1 and code or r'%s\:%d' % (code, count)
-                for (code, count) in nboxed)) + r'\]'
+            codes = r'\[' + ','.join((str(edition)
+                                      for edition in nboxed)) + r'\]'
         else:
             codes = '*'
     else:
@@ -176,9 +172,18 @@ def mungedex(query=None, args=[], add=None):
     print('constructing subset:')
     print(query) 
     dl = list(progress_meter(d.iter(query, args)))
-    dl = [DexLine(i) for i in progress_meter(dl)]
+    lines = []
+    
+    for i in progress_meter(dl):
+        try:
+            lines.append(DexLine(i))
+        except InvalidShelfcode as e:
+            print(str(e) + '-' + str(i.title_id))
+            continue
+        
+    #dl = [DexLine(i) for i in progress_meter(dl)]
     if add:
-        dex = Dex(dl)
+        dex = Dex(dl)            
         print('adding %s...' % add)
         sys.stdout.flush()
         dex.merge(Dex(add))
@@ -235,7 +240,10 @@ def writetext(
     fp = open(outfile, 'w')
     
     for line in books:
-        fp.write(str(line) + "\n")
+        try:
+            fp.write(str(line) + "\n")
+        except InvalidShelfcode:
+            continue
     fp.close()
     print('done.')
     
@@ -301,9 +309,9 @@ def writedex(
             else:
                 # bleah
                 count = sum([
-                    line.codes[i]
+                    line.codes[i].count
                     for i in line.codes
-                    if splitcode(i)[2] == str(kbx)])
+                    if i.shelfcode == str(kbx)])
             if inventory:
                 inventory.add(line, count)
 
@@ -334,14 +342,14 @@ if (not inventory) or options.shelfcodes:
         shelfqueries = []
         shelfargs = []
         for code in options.shelfcodes:
-            at, shelfcode, doublecrap = splitcode(code)
+            edition = Edition(code)
             q = 'shelfcode = %s'
-            shelfargs.append(shelfcode)
-            if at:
+            shelfargs.append(edition.shelfcode)
+            if edition.series_visible:
                 q += ' and book_series_visible'
-            if doublecrap:
+            if edition.double_info:
                 q += ' and doublecrap=%s'
-                shelfargs.append(doublecrap)
+                shelfargs.append(edition.double_info)
             shelfqueries.append('(' + q + ')')
         query += ' and (' + ' or '.join(shelfqueries) + ') '
         args += shelfargs

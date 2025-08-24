@@ -12,12 +12,12 @@ from mitsfs import utils
 from io import open
 from functools import total_ordering
 
-from mitsfs.dex.editions import splitcode, Editions
+from mitsfs.dex.editions import Edition, Editions
 
 __all__ = [
-    'DexLine', 'Dex', 
-    'FieldTuple','placefilter',
-#    'Shelfcodes', 'onecode', 'pragma_validate_shelfcode'
+    'DexLine', 'Dex',
+    'FieldTuple', 'placefilter',
+    # 'Shelfcodes', 'onecode', 'pragma_validate_shelfcode'
     ]
 
 
@@ -173,6 +173,7 @@ def placefilter(s):
     s = s.replace(')', '>')
     return s
 
+
 @total_ordering
 class DexLine(object):
     fieldtypes = (
@@ -216,7 +217,10 @@ class DexLine(object):
         if series is not None:
             self.series = FieldTuple(series)
         if codes is not None:
-            self.codes = Editions(codes)
+            if isinstance(codes, Editions):
+                self.codes = codes
+            else:
+                self.codes = Editions(codes)
 
     def __str__(self):
         return '<'.join([
@@ -260,16 +264,15 @@ class DexLine(object):
     VSRE = re.compile(r' #([-.,\d]+B?)$')
 
     def shelfkey(self, shelfcode):
-        book_series_visible, barecode, doublecrap = splitcode(shelfcode)
+        edition = Edition(shelfcode)
 
-        if doublecrap:
-            key = [doublecrap, self.placeauthor]
+        if edition.double_info:
+            key = [edition.double_info, self.placeauthor]
         else:
             key = [self.placeauthor]
         if self.series:
-            series_visible = (
-                bool(book_series_visible) or
-                self.series[0][0] == '@')
+            series_visible = (edition.series_visible
+                              or self.series[0][0] == '@')
             if series_visible:
                 key += [self.placeseries]
                 m = self.VSRE.search(self.series[0])
@@ -355,13 +358,13 @@ class Dex(object):
             line = DexLine(line)
         k = line.key()
         if k not in self.dict:
-            if sum(i for i in line.codes.values() if i > 0) or self.zerok:
+            if not self.zerok:
+                for edition in list(line.codes.values()):
+                    if edition.count < 1:
+                        del line.codes[edition.shelfcode]
+            if line.codes or self.zerok:
                 self.dict[k] = line
                 self.list.append(line)
-                if not self.zerok:
-                    for (code, count) in line.codes.items():
-                        if count < 0:
-                            line.codes[code] = 0
                 for field, index in self.indices.items():
                     for i in getattr(line, field):
                         f = self.indexfilt.get(field)
@@ -371,12 +374,9 @@ class Dex(object):
         else:
             o = self.dict[line.key()]
             assert line is not o, 'Attempted merge of DexLine already in dex'
-            old = set([deat(code) for code in o.codes])
-            o.codes = Editions([
-                (code, count)
-                for (code, count) in (o.codes + line.codes).items()
-                if (self.zerok or count > 0)])
-            new = set([deat(code) for code in o.codes])
+            old = set(o.codes.keys())
+            o.codes = o.codes + line.codes
+            new = set(o.codes.keys())
             # fix up index
             for i in new - old:
                 # shelfcodes we weren't in before
@@ -465,13 +465,12 @@ class Dex(object):
 
     def stats(self):
         d = {}
-        for l in self:
-            for incode, value in l.codes.items():
-                at, code, double = splitcode(incode)
-                if code not in d:
-                    d[code] = value
+        for line in self:
+            for incode, edition in line.codes.items():
+                if edition.shelfcode not in d:
+                    d[edition.shelfcode] = edition.count
                 else:
-                    d[code] += value
+                    d[edition.shelfcode] += edition.count
         return d
 
     def titlesearch(self, frag):

@@ -21,15 +21,14 @@ import termios
 import traceback
 import pprint
 
+from mitsfs.error import handle_exception
+from mitsfs.barcode import validate_barcode
+
 try:
     import ctypes
     we_get_ctypes = True
 except ImportError:
     we_get_ctypes = False
-
-from mitsfs import barcode
-from mitsfs import error
-from mitsfs import utils
 
 
 __all__ = [
@@ -40,7 +39,6 @@ __all__ = [
     'readaddress', 'Color', 'termwidth', 'len_color_str',
     'pfill', 'lfill', 'smul', 'rmul', 'bold', 'sgr0', 'termheight',
     ]
-
 
 
 class CompleteAdapter(object):
@@ -68,10 +66,10 @@ class CompleteAdapter(object):
             self.log.error('%s', exc)
 
 
-#This is the way to do tab completion on a mac. If we lose it on Athena, 
-#revert to the other line.
+# This is the way to do tab completion on a mac. If we lose it on Athena,
+# revert to the other line.
 readline.parse_and_bind('bind ^I rl_complete')
-#readline.parse_and_bind("tab: complete")
+# readline.parse_and_bind("tab: complete")
 readline.set_completer_delims('@|')
 
 
@@ -232,7 +230,7 @@ def readbarcode():
         in_barcode = read(prompt, history="barcode").strip()
         if not in_barcode:
             return None
-        if barcode.validate_barcode(in_barcode):
+        if validate_barcode(in_barcode):
             return in_barcode
         else:
             print("Invalid Barcode")
@@ -616,7 +614,7 @@ def menu(menu_in, line='', once=False, cleanup=None, title=None):
         except EOFError:
             return False
         except Exception:
-            error.handle_exception(
+            handle_exception(
                 locals().get('choice', (None, 'Unknown Context'))[1],
                 sys.exc_info())
             if once:
@@ -713,6 +711,8 @@ def lfill(l):
 
 def pfill(s):
     lfill(s.split())
+
+
 '''
 class HISTORY_STATE(ctypes.Structure):
     _fields_ = [
@@ -726,8 +726,8 @@ class HISTORY_STATE(ctypes.Structure):
             # int size;             # Number of slots allocated to this array.
             ('flags', ctypes.c_int),
             # int flags;
-            ] 
-    
+            ]
+
 HISTORY_STATE_p = ctypes.POINTER(HISTORY_STATE)
 
 readline.history_get_history_state.restype = HISTORY_STATE_p

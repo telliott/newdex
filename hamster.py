@@ -7,13 +7,14 @@ import re
 import itertools
 import smtplib
 
-from mitsfs.ui import banner, menu, specify, specify_book, specify_member, tabulate, read, readlines, readyes
+from mitsfs.ui import banner, menu, specify, specify_book
+from mitsfs.ui import specify_member, tabulate, read, readlines, readyes
 from mitsfs.dexdb import DexDB, DataError
 from mitsfs.constants import DATABASE_DSN, DEXBASE
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.membership import star_dissociated, role_members, star_cttes
-from mitsfs.dex.editions import InvalidShelfcode, splitcode
-from mitsfs.dex.editions import Editions
+from mitsfs.dex.editions import InvalidShelfcode
+from mitsfs.dex.editions import Editions, Edition
 
 __release__ = '2'
 
@@ -183,7 +184,7 @@ def editcodes(line):
             # the new state of things
             newcodes = book.codes + codes
             # only check the codes we're increasing
-            basecodes = [splitcode(c)[1] for c in codes if codes[c] > 0]
+            basecodes = [c.code for c in codes if c.count > 0]
             hassleset = {dex.shelfcodes[c].hassle for c in basecodes}
             hassleset = {x for x in hassleset if x}
             # count up the books
@@ -205,8 +206,8 @@ def editcodes(line):
 
 def changecodes(book, codes):
     new_deprecated = {
-        code: count for (code, count) in codes.items()
-        if dex.shelfcodes[code].type == 'D' and count > 0}
+        code: edition.count for (code, edition) in codes.items()
+        if dex.shelfcodes[code].type == 'D' and edition.count > 0}
 
     if new_deprecated:
         print('Change would result in addition to deprecated codes')
@@ -218,7 +219,8 @@ def changecodes(book, codes):
     both = oldcodes + codes
     lost = False
 
-    negs = [(code, count) for (code, count) in both.items() if count < 0]
+    negs = [(code, edition.count) for (code, edition) in both.items()
+            if edition.count < 0]
     if negs:
         print('Change would result in', Editions(negs), '(%s)' % both)
         print('(not doing it)')
@@ -535,13 +537,12 @@ def grep(pattern):
         print('While querying', e)
 
 
-    
 def validate_shelfcode(code):
     if not code.strip():
         return True
     try:
-        at, code, double = splitcode(code)
-        if at:
+        e = Edition(code)
+        if e.series_visible:
             print('No @s')
             return False
     except InvalidShelfcode:
@@ -552,7 +553,7 @@ def validate_shelfcode(code):
 def arc(line):
     sourcecode = readvalidate(
         'Source code: ',
-        #dex.indices.codes.iterkeys,
+        # dex.indices.codes.iterkeys,
         dex.shelfcodes.keys,
         validate=[validate_shelfcode],
         history='codes').upper()

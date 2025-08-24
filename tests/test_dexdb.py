@@ -2,16 +2,16 @@ import unittest
 import os
 import sys
 
+from test_setup import Case
+
 testdir = os.path.dirname(__file__)
 srcdir = '../'
-
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-
-from test_setup import Case
 from mitsfs.dexfile import DexLine, Dex
 from mitsfs.dexdb import DexDB
 from mitsfs.dex.shelfcodes import Shelfcodes
+
 
 
 class DexDBTest(Case):
@@ -76,6 +76,7 @@ class DexDBTest(Case):
             self.assertEqual(1, int(d['F<G<H<'].codes))
         finally:
             d.db.close()
+
 
 if __name__ == '__main__':
     unittest.main()
