@@ -10,6 +10,8 @@ import datetime
 from mitsfs import db
 from mitsfs import dexdb
 from mitsfs import ui
+from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
+
 
 __all__ = [
     'Member', 'MemberEmail', 'MemberName', 'MemberAddress', 'Membership',
@@ -21,6 +23,7 @@ __all__ = [
 # these really should be in the database somewhere
 MAXDAYSOUT = 21
 MAX_BOOKS = 8
+
 
 
 class Member(db.Entry):
@@ -42,7 +45,7 @@ class Member(db.Entry):
     modified_with = db.ReadField('member_modified_with')
 
     role = db.Field('rolname')
-    pseudo = db.Field('member_pseudo', coercer=lambda db, x: bool(x))
+    pseudo = db.Field('member_pseudo', coerce_boolean)
 
     @property
     def name(self):
@@ -610,7 +613,7 @@ class MemberEmail(db.EntryDeletable):
         super(MemberEmail, self).__init__(
             'member_email', 'member_email_id', db, member_email_id, **kw)
 
-    member_email_id = db.StaticField('member_email_id')
+    member_email_id = db.ReadField('member_email_id')
     member_id = db.Field('member_id')
     member_email = db.Field('member_email')
 
@@ -623,7 +626,7 @@ class MemberName(db.EntryDeletable):
         super(MemberName, self).__init__(
             'member_name', 'member_name_id', db, member_name_id, **kw)
 
-    member_name_id = db.StaticField('member_name_id')
+    member_name_id = db.ReadField('member_name_id')
     member_id = db.Field('member_id')
     member_name = db.Field('member_name')
 
@@ -636,7 +639,7 @@ class MemberAddress(db.EntryDeletable):
         super(MemberAddress, self).__init__(
             'member_address', 'member_address_id', db, member_address_id, **kw)
 
-    member_address_id = db.StaticField('member_address_id')
+    member_address_id = db.ReadField('member_address_id')
     member_id = db.Field('member_id')
     member_address = db.Field('member_address')
     address_type = db.Field('address_type')
@@ -719,17 +722,17 @@ class Checkout(db.Entry):
         super(Checkout, self).__init__(
             'checkout', 'checkout_id', db, checkout_id, **kw)
 
-    checkout_id = db.StaticField('checkout_id')
-    checkout_stamp = db.StaticField(
-        'checkout_stamp', db.coerce_datetime)
-    book_id = db.StaticField('book_id')
-    checkout_user = db.StaticField('checkout_user')
+    checkout_id = db.ReadField('checkout_id')
+    checkout_stamp = db.ReadField(
+        'checkout_stamp', coerce_datetime_no_timezone)
+    book_id = db.ReadField('book_id')
+    checkout_user = db.ReadField('checkout_user')
 
-    checkin_user = db.StaticField('checkin_user')
-    checkin_stamp = db.StaticField('checkin_stamp', db.coerce_datetime)
+    checkin_user = db.ReadField('checkin_user')
+    checkin_stamp = db.ReadField('checkin_stamp',coerce_datetime_no_timezone)
 
     checkout_lost = db.ReadFieldUncached(
-        'checkout_lost', db.coerce_datetime)
+        'checkout_lost', coerce_datetime_no_timezone)
 
     @property
     def title(self):
@@ -769,7 +772,7 @@ class Checkout(db.Entry):
         if timewarp is None:
             return stamp
         
-        return db.coerce_datetime(None, timewarp)
+        return coerce_datetime_no_timezone(timewarp)
 
     @property
     def due(self):
@@ -821,7 +824,7 @@ class Checkout(db.Entry):
             'update checkout set checkout_lost=%s where checkout_id=%s',
             (when, self.id))
 
-        fine = -self.book.shelfcode.replacement_cost
+        fine = -self.book.shelfcode.cost
         self.member.fine_transaction(
             fine,
             'Lost book %s' % (self.book,),
@@ -1048,9 +1051,9 @@ class TimeWarp(db.Entry):
         super(TimeWarp, self).__init__(
             'timewarp', 'timewarp_id', db, timewarp_id, **kw)
 
-    timewarp_id = db.StaticField('timewarp_id')
-    start = db.Field('timewarp_start', db.coerce_datetime)
-    end = db.Field('timewarp_end', db.coerce_datetime)
+    timewarp_id = db.ReadField('timewarp_id')
+    start = db.Field('timewarp_start', coerce_datetime_no_timezone)
+    end = db.Field('timewarp_end', coerce_datetime_no_timezone)
 
     created = db.ReadField('timewarp_created')
     created_by = db.ReadField('timewarp_created_by')

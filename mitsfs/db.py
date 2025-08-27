@@ -12,22 +12,32 @@ import os
 import re
 
 import psycopg2
-import psycopg2.extensions
 
 
 __all__ = [
-    'Database', 'Field', 'ReadField', 'StaticField', 'ReadFieldUncached',
-    'Entry', 'cached', 'coerce_datetime', 'EntryDeletable',
+    'Database', 'Field', 'ReadField', 'ReadFieldUncached',
+    'Entry', 'cached', 'EntryDeletable',
+    # 'StaticField',
     ]
 
 
 class EasyCursor(psycopg2.extensions.cursor):
-    def hid(self):
+    '''
+    @return id of the object in hexadecimal. Useful for logging
+    '''
+
+    def cursor_id(self):
         i = id(self)
-        if i < 0:
-            return '%x' % (2**32 - i)
-        else:
-            return '%x' % i
+        return f'{2**32 - i:x}' if i < 0 else f'C: {i:x}'
+
+    '''
+    The core function that handles all the querying to the database
+
+    @param sql: the parameterized sql statement
+    @param args: args to be passed into the parameterized sql
+
+    @return: the cursor object
+    '''
 
     def execute(self, sql, args=None):
         log = logging.getLogger('mitsfs.sql')
@@ -35,25 +45,49 @@ class EasyCursor(psycopg2.extensions.cursor):
         try:
             psycopg2.extensions.cursor.execute(self, sql, args)
         except Exception as exc:
+            log.exception('%s: %s: %s',
+                          self.cursor_id(), exc.__class__.__name__, exc)
             try:
                 self.connection.rollback()
-            except:
+            except Exception as err:
+                log.exception('%s: %s: %s',
+                              self.cursor_id(), err.__class__.__name__, err)
                 pass
-            log.exception('%s: %s: %s', self.hid(), exc.__class__.__name__, exc)
             raise
-        log.debug('%s: %s rows: %d', self.hid(), self.statusmessage, self.rowcount)
+        log.debug('%s: %s rows: %d',
+                  self.cursor_id(), self.statusmessage, self.rowcount)
         return self
+
+    '''
+    Pass in a query and args that result in a single value
+
+    @param query: the sql query
+    @param args: the args to be passed into the query
+
+    @return: a single string value corresponding to the result of the query.
+    '''
 
     def selectvalue(self, sql, args=None):
         self.execute(sql, args)
         if self.rowcount == 0:
             return None
         return self.fetchone()[0]
-        
+
+    '''
+    Pass in a query and a list of args tuples, and executes the sql repeatedly
+    for each tuple provided
+
+    @param query: the sql query
+    @param args: a list of args tuples, each to be executed against the sql
+
+    @return: the cursor object
+    '''
+
     def executemany(self, sql, argsiter):
         for args in argsiter:
             self.execute(sql, args)
         return self
+
 
     def __nonzero__(self):
         return self.rowcount != 0
@@ -129,99 +163,58 @@ class ValidationError(Exception):
     pass
 
 
-class ReadFieldUncached(property):
-    def __init__(self, fieldname, coercer=None):
-        self.field = fieldname
-        self.coercer = coercer
-        super(ReadFieldUncached, self).__init__(self.get, self.set)
+'''Raised when we are unable to locate an item in the database'''
 
-    def get(self, obj):
-        command = 'select %s from %s where %s = %%s' \
-            % (self.field, obj.table, obj.idfield)
-        
-        c = obj.cursor.execute(command, (obj.id,))
-        if c.rowcount == 0:
-            return None
-        
-        val = c.fetchone()[0]      
-        if self.coercer is not None:
-            val = self.coercer(obj.db, val)
-        return val
-
-    def set(self, obj, val):
-        raise AssertionError('Readonly property %s:%s' % (
-            repr(obj), self.field))
+class NotFoundException(Exception):
+    pass
 
 
-class StaticField(ReadFieldUncached):
-    def get(self, obj):
-        if self.field in obj.cache:
-            return obj.cache[self.field]
-        command = 'select %s from %s where %s = %%s' \
-            % (self.field, obj.table, obj.idfield)
-        c = obj.cursor.execute(command, (obj.id,))
-        if c.rowcount == 0:
-            return None
-        
-        val = c.fetchone()[0]      
-        
-        if self.coercer is not None:
-            val = self.coercer(obj.db, val)
-        obj.cache[self.field] = val
-        return val
+'''
+These three classes allow reading a single field from the db in a generic 
+fashion. They are used in the membership section of the code.
+
+Field enables full getting and setting of the field.
+ReadFieldUncached prohibits setting. it is used once, for the checkout_lost
+ReadField is the most common. Does a read (no write) but wraps it in a cache.
 
 
-class ReadField(ReadFieldUncached):
-    def get(self, obj):
-        if self.field in obj.cache:
-            return obj.cache[self.field]
-        c = obj.cursor.execute(
-            'select "%s" from %s where %s = %%s' %
-            (self.field, obj.table, obj.idfield),
-            (obj.id,))
-        
-        if c.rowcount == 0:
-            return None
-        
-        val = c.fetchone()[0]      
-        
-        if self.coercer is not None:
-            val = self.coercer(obj.db, val)
-        obj.cache[self.field] = val
-        return val
+'''
 
-
-def cached(f):
-    @functools.wraps(f)
-    def wrapper(self, *args, **kw):
-        if f.__name__ in self.cache:
-            return self.cache[f.__name__]
-        val = f(self, *args, **kw)
-        self.cache[f.__name__] = val
-        return val
-    return wrapper
-
-
-class Field(ReadField):
+class Field(property):
     def __init__(
             self, fieldname, coercer=None, validator=None,
-            filter=lambda d, s: s.strip() if hasattr(s, 'strip') else s
+            prep_for_write=None
             ):
-        self.filter = filter
+        self.field = fieldname
+        self.prep_for_write = prep_for_write
         self.validator = validator
-        super(Field, self).__init__(fieldname, coercer=coercer)
+        self.coercer = coercer
+        super().__init__(self.get, self.set)
+
+    def get(self, obj):
+        command = 'select %s from %s where %s = %%s' \
+            % (self.field, obj.table, obj.idfield)
+        val = obj.cursor.selectvalue(command, (obj.id,))
+
+        if self.coercer is not None:
+            val = self.coercer(val, obj.db)
+        return val
 
     def set(self, obj, val):
-        if self.filter:
-            val = self.filter(obj.db, val)
+        if self.prep_for_write:
+            print("1: " + str(val))
+            val = self.prep_for_write(val, obj.db)
+            print("2: " + str(val))
         if self.validator and not self.validator(obj, val):
             raise ValidationError(
                 'Validation failed for %s.%s: %s' % (
                     obj.table, self.field, repr(val)))
-        if self.coercer is not None:
-            obj.cache[self.field] = self.coercer(obj.db, val)
-        else:
-            obj.cache[self.field] = val
+        if hasattr(val, 'strip'):
+            val = val.strip()
+        if self.prep_for_write is None and self.coercer is not None:
+            val = self.coercer(val, obj.db)
+
+        obj.cache[self.field] = val
         if not obj.new:
             obj.cursor.execute(
                 'update %s set %s = %%s where %s = %%s' %
@@ -231,7 +224,40 @@ class Field(ReadField):
             obj.db.db.commit()
 
 
+class ReadFieldUncached(Field):
+    def set(self, obj, val):
+        raise AssertionError('Readonly property %s:%s' % (
+            repr(obj), self.field))
+
+
+class ReadField(ReadFieldUncached):
+    def get(self, obj):
+        if self.field in obj.cache:
+            return obj.cache[self.field]
+        val = super().get(obj)
+        obj.cache[self.field] = val
+        return val
+
+
+'''
+This is pulled out for readability and to be clear what it is.
+
+Given an object and an attribute in the object, figure out if it has a field
+attribute in it (which defines the db column) and return the value.
+Lets you define the fields of a class by the objects above
+
+@param obj: the object being examined
+@param attribute name: the attribute name to be examined
+
+@return: the value of the field attribute (or None if there wasn't one)
+'''
+def get_field_name_if_has_field_attribute(obj, attribute_name):
+    attr = getattr(obj, attribute_name)
+    return getattr(attr, 'field', None)
+
+
 class Entry(object):
+
     def __init__(self, table, idfield, db, id_=None, **kw):
         self.db = db
         self.table = table
@@ -239,19 +265,32 @@ class Entry(object):
         self.cache_reset()
         self.id = id_
         self.cursor = None
-        self.docommit = True
+        self.docommit = True       
+        
+        # this is at the heart of the whole thing. 
+        # each subclass of this method has class (not instance) attributes
+        # that are objects with a set field attribute (presumably Field/
+        # ReadField/ReadFieldUncached). So it loops through all the attributes 
+        # of the object to grab them and put them in a field array with the
+        # name and the field value
+        me = self.__class__
+        
         self._fields = dict(
-            (pf, df)
-            for (pf, df)
-            in ((i, getattr(getattr(self.__class__, i), 'field', None))
-                for i in dir(self.__class__))
-            if df is not None)
+            (attribute_name, column_name)
+            for (attribute_name, column_name)
+            in ((attribute_name, 
+                 get_field_name_if_has_field_attribute(me, attribute_name))
+                for attribute_name in dir(me))
+            if column_name is not None)
+
         for (k, v) in kw.items():
             if k not in self._fields:
                 raise AssertionError(
-                    '%s is not a field of %s' % (k, self.__class__.__name__))
+                    '%s is not a field of %s' % (k, me.__name__))
             setattr(self, k, v)
 
+        
+        
     def cache_reset(self):
         self.cache_date = None
         self.cache = {}
@@ -307,7 +346,7 @@ class Entry(object):
                  self.idfield),
                 list(self.cache.values()))
             result = c.fetchone()
-            self.id = result[0] 
+            self.id = result[0]
         else:
             c = self.cursor.execute(
                 'insert into %s default values returning %s' %
@@ -343,9 +382,15 @@ class EntryDeletable(Entry):
 
         if commit:
             self.db.commit()
+            
 
+def cached(f):
+    @functools.wraps(f)
+    def wrapper(self, *args, **kw):
+        if f.__name__ in self.cache:
+            return self.cache[f.__name__]
+        val = f(self, *args, **kw)
+        self.cache[f.__name__] = val
+        return val
+    return wrapper
 
-def coerce_datetime(_, stamp):
-    if stamp is None:
-        return stamp
-    return stamp.replace(tzinfo=None)

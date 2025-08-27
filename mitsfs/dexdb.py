@@ -25,6 +25,7 @@ from mitsfs import membership
 from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
+from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
 
 # if we ever switch away from postgres, we may need to export a different
 # exception type as DataError
@@ -108,39 +109,39 @@ class Series(db.Entry):
         return [Title(self.db, x[0]) for x in c.fetchall()]
 
 
-class Shelfcode(db.Entry):
-    def __init__(self, db, selector):
-        if selector is None:
-            raise KeyError('There is no non-shelfcode [go find libcomm]')
-        try:
-            shelfcode_id = int(selector)
-        except ValueError:
-            shelfcode_id = None
-        if shelfcode_id is None:
-            try:
-                c = db.cursor.execute(
-                    'select shelfcode_id from shelfcode'
-                    ' where shelfcode=upper(%s)',
-                    (str(selector).strip(),))
-                shelfcode_result = c.fetchone()
-                shelfcode_id = shelfcode_result[0]
-            except ValueError:
-                raise KeyError('No such shelfcode')
+# class Shelfcode(db.Entry):
+#     def __init__(self, selector, db):
+#         if selector is None:
+#             raise KeyError('There is no non-shelfcode [go find libcomm]')
+#         try:
+#             shelfcode_id = int(selector)
+#         except ValueError:
+#             shelfcode_id = None
+#         if shelfcode_id is None:
+#             try:
+#                 c = db.cursor.execute(
+#                     'select shelfcode_id from shelfcode'
+#                     ' where shelfcode=upper(%s)',
+#                     (str(selector).strip(),))
+#                 shelfcode_result = c.fetchone()
+#                 shelfcode_id = shelfcode_result[0]
+#             except ValueError:
+#                 raise KeyError('No such shelfcode')
 
-        super(Shelfcode, self).__init__(
-            'shelfcode', 'shelfcode_id', db, shelfcode_id)
+#         super(Shelfcode, self).__init__(
+#             'shelfcode', 'shelfcode_id', db, shelfcode_id)
 
-    name = db.StaticField('shelfcode')
-    description = db.StaticField('shelfcode_description')
-    type = db.StaticField('shelfcode_type')
-    replacement_cost = db.StaticField('replacement_cost')
+#     name = db.ReadField('shelfcode')
+#     description = db.ReadField('shelfcode_description')
+#     type = db.ReadField('shelfcode_type')
+#     replacement_cost = db.ReadField('replacement_cost')
 
-    def __str__(self):
-        return self.name
+#     def __str__(self):
+#         return self.name
 
-    @staticmethod
-    def list(db):
-        return db.cursor.execute('select shelfcode from shelfcode')
+#     @staticmethod
+#     def list(db):
+#         return db.cursor.execute('select shelfcode from shelfcode')
 
 
 class Book(db.Entry):
@@ -175,11 +176,11 @@ class Book(db.Entry):
 
     comment = db.Field('book_comment')
 
-    #would love to replace this with the shelfcode class, but haven't
+    #would love to replace this with an Edition class, but haven't
     #figured out how to get it in here.
     shelfcode = db.Field(
-        'shelfcode_id', coercer=Shelfcode,
-        filter=lambda *args: int(Shelfcode(*args)))
+        'shelfcode_id', coercer=coerce_shelfcode, 
+        prep_for_write=uncoerce_shelfcode)
 
     @property
     def barcodes(self):
@@ -228,7 +229,7 @@ class Book(db.Entry):
 
     @property
     def circulating(self):
-        return self.shelfcode.type == 'C'
+        return self.shelfcode.code_type == 'C'
 
     def checkout(self, member, date=None):
         if date is None:
@@ -261,8 +262,6 @@ class Book(db.Entry):
             ]
 
     def __repr__(self):
-        print ("ID: %s\n" % type(self.title.title_id))
-        print ("BOOKID: %s\n" % type(self.book_id))
         return '#%d:%d %s' % (
             self.title.title_id[0], self.book_id[0], str(self))
 

@@ -117,18 +117,6 @@ class Shelfcodes(dict):
             ')$'
         )
 
-    '''
-    Some parts of the system need to do a lookup to get a shelfcode (they
-    are after the id, usually). But they are passing a function around
-    and calling that function with a db and the key. So this is a standard
-    get call, but taking a DB argument first (and throwing it away)
-    '''
-
-    def get_with_db_param(self, db, key):
-        if key in self:
-            return self[key]
-        raise
-
     def __repr__(self):
         return "\n".join(["%s => %s (%s)" %
                           (key,

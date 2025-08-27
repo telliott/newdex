@@ -1,5 +1,3 @@
-from mitsfs.dex.shelfcodes import Shelfcodes
-from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 import sys
 import os
 import unittest
@@ -7,6 +5,9 @@ import unittest
 testdir = os.path.dirname(__file__)
 srcdir = '../../../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
+
+from mitsfs.dex.shelfcodes import Shelfcodes
+from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 
 
 class EditionsTest(unittest.TestCase):
