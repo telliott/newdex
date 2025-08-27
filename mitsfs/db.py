@@ -88,7 +88,6 @@ class EasyCursor(psycopg2.extensions.cursor):
             self.execute(sql, args)
         return self
 
-
     def __nonzero__(self):
         return self.rowcount != 0
 
@@ -165,20 +164,20 @@ class ValidationError(Exception):
 
 '''Raised when we are unable to locate an item in the database'''
 
+
 class NotFoundException(Exception):
     pass
 
 
 '''
-These three classes allow reading a single field from the db in a generic 
+These three classes allow reading a single field from the db in a generic
 fashion. They are used in the membership section of the code.
 
 Field enables full getting and setting of the field.
 ReadFieldUncached prohibits setting. it is used once, for the checkout_lost
 ReadField is the most common. Does a read (no write) but wraps it in a cache.
-
-
 '''
+
 
 class Field(property):
     def __init__(
@@ -251,6 +250,8 @@ Lets you define the fields of a class by the objects above
 
 @return: the value of the field attribute (or None if there wasn't one)
 '''
+
+
 def get_field_name_if_has_field_attribute(obj, attribute_name):
     attr = getattr(obj, attribute_name)
     return getattr(attr, 'field', None)
@@ -265,20 +266,20 @@ class Entry(object):
         self.cache_reset()
         self.id = id_
         self.cursor = None
-        self.docommit = True       
-        
-        # this is at the heart of the whole thing. 
+        self.docommit = True
+
+        # this is at the heart of the whole thing.
         # each subclass of this method has class (not instance) attributes
         # that are objects with a set field attribute (presumably Field/
-        # ReadField/ReadFieldUncached). So it loops through all the attributes 
+        # ReadField/ReadFieldUncached). So it loops through all the attributes
         # of the object to grab them and put them in a field array with the
         # name and the field value
         me = self.__class__
-        
+
         self._fields = dict(
             (attribute_name, column_name)
             for (attribute_name, column_name)
-            in ((attribute_name, 
+            in ((attribute_name,
                  get_field_name_if_has_field_attribute(me, attribute_name))
                 for attribute_name in dir(me))
             if column_name is not None)
@@ -289,8 +290,6 @@ class Entry(object):
                     '%s is not a field of %s' % (k, me.__name__))
             setattr(self, k, v)
 
-        
-        
     def cache_reset(self):
         self.cache_date = None
         self.cache = {}
@@ -382,7 +381,7 @@ class EntryDeletable(Entry):
 
         if commit:
             self.db.commit()
-            
+
 
 def cached(f):
     @functools.wraps(f)
@@ -393,4 +392,3 @@ def cached(f):
         self.cache[f.__name__] = val
         return val
     return wrapper
-

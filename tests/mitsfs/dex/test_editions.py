@@ -84,6 +84,7 @@ class EditionsTest(unittest.TestCase):
         self.assertEqual(4, int(z))
         self.assertEqual(2, len(z.keys()))
 
+
 if __name__ == '__main__':
     Shelfcodes.generate_shelfcode_regex(['L', 'C/P', 'PA'], ['D'])
     unittest.main()

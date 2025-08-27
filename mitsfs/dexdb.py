@@ -5,7 +5,6 @@ code for manipulating pinkdexen stored in postgres databases
 
 '''
 
-import collections
 import datetime
 import difflib
 import itertools
@@ -41,8 +40,11 @@ __all__ = [
 
 # hacktackular!
 gensym_seed = itertools.count()
+
+
 def gensym():
     return ('G%04d' % next(gensym_seed))
+
 
 NOTERE = re.compile(r'(.*)\((.*)\)')
 
@@ -109,41 +111,6 @@ class Series(db.Entry):
         return [Title(self.db, x[0]) for x in c.fetchall()]
 
 
-# class Shelfcode(db.Entry):
-#     def __init__(self, selector, db):
-#         if selector is None:
-#             raise KeyError('There is no non-shelfcode [go find libcomm]')
-#         try:
-#             shelfcode_id = int(selector)
-#         except ValueError:
-#             shelfcode_id = None
-#         if shelfcode_id is None:
-#             try:
-#                 c = db.cursor.execute(
-#                     'select shelfcode_id from shelfcode'
-#                     ' where shelfcode=upper(%s)',
-#                     (str(selector).strip(),))
-#                 shelfcode_result = c.fetchone()
-#                 shelfcode_id = shelfcode_result[0]
-#             except ValueError:
-#                 raise KeyError('No such shelfcode')
-
-#         super(Shelfcode, self).__init__(
-#             'shelfcode', 'shelfcode_id', db, shelfcode_id)
-
-#     name = db.ReadField('shelfcode')
-#     description = db.ReadField('shelfcode_description')
-#     type = db.ReadField('shelfcode_type')
-#     replacement_cost = db.ReadField('replacement_cost')
-
-#     def __str__(self):
-#         return self.name
-
-#     @staticmethod
-#     def list(db):
-#         return db.cursor.execute('select shelfcode from shelfcode')
-
-
 class Book(db.Entry):
     def __init__(self, title, book_id):
         super(Book, self).__init__('book', 'book_id', title.dex, book_id)
@@ -176,10 +143,9 @@ class Book(db.Entry):
 
     comment = db.Field('book_comment')
 
-    #would love to replace this with an Edition class, but haven't
-    #figured out how to get it in here.
+    # Doing a little bit of hacking here to get a shelfcode object into place
     shelfcode = db.Field(
-        'shelfcode_id', coercer=coerce_shelfcode, 
+        'shelfcode_id', coercer=coerce_shelfcode,
         prep_for_write=uncoerce_shelfcode)
 
     @property
@@ -602,7 +568,7 @@ class AuthorIndex(object):
 
     def complete(self, key):
         c = self.dex.getcursor()
-        return(i for i in c.execute(
+        return (i for i in c.execute(
             'select entity_name'
             ' from entity'
             ' where position(upper(%s) in upper(entity_name)) = 1',
@@ -610,7 +576,7 @@ class AuthorIndex(object):
 
     def complete_checkedout(self, key):
         c = self.dex.getcursor()
-        return(i for i in c.execute(
+        return (i for i in c.execute(
             'select entity_name'
             ' from'
             '  entity'
@@ -681,49 +647,6 @@ class DexDB(db.Database):
             authors=AuthorIndex(self),
             codes=CodeIndex(self))
         self.shelfcodes = Shelfcodes(self)
-
-    # def load_shelfcodes(self, force=False):
-    #     ShelfcodeTuple = collections.namedtuple(
-    #         'Shelfcode',
-    #         ['description', 'type', 'cost', 'class_', 'doublecode', 'hassle'])
-
-    #     def process(t):
-    #         desc, type, cost, class_, double, hcount, hwith = t
-    #         return ShelfcodeTuple(
-    #             desc, type, cost, class_, double,
-    #             ((tuple(hwith), hcount) if type == 'C' else ()))
-    #     # XXX this should really be a dict of Shelfcode objects?
-    #     self.shelfcodes = {
-    #         x[0]: process(x[1:])
-    #         for x in self.getcursor().execute(
-    #             'select'
-    #             '  a.shelfcode, a.shelfcode_description, a.shelfcode_type,'
-    #             '  a.replacement_cost, a.shelfcode_class,'
-    #             '  a.shelfcode_doublecode, sc.shelfcode_class_hassle,'
-    #             '  array_agg(b.shelfcode)'
-    #             ' from'
-    #             '  shelfcode a'
-    #             '  natural join shelfcode_class sc'
-    #             '  join shelfcode b using(shelfcode_type, shelfcode_class)'
-    #             ' group by'
-    #             '  a.shelfcode, a.shelfcode_description, a.shelfcode_type,'
-    #             '  a.replacement_cost, a.shelfcode_class,'
-    #             '  a.shelfcode_doublecode, sc.shelfcode_class_hassle')}
-    #     if force or DexDB.codere is None:
-    #         # we reverse the double codes so that the longer ones with matching
-    #         # stems come first
-    #         # yeah, yeah, yea
-    #         dcodes = [
-    #             code for code in self.shelfcodes
-    #             if self.shelfcodes[code].doublecode]
-    #         ncodes = list(set(self.shelfcodes) - set(dcodes))
-    #         DexDB.codere = re.compile(
-    #             '^(@?)(?:(' +
-    #             '|'.join(ncodes) +
-    #             ')|(' +
-    #             '|'.join(reversed(sorted(dcodes))) +
-    #             r')([-A-Z]?[\d.]+))$'
-    #             )
 
     def xsearch(self, ops, conjunction='and'):
         fields = {
@@ -985,7 +908,7 @@ class DexDB(db.Database):
         if constructor is None:
             constructor = Title
         if c is None:
-                    c = self.getcursor()
+            c = self.getcursor()
         if not q:
             q = (
                 'select title_id'
@@ -1056,7 +979,7 @@ class DexDB(db.Database):
                 books=[
                     utils.PropDict(
                         list(zip(['code', 'shelfcode_id', 'type', 'count'],
-                            subrow)))
+                                 subrow)))
                     for subrow
                     in (
                         k + (len(list(g)),)
@@ -1170,7 +1093,7 @@ class DexDB(db.Database):
                 " where"
                 "  title_name = %s and"
                 "  order_title_by = %s" +
-                (" and title_type = '='" if tsortby and index == 0 else''),
+                (" and title_type = '='" if tsortby and index == 0 else ''),
                 (name, index)))
             if not subcands:
                 return None
@@ -1261,8 +1184,8 @@ class DexDB(db.Database):
             raise KeyError(name)
         return code_id
 
-    def replace(self, l, replacement):
-        victim = self[l]
+    def replace(self, line, replacement):
+        victim = self[line]
         title_id = victim.title_id
         # now figure out what changed and fiddle it
         # we "know" that we don't have to worry about shelfcodes
@@ -1521,7 +1444,7 @@ class DexDB(db.Database):
             for edition in line.codes.values():
                 for i in range(0, edition.count):
                     self.newbook(
-                        victim.title_id, edition.shelfcode, review, 
+                        victim.title_id, edition.shelfcode, review,
                         c=c, comment=comment)
         self.db.commit()
 
@@ -1867,3 +1790,84 @@ def deeq(e):
         t1, s1 = e[1]
         e = [(t1, s1 + '=' + s0)] + e[2:]
     return [s for (t, s) in e]
+
+
+# class Shelfcode(db.Entry):
+#     def __init__(self, selector, db):
+#         if selector is None:
+#             raise KeyError('There is no non-shelfcode [go find libcomm]')
+#         try:
+#             shelfcode_id = int(selector)
+#         except ValueError:
+#             shelfcode_id = None
+#         if shelfcode_id is None:
+#             try:
+#                 c = db.cursor.execute(
+#                     'select shelfcode_id from shelfcode'
+#                     ' where shelfcode=upper(%s)',
+#                     (str(selector).strip(),))
+#                 shelfcode_result = c.fetchone()
+#                 shelfcode_id = shelfcode_result[0]
+#             except ValueError:
+#                 raise KeyError('No such shelfcode')
+
+#         super(Shelfcode, self).__init__(
+#             'shelfcode', 'shelfcode_id', db, shelfcode_id)
+
+#     name = db.ReadField('shelfcode')
+#     description = db.ReadField('shelfcode_description')
+#     type = db.ReadField('shelfcode_type')
+#     replacement_cost = db.ReadField('replacement_cost')
+
+#     def __str__(self):
+#         return self.name
+
+#     @staticmethod
+#     def list(db):
+#         return db.cursor.execute('select shelfcode from shelfcode')
+
+# This was previously part of the DexDB class, but has been replaced with a
+# shelfcode object
+# def load_shelfcodes(self, force=False):
+#     ShelfcodeTuple = collections.namedtuple(
+#         'Shelfcode',
+#         ['description', 'type', 'cost', 'class_',
+# 'doublecode', 'hassle'])
+
+#     def process(t):
+#         desc, type, cost, class_, double, hcount, hwith = t
+#         return ShelfcodeTuple(
+#             desc, type, cost, class_, double,
+#             ((tuple(hwith), hcount) if type == 'C' else ()))
+#     # XXX this should really be a dict of Shelfcode objects?
+#     self.shelfcodes = {
+#         x[0]: process(x[1:])
+#         for x in self.getcursor().execute(
+#             'select'
+#             '  a.shelfcode, a.shelfcode_description, a.shelfcode_type,'
+#             '  a.replacement_cost, a.shelfcode_class,'
+#             '  a.shelfcode_doublecode, sc.shelfcode_class_hassle,'
+#             '  array_agg(b.shelfcode)'
+#             ' from'
+#             '  shelfcode a'
+#             '  natural join shelfcode_class sc'
+#             '  join shelfcode b using(shelfcode_type, shelfcode_class)'
+#             ' group by'
+#             '  a.shelfcode, a.shelfcode_description, a.shelfcode_type,'
+#             '  a.replacement_cost, a.shelfcode_class,'
+#             '  a.shelfcode_doublecode, sc.shelfcode_class_hassle')}
+#     if force or DexDB.codere is None:
+#         # we reverse the double codes so that the longer ones
+#         # with matching stems come first
+#         # yeah, yeah, yea
+#         dcodes = [
+#             code for code in self.shelfcodes
+#             if self.shelfcodes[code].doublecode]
+#         ncodes = list(set(self.shelfcodes) - set(dcodes))
+#         DexDB.codere = re.compile(
+#             '^(@?)(?:(' +
+#             '|'.join(ncodes) +
+#             ')|(' +
+#             '|'.join(reversed(sorted(dcodes))) +
+#             r')([-A-Z]?[\d.]+))$'
+#             )
