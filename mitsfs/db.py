@@ -21,6 +21,45 @@ __all__ = [
     ]
 
 
+class Database(object):
+    def getcursor(self):
+        return self.db.cursor(cursor_factory=EasyCursor)
+
+    def __init__(self, client='mitsfs.dexdb', dsn='dbname=mitsfs'):
+        self.dsn = dsn
+        try:
+            self.db = psycopg2.connect(dsn)
+        except psycopg2.OperationalError as e:
+            # these error messages are terrible, here's a common one
+            if re.match(r'FATAL:  role "[^"]*" does not exist\n', e.message):
+                raise Exception(
+                    'Unknown user.  You likely have not been granted access.')
+            elif (
+                e.message.startswith('FATAL:  GSSAPI authentication failed')
+                    or e.message.startswith('GSSAPI continuation error:')):
+                raise Exception(
+                    'Authentication failure.  '
+                    'Try renewing your Kerberos tickets?')
+            else:
+                raise
+
+        self.cursor = self.getcursor()
+        self.client = client
+        self.cursor.execute('select set_client(%s)', (client,))
+        self.wizard = None
+        if os.environ.get('SPEAKER_TO_POSTGRES'):
+            self.cursor.execute('set role "speaker-to-postgres"')
+            print('Wizard mode enabled')
+            self.wizard = 'badger'
+        self.db.commit()  # Just makin' sure, and folks he was
+
+    def commit(self):
+        self.db.commit()
+
+    def rollback(self):
+        self.db.rollback()
+
+
 class EasyCursor(psycopg2.extensions.cursor):
     '''
     @return id of the object in hexadecimal. Useful for logging
@@ -113,51 +152,6 @@ class EasyCursor(psycopg2.extensions.cursor):
         self.connection.set_isolation_level(self.isolation_level)
 
 
-class Database(object):
-    def getcursor(self):
-        return self.db.cursor(cursor_factory=EasyCursor)
-
-    def __init__(self, client='mitsfs.dexdb', dsn='dbname=mitsfs'):
-        self.dsn = dsn
-        try:
-            self.db = psycopg2.connect(dsn)
-        except psycopg2.OperationalError as e:
-            # these error messages are terrible, here's a common one
-            if re.match(r'FATAL:  role "[^"]*" does not exist\n', e.message):
-                raise Exception(
-                    'Unknown user.  You likely have not been granted access.')
-            elif (
-                e.message.startswith('FATAL:  GSSAPI authentication failed')
-                    or e.message.startswith('GSSAPI continuation error:')):
-                raise Exception(
-                    'Authentication failure.  '
-                    'Try renewing your Kerberos tickets?')
-            else:
-                raise
-
-        self.cursor = self.getcursor()
-        self.client = client
-        self.cursor.execute('select set_client(%s)', (client,))
-        self.wizard = None
-        if os.environ.get('SPEAKER_TO_POSTGRES'):
-            self.cursor.execute('set role "speaker-to-postgres"')
-            print('Wizard mode enabled')
-            self.wizard = 'badger'
-        self.db.commit()  # Just makin' sure, and folks he was
-
-    def commit(self):
-        self.db.commit()
-
-    def rollback(self):
-        self.db.rollback()
-
-    def lastseq(self, c=None):
-        if c is None:
-            c = self.cursor
-        (seq_id,) = list(c.execute('select last_value from id_seq'))
-        return seq_id
-
-
 class ValidationError(Exception):
     pass
 
@@ -176,10 +170,23 @@ fashion. They are used in the membership section of the code.
 Field enables full getting and setting of the field.
 ReadFieldUncached prohibits setting. it is used once, for the checkout_lost
 ReadField is the most common. Does a read (no write) but wraps it in a cache.
+
 '''
 
 
 class Field(property):
+    '''
+    Create a field object. Enables just-in-time retrieveal of field values
+
+    @param fieldname: the name of the field
+    @param coercer: a function to take the field data extracted from the
+        database and turn it into another object
+    @param validator: a function to check against before writing to the db.
+
+    All the above functions passed in must take a value, and an optional
+    database object
+    '''
+
     def __init__(
             self, fieldname, coercer=None, validator=None,
             prep_for_write=None
@@ -190,6 +197,21 @@ class Field(property):
         self.coercer = coercer
         super().__init__(self.get, self.set)
 
+    '''
+    Pretty standard getter. Coerces the value into whatever the coerce function
+    returns.
+
+    @param obj: This confuses the heck out of me and there's no documentation
+        about it. As far as I can tell, obj is class this field is a member of.
+        So if you set x=Field(foo) and then make this a class variable, calls
+        to get are transformed into __get__(self, class)
+
+        This lets you define Entry objects below that contain Fields, and
+        those have access to the params in the entry object. Python can
+        be really cryptic sometimes.
+    @return: the value in the database in this field for the ID of the caller
+    '''
+
     def get(self, obj):
         command = 'select %s from %s where %s = %%s' \
             % (self.field, obj.table, obj.idfield)
@@ -199,11 +221,26 @@ class Field(property):
             val = self.coercer(val, obj.db)
         return val
 
+    '''
+    Set variables.
+
+    This does a fair amount before it writes.
+    1) If there's a prep_for_write defined, applies it to the value. Usually
+        done to turn a coerced object back into a string.
+    2) apply strip() to it if you can
+    3) validate that the value is correct if a validator was provided
+    4) coerce the data into the right form. Does not do this if
+        prep_for_write is defined, because that'll turn it back into an object
+        #
+    @param obj: See above
+
+    '''
+
     def set(self, obj, val):
         if self.prep_for_write:
-            print("1: " + str(val))
             val = self.prep_for_write(val, obj.db)
-            print("2: " + str(val))
+        if hasattr(val, 'strip'):
+            val = val.strip()
         if self.validator and not self.validator(obj, val):
             raise ValidationError(
                 'Validation failed for %s.%s: %s' % (

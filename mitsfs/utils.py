@@ -36,15 +36,15 @@ class PropDict(dict):
 def timestamp():
     return time.strftime('%Y%m%d%H%M%S')
 
+# appears to be unused
+# SPLITTER = re.compile(r'(\D+)')
+# DIGITS = re.compile(r'^(\d+)$')
 
-SPLITTER = re.compile(r'(\D+)')
-DIGITS = re.compile(r'^(\d+)$')
 
-
-def sort_key(s):
-    return tuple(
-        int(t) if DIGITS.match(t) else t.strip()
-        for t in [_f for _f in SPLITTER.split(s) if _f])
+# def sort_key(s):
+#     return tuple(
+#         int(t) if t.isdigit() else t.strip()
+#         for t in [_f for _f in SPLITTER.split(s) if _f])
 
 
 def get_logfiles():

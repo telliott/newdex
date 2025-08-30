@@ -1306,10 +1306,9 @@ class DexDB(db.Database):
         '''
         if c is None:
             c = self.cursor
-        c.execute(
-            'insert into title default values',
+        title_id = c.selectvalue(
+            'insert into title default values returning title_id',
             (self.client, self.client))
-        title_id = self.lastseq(c)
         c.executemany(
             "insert into title_responsibility"
             "  (title_id, entity_id,"
@@ -1347,17 +1346,16 @@ class DexDB(db.Database):
         if c is None:
             c = self.cursor
         e = Edition(shelfcode)
-        c.execute(
+        return c.selectvalue(
             "insert into book"
             " (title_id, book_series_visible,"
             "  shelfcode_id, doublecrap, review, book_comment)"
-            " values (%s, %s, %s, %s, %s, %s)",
+            " values (%s, %s, %s, %s, %s, %s) returning book_id",
             (
                 title_id, 't' if e.series_visible else 'f',
                 self.shelfcodes[e.shelfcode].shelfcode_id, e.double_info,
                 review, comment),
             )
-        return self.lastseq()
 
     def add(self, line, review=False, lost=False, c=None, comment=None):
         if c is None:
