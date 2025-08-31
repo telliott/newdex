@@ -566,21 +566,23 @@ create or replace view pinkdex as select * from
 
 grant select on pinkdex to public;
 
-
 create table member (
        member_id integer default nextval('id_seq') not null primary key,
-       member_pseudo boolean default false not null,
-       rolname name, -- references pg_authid(rolname) -- cannot reference a system catalog, sadly
-
+       pseudo boolean default false not null,
+       first_name text, 
+       last_name text, 
+       email text not null,
+       phone text,
+       address text,
+       key_initials text,
+       login text,
+ 
        member_created timestamp with time zone default current_timestamp not null,
        member_created_by varchar(64) default current_user not null,
        member_created_with varchar(64) default current_client() not null,
        member_modified timestamp with time zone default current_timestamp not null,
        member_modified_by varchar(64) default current_user not null,
-       member_modified_with varchar(64) default current_client() not null,
-       member_name_default integer,
-       member_email_default integer,
-       member_address_default integer);
+       member_modified_with varchar(64) default current_client() not null);
 
 create trigger member_insert
        before insert on member for each row execute procedure insert_row_created_with();
@@ -590,6 +592,9 @@ create trigger member_log
        before insert or update or delete on member for each row execute procedure log_row();
 
 grant insert, update, select on member to keyholders;
+
+insert into member(member_id, email, pseudo) select currval('id_seq'), 'CASH', true;
+
 
 
 create table checkout (
@@ -705,107 +710,20 @@ grant select on inventory_missing to public;
 grant insert, update, delete on inventory_entry to libcomm;
 
 
-create table member_name (
-       member_name_id integer default nextval('id_seq') primary key,
-       member_id integer not null references member,
-       member_name text not null);
 
-create index member_name_member_name_idx on member_name(member_name);
-create index member_name_member_id_idx on member_name(member_id);
+-- create table member_comment (
+--       member_comment_id integer default nextval('id_seq') primary key,
+--       member_id integer not null references member,
+--       member_comment text not null);
 
---XXX circular
-alter table member add constraint member_member_name_default_fkey FOREIGN KEY (member_name_default) references member_name(member_name_id);
+-- create trigger member_comment_insert
+--       before insert or update or delete on member_comment
+--       for each row execute procedure collateral_update('member');
+-- create trigger member_comment_log
+--       before insert or update or delete on member_comment
+--       for each row execute procedure log_row();
 
-create trigger member_name_insert
-       before insert or update or delete on member_name
-       for each row execute procedure collateral_update('member');
-create trigger member_name_log
-       before insert or update or delete on member_name
-       for each row execute procedure log_row();
-
-insert into member(member_pseudo) values (true);
-insert into member_name(member_id, member_name) select currval('id_seq'), 'CASH';
-
-grant insert, delete, select on member_name to keyholders;
-
-
-create table member_magic (
-       member_name text unique primary key,
-       member_id integer not null references member);
-
-grant select on member_magic to keyholders;
-grant insert, delete, select on member_magic to libcomm;
-
-insert into member_magic (member_name, member_id) select member_name, member_id from member_name where member_name='CASH';
-
-
-create table member_email (
-       member_email_id integer default nextval('id_seq') primary key,
-       member_id integer not null references member,
-       member_email text not null);
-
---XXX circular
-alter table member add constraint member_member_email_default_fkey FOREIGN KEY (member_email_default) references member_email(member_email_id);
-
-create index member_email_member_id_idx on member_email(member_id);
-
-create trigger member_email_insert
-       before insert or update or delete on member_email
-       for each row execute procedure collateral_update('member');
-create trigger member_email_log
-       before insert or update or delete on member_email
-       for each row execute procedure log_row();
-
-grant insert, delete, select on member_email to keyholders;
-
-
-create table address_type (
-       address_type char(1) not null primary key,
-       address_type_description text);
-
-grant select on address_type to keyholders;
-grant insert, delete, update on address_type to libcomm;
-
-insert into address_type values ('?', 'Unspecified');
-insert into address_type values ('P', 'Permanent');
-insert into address_type values ('T', 'Term');
-insert into address_type values ('M', 'MIT Work');
-
-
-create table member_address (
-       member_address_id integer default nextval('id_seq') primary key,
-       member_id integer not null references member,
-       member_address text not null,
-       address_type char(1) default '?' references address_type not null);
-
---XXX circular
-alter table member add constraint member_member_address_default_fkey FOREIGN KEY (member_address_default) references member_address(member_address_id);
-
-create index member_address_member_id_idx on member_address(member_id);
-
-create trigger member_address_insert
-       before insert or update or delete on member_address
-       for each row execute procedure collateral_update('member');
-create trigger member_address_log
-       before insert or update or delete on member_address
-       for each row execute procedure log_row();
-
-grant insert, delete, select on member_address to keyholders;
-
-
-create table member_comment (
-       member_comment_id integer default nextval('id_seq') primary key,
-       member_id integer not null references member,
-       member_comment text not null);
-
-create trigger member_comment_insert
-       before insert or update or delete on member_comment
-       for each row execute procedure collateral_update('member');
-create trigger member_comment_log
-       before insert or update or delete on member_comment
-       for each row execute procedure log_row();
-
-grant insert, delete, select on member_comment to keyholders;
+-- grant insert, delete, select on member_comment to keyholders;
 
 
 create table transaction_type (

@@ -10,7 +10,7 @@ import unittest
 import psycopg2
 import itertools
 import subprocess
-
+import os
 
 __all__ = [
     'Case',
@@ -45,10 +45,21 @@ class Case(unittest.TestCase):
             self.adminsql("create database %s encoding='UTF8'", self.dbname)
         except psycopg2.OperationalError:
             raise
+        
+        # find a schema.sql file walking up the directory. Limit to 5 levels
+        # to prevent infinite loops
+        schema_path = '.'
+        for i in range(5):
+            if 'schema.sql' in os.listdir(schema_path):
+                break
+            schema_path = '../' + schema_path
+            
+        if 'schema.sql' not in os.listdir(schema_path):
+            raise Exception
             
         try:
             output = subprocess.check_output(
-                ('psql', self.dsn, '-f', '../schema.sql'),
+                ('psql', self.dsn, '-f', schema_path + '/schema.sql'),
                 stderr=subprocess.STDOUT,
                 ).decode('utf-8')
         except subprocess.CalledProcessError as e:

@@ -36,7 +36,7 @@ __all__ = [
     'menu', 'readyes', 'banner', 'motd', 'tabulate', 'specify_member',
     'readvalidate', 'readmoney', 'readdate', 'menuize_dict',
     'clear_screen', 'readbarcode', 'money_str', 'reademail',
-    'readaddress', 'Color', 'termwidth', 'len_color_str',
+    'readaddress', 'readinitials', 'Color', 'termwidth', 'len_color_str',
     'pfill', 'lfill', 'smul', 'rmul', 'bold', 'sgr0', 'termheight',
     ]
 
@@ -281,32 +281,27 @@ def reademail(prompt):
     return readvalidate(prompt, validate=val).strip()
 
 
-def readaddress(address_types):
-    print("Address Types:")
+def readinitials(prompt):
+    def val(email):
+        ok = re.match(r"^[A-Z]{2,4}$", email.strip())
+        if not ok:
+            print("Not valid initials (2-4 all caps)")
+        return ok
+    return readvalidate(prompt, validate=val).strip()
 
-    print(tabulate([
-        (Color.select(t + '.'),
-         address_types[t])
-        for t in sorted(address_types)]))
-    print()
 
-    def val(char):
-        valid = char.strip().upper() in address_types
-        if not valid:
-            print("Not a valid type")
-        return valid
+def readphone(prompt):
+    def val(phone):
+        ok = re.match(r"^[- \d\(\)]+$", phone.strip())
+        if not ok:
+            print("Not a valid phone number")
+        return ok
+    return readvalidate(prompt, validate=val).strip()
 
-    addr_type = readvalidate('Select Address Type: ', validate=val)
-    addr_type = addr_type.strip().upper()
 
-    while True:
-        new = readlines(
-            'Address to add (as default).'
-            '  End with a dot on a line by itself.')
-        if new is None or len(new) == 0:
-            print("Please add a valid address")
-            continue
-        return (addr_type, new)
+def readaddress():
+    new = readlines('New address (End with a dot on a line by itself):')
+    return new
 
 
 def maxresults():

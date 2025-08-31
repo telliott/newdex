@@ -80,6 +80,7 @@ class EasyCursor(psycopg2.extensions.cursor):
 
     def execute(self, sql, args=None):
         log = logging.getLogger('mitsfs.sql')
+
         log.debug('%s', self.mogrify(sql, args))
         try:
             psycopg2.extensions.cursor.execute(self, sql, args)
@@ -231,7 +232,7 @@ class Field(property):
     3) validate that the value is correct if a validator was provided
     4) coerce the data into the right form. Does not do this if
         prep_for_write is defined, because that'll turn it back into an object
-        #
+
     @param obj: See above
 
     '''
@@ -245,8 +246,6 @@ class Field(property):
             raise ValidationError(
                 'Validation failed for %s.%s: %s' % (
                     obj.table, self.field, repr(val)))
-        if hasattr(val, 'strip'):
-            val = val.strip()
         if self.prep_for_write is None and self.coercer is not None:
             val = self.coercer(val, obj.db)
 
@@ -384,11 +383,9 @@ class Entry(object):
             result = c.fetchone()
             self.id = result[0]
         else:
-            c = self.cursor.execute(
+            self.id = self.cursor.selectvalue(
                 'insert into %s default values returning %s' %
                 (self.table, self.idfield))
-            result = c.fetchone()
-            self.id = result[0]
         if commit:
             self.db.db.commit()
         else:

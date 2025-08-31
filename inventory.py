@@ -19,7 +19,7 @@ update checkout
   natural join member
   natural join member_name
  where checkout.checkout_id = checkout_member.checkout_id
-  and member_pseudo
+  and pseudo
   and member_name='NEWSHELF'
   and checkin_stamp is null;
 

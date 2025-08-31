@@ -14,7 +14,7 @@ from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
 
 
 __all__ = [
-    'Member', 'MemberEmail', 'MemberName', 'MemberAddress', 'Membership',
+    'Membership', 'find_members',
     'Checkout', 'MembershipBook', 'TimeWarp', 'star_dissociated',
     'role_members', 'star_cttes',
     ]
@@ -25,47 +25,50 @@ MAXDAYSOUT = 21
 MAX_BOOKS = 8
 
 
+def find_members(db, name, pseudo=False):
+    """returns a list of member objects that match the given name"""
+    return [
+        Member(db, i)  # turning the tuple into args
+        for i in
+        db.cursor.execute(
+            'select member_id'
+            ' from member'
+            ' where concat(first_name, last_name, key_initials, email) ~* %s'
+            ' and pseudo = %s',
+            (name, pseudo))]
+
 
 class Member(db.Entry):
     def __init__(self, db, member_id=None, **kw):
         super(Member, self).__init__(
             'member', 'member_id', db, member_id, **kw)
 
-    created = db.ReadField('member_created')
-    created_by = db.ReadField('member_created_by')
-    created_with = db.ReadField('member_created_with')
-
     member_id = db.ReadField('member_id')
-    member_name_default = db.Field('member_name_default')
-    member_email_default = db.Field('member_email_default')
-    member_address_default = db.Field('member_address_default')
 
-    modified = db.ReadField('member_modified')
-    modified_by = db.ReadField('member_modified_by')
-    modified_with = db.ReadField('member_modified_with')
+    first_name = db.Field('first_name')
+    last_name = db.Field('last_name')
+    key_initials = db.Field('key_initials')
+    email = db.Field('email')
+    phone = db.Field('phone')
+    address = db.Field('address')
 
-    role = db.Field('rolname')
-    pseudo = db.Field('member_pseudo', coerce_boolean)
+    # used to add permissions to this person for committees, etc
+    login = db.Field('login')
 
-    @property
-    def name(self):
-        return MemberName(self.db, self.member_name_default)
+    # fake members representing committees
+    pseudo = db.Field('pseudo', coerce_boolean)
 
-    @property
-    def email(self):
-        if self.member_email_default is None:
-            return None
-        return MemberEmail(self.db, self.member_email_default)
+    # created = db.ReadField('member_created')
+    # created_by = db.ReadField('member_created_by')
+    # created_with = db.ReadField('member_created_with')
+    # modified = db.ReadField('member_modified')
+    # modified_by = db.ReadField('member_modified_by')
+    # modified_with = db.ReadField('member_modified_with')
 
-    @property
-    def address(self):
-        if self.member_address_default is None:
-            return None
-        return MemberAddress(self.db, self.member_address_default)
 
     @property
     def membership(self):
-        
+
         member_id = self.cursor.selectvalue(
             'select membership_id'
             ' from membership'
@@ -74,7 +77,7 @@ class Member(db.Entry):
             (self.member_id,))
         if member_id is None:
             return None
-        
+
         return Membership(self.db, membership_id=member_id)
 
     def membership_add(
@@ -100,7 +103,7 @@ class Member(db.Entry):
     def membership_describe(self, membership_type, when='now'):
         '''Describe a new membership: text description, how much it would cost,
          and wnen it would expire'''
-         
+
         c = self.cursor.execute(
             'select'
             '  membership_description, membership_cost, membership_duration'
@@ -115,18 +118,18 @@ class Member(db.Entry):
             '   group by membership_type) as current'
             ' where membership_type=%s',
             (when, membership_type))
-         
+
         if c.rowcount == 0:
             return None
-    
+
         (description, cost, duration) = c.fetchone()
-        
+
         if duration:
             # + postgres is better at python at time intervals
             # + the return value of date_trunc doesn't always have a time zone;
             #   thus the first "at time zone" on line 4 puts it in a time zone
             #   then converts back to ostensible local time
-            
+
             c = self.cursor.execute(
                 'select'
                 "  date_trunc("
@@ -146,84 +149,11 @@ class Member(db.Entry):
                 expiration = c.fetchone()[0]
         else:
             expiration = None
-         
+
         if self.membership and not self.membership.expired and not expiration:
             cost -= self.membership.cost
 
         return description, cost, expiration
-
-    @property
-    def names(self):
-        return [
-            MemberName(self.db, x)
-            for x in self.cursor.execute(
-                'select member_name_id'
-                ' from member_name'
-                ' where member_id=%s'
-                ' order by member_name_id desc',
-                (self.member_id,))
-            ]
-
-    @property
-    def emails(self):
-        return [
-            MemberEmail(self.db, x)
-            for x in self.cursor.execute(
-                'select member_email_id'
-                ' from member_email'
-                ' where member_id=%s'
-                ' order by member_email_id desc',
-                (self.member_id,))
-            ]
-
-    @property
-    def addresses(self):
-        return [
-            MemberAddress(self.db, x)
-            for x in self.cursor.execute(
-                'select member_address_id'
-                ' from member_address'
-                ' where member_id=%s'
-                ' order by member_address_id desc',
-                (self.member_id,))
-            ]
-
-    @property
-    def other_names(self):
-        return [
-            MemberName(self.db, x)
-            for x in self.cursor.execute(
-                'select member_name_id'
-                ' from member_name'
-                ' where member_id=%s and'
-                '  member_name_id != %s'
-                ' order by member_name_id desc',
-                (self.member_id, self.member_name_default,))
-            ]
-
-    @property
-    def other_emails(self):
-        return [
-            MemberEmail(self.db, x)
-            for x in self.cursor.execute(
-                'select member_email_id'
-                ' from member_email'
-                '  where member_id=%s and'
-                '  member_email_id != %s'
-                ' order by member_email_id desc',
-                (self.member_id, self.member_email_default))
-            ]
-
-    @property
-    def other_addresses(self):
-        return [
-            MemberAddress(self.db, x) for x in self.cursor.execute(
-                'select member_address_id'
-                ' from member_address'
-                ' where member_id=%s and member_address_id != %s'
-                ' order by member_address_id desc',
-                (self.member_id, self.member_address_default))
-            ]
 
     @property
     def balance(self):
@@ -248,7 +178,7 @@ class Member(db.Entry):
 
     def __str__(self):
         # sigh, ftr, the angry fruit salad wasn't my idea
-        s = ui.Color.info(self.name)
+        s = ui.Color.info("%s, %s" % (self.last_name, self.first_name))
         email = self.email
         if email:
             s += ' <%s>' % email
@@ -260,48 +190,34 @@ class Member(db.Entry):
 
     @property
     def normal_str(self):
-        return '%s - (%s) %s' % (
-            self.name,
+        return '%s %s - (%s) %s' % (
+            self.first_name,
+            self.last_name,
             self.email,
             (
                 "$%.2f" % (self.balance,)
                 if not self.pseudo
                 else 'COMMITTEE'))
 
-    def pretty_name(self, name):
-        if name.member_name_id == self.member_name_default:
-            return " * " + str(name)
-        return "   " + str(name)
-
-    def pretty_email(self, email):
-        if email.member_email_id == self.member_email_default:
-            return " * " + str(email)
-        return "   " + str(email)
-
-    def pretty_address(self, address):
-        if address.member_address_id == self.member_address_default:
-                s = " * " + str(address.address_description) + ":"
-        else:
-            s = "   " + str(address.address_description) + ":"
-        return s + "      " + str(address).replace("\n", "\n      ")
-
     def info(self):
         if self.pseudo:
-            return 'pseudo-member/committee'
+            return 'pseudo-member/committee: %s' % self.first_name
 
-        info = "Names:"
-        for n in self.names:
-            info += "\n" + self.pretty_name(n)
+        info = f"Name: {self.last_name}, {self.first_name}"
+        if self.key_initials:
+            info += f" ({self.key_initials})"
+        info += '\n'
 
-        info += "\n\nEmail:"
-        for e in self.emails:
-            info += "\n" + self.pretty_email(e)
+        if self.email:
+            info += f"Email: {self.email}\n"
+        if self.phone:
+            info += f"Phone: {self.phone}\n"
 
-        info += "\n\nAddresses:"
-        for a in self.addresses:
-            info += "\n" + self.pretty_address(a)
+        if self.address:
+            info += f"Home Address: {self.address}\n"
 
-        info += "\n\nCurrent Membership: " + str(self.membership)
+        info += "\n"
+        info += "Current Membership: " + str(self.membership)
         info += "\nFine Credit: " + str(self.balance)
         return info
 
@@ -328,7 +244,7 @@ class Member(db.Entry):
         return txn_id
 
     def cash_transaction(self, amount, txntype, desc):
-        cash = self.db.membook().getmagic('CASH')
+        cash = find_members(self.db, 'CASH', pseudo=True)[0]
         txn1_id = self.transaction(amount, txntype, desc, commit=False)
         txn2_id = cash.transaction(amount, txntype, desc, commit=False)
         self.cursor.execute(
@@ -455,7 +371,7 @@ class Member(db.Entry):
             '  checkin_stamp is null'
             ' order by checkout_stamp',
             (self.member_id,))
-        
+
         return [ Checkout(self.db, checkout_id=x[0]) for x in c.fetchall() ]
 
     @property
@@ -468,7 +384,7 @@ class Member(db.Entry):
             ' where member_id = %s'
             ' order by checkout_stamp desc',
             (self.member_id,))
-        
+
         return [ Checkout(self.db, checkout_id=x[0]) for x in c.fetchall() ]
 
     def checkout_good(self, override=False):
@@ -513,12 +429,12 @@ class Member(db.Entry):
 
         return not bool(msgs), msgs, cmsg
 
-    def key(self, role):
-        self.role = role
+    def key(self, login):
+        self.login = login
         cursor = self.db.cursor
         cursor.execute('set role "*chamber"')
-        cursor.execute('create role "%s" login' % role)
-        cursor.execute('grant keyholders to "%s"' % role)
+        cursor.execute('create role "%s" login' % login)
+        cursor.execute('grant keyholders to "%s"' % login)
         cursor.execute('reset role')
         self.db.commit()
 
@@ -538,25 +454,25 @@ class Member(db.Entry):
     def dekey(self):
         cursor = self.db.cursor
         for group in self.committees:
-            cursor.execute('revoke "%s" from "%s"' % (group, self.role))
+            cursor.execute('revoke "%s" from "%s"' % (group, self.login))
         cursor.execute('set role "*chamber"')
-        cursor.execute('drop role "%s"' % (self.role,))
+        cursor.execute('drop role "%s"' % (self.login,))
         cursor.execute('reset role')
         self.db.commit()
 
-    def grant(self, role):
-        if role == '*chamber':
+    def grant(self, login):
+        if login == '*chamber':
             self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('grant "%s" to "%s"' % (role, self.role))
-        if role == '*chamber':
+        self.db.cursor.execute('grant "%s" to "%s"' % (login, self.login))
+        if login == '*chamber':
             self.db.cursor.execute('reset role')
         self.db.commit()
 
-    def revoke(self, role):
-        if role == '*chamber':
+    def revoke(self, login):
+        if login == '*chamber':
             self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('revoke "%s" from "%s"' % (role, self.role))
-        if role == '*chamber':
+        self.db.cursor.execute('revoke "%s" from "%s"' % (login, self.login))
+        if login == '*chamber':
             self.db.cursor.execute('reset role')
         self.db.commit()
 
@@ -570,9 +486,6 @@ class Member(db.Entry):
                 'update checkout_member set member_id=%s where member_id=%s',
                 (self.id, other_id))
             c.execute(
-                'update member_magic set member_id=%s where member_id=%s',
-                (self.id, other_id))
-            c.execute(
                 'update member_comment set member_id=%s where member_id=%s',
                 (self.id, other_id))
             c.execute(
@@ -581,22 +494,6 @@ class Member(db.Entry):
             c.execute(
                 'update transaction set member_id=%s where member_id=%s',
                 (self.id, other_id))
-            # I really need to change the way these work
-            c.execute(
-                'update member set'
-                ' (member_name_default, member_email_default,'
-                '  member_address_default) = (NULL, NULL, NULL)'
-                ' where member_id=%s',
-                (other_id,))
-            c.execute(
-                'delete from member_email where member_id=%s',
-                (other_id,))
-            c.execute(
-                'delete from member_address where member_id=%s',
-                (other_id,))
-            c.execute(
-                'delete from member_name where member_id=%s',
-                (other_id,))
             c.execute(
                 'delete from member where member_id=%s',
                 (other_id,))
@@ -606,55 +503,6 @@ class Member(db.Entry):
             raise
         finally:
             c.execute('reset role')
-
-
-class MemberEmail(db.EntryDeletable):
-    def __init__(self, db, member_email_id=None, **kw):
-        super(MemberEmail, self).__init__(
-            'member_email', 'member_email_id', db, member_email_id, **kw)
-
-    member_email_id = db.ReadField('member_email_id')
-    member_id = db.Field('member_id')
-    member_email = db.Field('member_email')
-
-    def __str__(self):
-        return self.member_email
-
-
-class MemberName(db.EntryDeletable):
-    def __init__(self, db, member_name_id=None, **kw):
-        super(MemberName, self).__init__(
-            'member_name', 'member_name_id', db, member_name_id, **kw)
-
-    member_name_id = db.ReadField('member_name_id')
-    member_id = db.Field('member_id')
-    member_name = db.Field('member_name')
-
-    def __str__(self):
-        return self.member_name
-
-
-class MemberAddress(db.EntryDeletable):
-    def __init__(self, db, member_address_id=None, **kw):
-        super(MemberAddress, self).__init__(
-            'member_address', 'member_address_id', db, member_address_id, **kw)
-
-    member_address_id = db.ReadField('member_address_id')
-    member_id = db.Field('member_id')
-    member_address = db.Field('member_address')
-    address_type = db.Field('address_type')
-
-    @property
-    def address_description(self):
-        return self.cursor.selectvalue(
-            'select address_type_description'
-            ' from address_type'
-            ' where address_type=%s',
-            (self.address_type, ))
-
-    def __str__(self):
-        return self.member_address
-
 
 class Membership(db.Entry):
     def __init__(self, db, membership_id=None, **kw):
@@ -673,7 +521,7 @@ class Membership(db.Entry):
 
     @property
     def description(self):
-        
+
         return self.cursor.selectvalue(
             'select membership_description'
             ' from membership_type'
@@ -697,7 +545,7 @@ class Membership(db.Entry):
             (pid,)))
         if v:
             return 0.0
-        
+
         return self.cursor.selectvalue(
             'select -transaction_amount'
             ' from transaction'
@@ -771,7 +619,7 @@ class Checkout(db.Entry):
             (stamp, stamp,))
         if timewarp is None:
             return stamp
-        
+
         return coerce_datetime_no_timezone(timewarp)
 
     @property
@@ -952,61 +800,19 @@ class MembershipBook(object):
             '  and current_timestamp > membership_type_valid_from'
             ' order by membership_duration, membership_type'
             ))
-        self.address_types = dict(self.db.cursor.execute(
-            'select'
-            '  address_type, address_type_description'
-            ' from address_type'))
         self.db.rollback()
 
     def complete_name(self, s):
-        return self.db.cursor.execute(
-            'select member_name'
-            ' from member_name'
-            ' where position(%s in upper(member_name)) = 1',
-            (s.strip().upper(),))
+        return [str(member) for member in find_members(self.db, s)]
 
     def get(self, name):
-        '''returns a list of member objects that match the given name;
-        member objects are cheap'''
-        return [
-            Member(self.db, i)
-            for i in
-            self.db.cursor.execute(
-                'select member_id'
-                ' from member_name'
-                ' where upper(member_name)=%s'
-                ' group by member_id'
-                ' order by member_id',
-                (name.strip().upper(),))]
-
-    def getmagic(self, name):
-        '''returns the relevant magic member object'''
-        (member_id,) = self.db.cursor.execute(
-            'select member_id from member_magic where member_name=%s',
-            (name,))
-        return Member(self.db, member_id)
+        return find_members(self.db, name)
 
     def search(self, name):
-        """returns a list of member objects that match the given name;
-        member objects are cheap"""
-        return [
-            Member(self.db, i)
-            for i in
-            self.db.cursor.execute(
-                'select member_id'
-                ' from member_name'
-                ' where upper(member_name) ~ %s'
-                ' group by member_id',
-                ('.*'.join(name.strip().upper().split(' ')),))]
+        return find_members(self.db, name)
 
     def __getitem__(self, member_id):
         """returns the unique member object for a given member_id"""
-        try:
-            (member_id,) = self.db.cursor.execute(
-                'select member_id from member where member_id=%s',
-                (member_id,))
-        except ValueError:
-            return None
         return Member(self.db, member_id)
 
     def vgg(self):
@@ -1026,7 +832,7 @@ class MembershipBook(object):
             ' natural join book'
             ' natural join shelfcode'
             ' where'
-            '  not member_pseudo'
+            '  not pseudo'
             '  and checkin_stamp is null'
             '  and checkout_lost is null'
             '  and checkout_stamp <'
@@ -1077,11 +883,11 @@ def star_dissociated(db):
         '  roleid is null and'
         '  rolcanlogin and'
         '  not rolsuper and'
-        '  member.rolname is null'
+        '  member.login is null'
         ' order by rolname'))
 
 
-def role_members(db, role):
+def role_members(db, login):
     """Returns an iterator of member objects associated with a given
     database role."""
     return sorted(
@@ -1095,9 +901,9 @@ def role_members(db, role):
                 '   on pg_auth_members.roleid = roleid_.oid'
                 '  join pg_roles member_ on'
                 '   pg_auth_members.member = member_.oid'
-                '  join member on member.rolname = member_.rolname'
+                '  join member on member.login = member_.rolname'
                 ' where roleid_.rolname = %s',
-                (role,))),
+                (login,))),
         key=lambda mem: str(mem.name))
 
 

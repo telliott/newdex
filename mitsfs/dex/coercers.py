@@ -27,11 +27,12 @@ def coerce_datetime_no_timezone(field, db=None):
 '''
 Turn a string into a boolean.
 
-Should we support 'f' as false?
 '''
 
 
 def coerce_boolean(field, db=None):
+    if field == 'f':
+        return False
     return bool(field)
 
 
@@ -59,3 +60,14 @@ def uncoerce_shelfcode(field, db=None):
     if type(field) is Shelfcode:
         return int(field)
     return field
+
+
+'''
+Turn a boolean into t/f
+'''
+
+
+def uncoerce_boolean(field, db=None):
+    if field is False:
+        return 'f'
+    return 't'

@@ -16,10 +16,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from test_setup import Case
 from mitsfs.dexdb import DexDB
-from mitsfs.membership import Member, MemberName, TimeWarp
+from mitsfs.membership import Member, TimeWarp
 from mitsfs.dexfile import DexLine
 from mitsfs.error import handle_exception
 from mitsfs.dex.shelfcodes import Shelfcodes
+
+
+def create_test_member(d):
+    # create a user to do the checking out
+    newmember = Member(d)
+    newmember.email = 'thor@asgard.com'
+    newmember.first_name = 'Thor'
+    newmember.last_name = 'Odinson'
+    newmember.create(commit=True)
+    return newmember.id
 
 class MitsfsTest(Case):
     def testConnect(self):
@@ -27,6 +37,7 @@ class MitsfsTest(Case):
             d = DexDB(dsn=self.dsn)
         finally:
             d.db.close()
+
 
     def testCreateCheckoutCheckin(self):
         try:
@@ -39,16 +50,9 @@ class MitsfsTest(Case):
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            member = Member(d, newmember.id)
+            member = Member(d, new_id)
             member.membership_add(
                 'T',
                 datetime.datetime.today() + datetime.timedelta(weeks=12),
@@ -135,16 +139,9 @@ class MitsfsTest(Case):
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            member = Member(d, newmember.id)
+            member = Member(d, new_id)
 
             member.membership_add(
                 'T',
@@ -213,6 +210,8 @@ class MitsfsTest(Case):
         finally:
             d.db.close()
 
+    ''' This section is not working and if we actually used it we'd need to '
+    start from scratch
     def testDuesChange(self):
         try:
             d = DexDB(dsn=self.dsn)
@@ -224,17 +223,10 @@ class MitsfsTest(Case):
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            ''' This section is not working and if we actually used it we'd need to '
-start fro scratch
+            member = Member(d, new_id)
+
            member = Member(d, newmember.id)
             member.membership_add('4', when='2014-12-01')
 
@@ -248,9 +240,9 @@ start fro scratch
             self.assertEqual(cost, 45)
             member.membership_add('4', when='2035-01-01')
             self.assertEqual(int(member.balance), -45)
-'''
         finally:
             d.db.close()
+        '''
 
     def testCreateFineChanges(self):
         try:
@@ -269,16 +261,9 @@ start fro scratch
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            member = Member(d, newmember.id)
+            member = Member(d, new_id)
             member.membership_add(
                 'T',
                 datetime.datetime.today() + datetime.timedelta(weeks=12),
@@ -343,17 +328,9 @@ start fro scratch
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            member = Member(d, newmember.id)
-
+            member = Member(d, new_id)
             member.membership_add('T')
 
             observed_cost = -member.balance
@@ -378,16 +355,9 @@ start fro scratch
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
-            # create a user to do the checking out
-            newmember = Member(d)
-            newmember.create(commit=False)
-            member_name = MemberName(
-                d, member_id=newmember.id, member_name='USER')
-            member_name.create(commit=False)
-            newmember.member_name_default = member_name.id
-            newmember.commit()
+            new_id = create_test_member(d)
 
-            member = Member(d, newmember.id)
+            member = Member(d, new_id)
 
             _, life_cost, _ = member.membership_describe('L')
             _, term_cost, _ = member.membership_describe('T')

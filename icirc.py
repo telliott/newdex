@@ -7,12 +7,12 @@ import datetime
 from mitsfs.dexdb import DexDB, CirculationException
 from mitsfs.ui import Color, banner, menu, tabulate, money_str, lfill, pfill, \
                 read, readmoney, readaddress, readdate, readbarcode, \
-                readvalidate, readnumber, readyes, reademail, \
-                specify, specify_book, specify_member, len_color_str, \
-                bold, smul, sgr0, termwidth
-                    
+                readvalidate, readnumber, readyes, reademail, readphone, \
+                readinitials, specify, specify_book, specify_member, \
+                len_color_str, bold, smul, sgr0, termwidth
+
 from mitsfs.constants import DATABASE_DSN
-from mitsfs.membership import Member, MemberName, MemberEmail, MemberAddress
+from mitsfs.membership import Member
 
 __release__ = '1.1'
 
@@ -413,54 +413,44 @@ def editmem(line):
         print("in a pseudo user account.")
         return
 
-    def addname(line):
-        print(member, 'Existing names:')
-        for x in member.names:
-            print(member.pretty_name(x))
-        new = readvalidate("Name to add: ").strip()
+    def edit_name(line):
+        print(f'Current:\n\t First Name: {member.first_name}, '
+              f'Last Name: {member.last_name}')
+        first = read("New First Name (blank to retain): ").strip()
+        last = read("New Last Name (blank to retain): ").strip()
+ 
+        if first:
+             member.first_name = first
+        if last: 
+            member.last_name = last
 
-        o = MemberName(dex)
-        o.member_id = member.id
-        o.member_name = new
-        o.create()
+    def edit_email(line):
+        print(f'Current: {member.email}')
+        email = reademail("New Email: ").strip()
+ 
+        if email:
+             member.email = email
 
-        if readyes('Set name to default? [' + Color.yN + '] '):
-            member.member_name_default = o.id
+    def edit_address(line):
+        print(f'Current: {member.address}')
+        address = readaddress()
+        if address:
+             member.address = address
 
-    def addemail(line):
-        print(member, 'Existing emails:')
-        for x in member.emails:
-            print(member.pretty_email(x))
-        new = reademail("Email to add: ")
+    def edit_phone(line):
+        print(f'Current: {member.phone}')
+        phone = readphone('New Phone: ').strip()
 
-        o = MemberEmail(dex)
-        o.member_id = member.id
-        o.member_email = new
-        o.create()
+        if phone:
+            member.phone = phone
 
-        if readyes('Set email to default? [' + Color.yN + '] '):
-            member.member_email_default = o.id
+    # TODO: Move this to a protected area and expose in a menu
+    def edit_initials(line):
+        print(f'Current: {member.key_initials}')
+        inits = readinitials().strip()
 
-    def addaddress(line):
-        print(member, "Existing addressess:")
-
-        for x in member.addresses:
-            print(member.pretty_address(x))
-
-        (addr_type, new) = readaddress(membook.address_types)
-
-        print('Adding', membook.address_types[addr_type])
-        new = '\n'.join(new).strip()
-
-        o = MemberAddress(dex)
-        o.member_id = member.id
-        o.member_address = new
-        o.address_type = addr_type
-        o.create()
-
-        if readyes(
-                'Set address to default? [' + Color.yN + '] '):
-            member.member_address_default = o.id
+        if inits:
+            member.key_initials = inits
 
     def remove(_, title, info):
         if len(info) == 0:
@@ -485,78 +475,77 @@ def editmem(line):
         else:
             info[delete - 1].delete()
 
-    def default(_, title, info, field):
-        if len(info) == 0:
-            print("No", title, "to set as default")
-            return
-        print("Set Default", title + ":")
-        table = []
-        for n, x in enumerate(info):
-            lines = str(x).split("\n")
-            table += [(Color.select('%d.' % (n + 1,)), lines[0])]
-            table += [('', line) for line in lines[1:]]
-        table += [(Color.select('Q.'), 'Back to Set Default Menu')]
-        print(tabulate(table))
-        print()
+    # def default(_, title, info, field):
+    #     if len(info) == 0:
+    #         print("No", title, "to set as default")
+    #         return
+    #     print("Set Default", title + ":")
+    #     table = []
+    #     for n, x in enumerate(info):
+    #         lines = str(x).split("\n")
+    #         table += [(Color.select('%d.' % (n + 1,)), lines[0])]
+    #         table += [('', line) for line in lines[1:]]
+    #     table += [(Color.select('Q.'), 'Back to Set Default Menu')]
+    #     print(tabulate(table))
+    #     print()
 
-        select = readnumber(
-            'Select %s to set as default: ' % (title,),
-            0, len(info) + 1, escape='Q')
+    #     select = readnumber(
+    #         'Select %s to set as default: ' % (title,),
+    #         0, len(info) + 1, escape='Q')
 
-        if select is None:
-            print('Nothing selected.')
-            return
-        else:
-            field(info[select - 1].id)
+    #     if select is None:
+    #         print('Nothing selected.')
+    #         return
+    #     else:
+    #         field(info[select - 1].id)
 
-    def set_default_name(name):
-        member.member_name_default = name
+    # def set_default_name(name):
+    #     member.member_name_default = name
 
-    def set_default_email(email):
-        member.member_email_default = email
+    # def set_default_email(email):
+    #     member.member_email_default = email
 
-    def set_default_address(address):
-        member.member_address_default = address
+    # def set_default_address(address):
+    #     member.member_address_default = address
 
-    def add_info(line):
+    def edit_member(line):
         rmenu([
-            ('N', 'Add Name', addname),
-            ('E', 'Add Email', addemail),
-            ('A', 'Add Address', addaddress),
+            ('N', 'Change Name', edit_name),
+            ('E', 'Change Email', edit_email),
+            ('A', 'Change Address', edit_address),
+            ('P', 'Change Phone', edit_phone),
             ('Q', 'Back to Edit Membership', None)
-            ], title='Add Patron Information')
+            ], title='Change Member Information')
 
-    def remove_info(line):
-        rmenu([
-            ('N', 'Remove Name',
-                lambda x: remove(x, 'name', member.other_names)),
-            ('E', 'Remove Email',
-                lambda x: remove(x, 'email', member.other_emails)),
-            ('A', 'Remove Address',
-                lambda x: remove(x, 'address', member.other_addresses)),
-            ('Q', 'Back to Edit Membership', None),
-            ], title='Remove Patron Information')
+    # def remove_info(line):
+    #     rmenu([
+    #         ('N', 'Remove Name',
+    #             lambda x: remove(x, 'name', member.other_names)),
+    #         ('E', 'Remove Email',
+    #             lambda x: remove(x, 'email', member.other_emails)),
+    #         ('A', 'Remove Address',
+    #             lambda x: remove(x, 'address', member.other_addresses)),
+    #         ('Q', 'Back to Edit Membership', None),
+    #         ], title='Remove Patron Information')
 
-    def set_default_info(line):
-        rmenu([
-            ('N', 'Set Default Name',
-                lambda x: default(x, 'name', member.names, set_default_name)),
-            ('E', 'Set Default Email',
-                lambda x: default(
-                    x, 'email', member.emails, set_default_email)),
-            ('A', 'Set Default Address',
-                lambda x: default(
-                    x, 'address', member.addresses, set_default_address)),
-            ('Q', 'Back to Edit Membership', None)
-            ], title='Set Default Patron Information')
+    # def set_default_info(line):
+    #     rmenu([
+    #         ('N', 'Set Default Name',
+    #             lambda x: default(x, 'name', member.names, set_default_name)),
+    #         ('E', 'Set Default Email',
+    #             lambda x: default(
+    #                 x, 'email', member.emails, set_default_email)),
+    #         ('A', 'Set Default Address',
+    #             lambda x: default(
+    #                 x, 'address', member.addresses, set_default_address)),
+    #         ('Q', 'Back to Edit Membership', None)
+    #         ], title='Set Default Patron Information')
 
     print()
     print(member.info())
     rmenu([
         ('M', 'New/Renew Membership', membership),
-        ('A', 'Add Info', add_info),
-        ('R', 'Remove Info', remove_info),
-        ('D', 'Set Default Info', set_default_info),
+        ('E', 'Edit Member', edit_member),
         ('Q', 'Main Menu', None),
         ], title='Membership')
 
@@ -564,52 +553,37 @@ def editmem(line):
 def newmem(line):
     print("Please transfer the patron's information from the sheet.")
 
-    full_name = readvalidate('Legal name (required): ').strip()
+    first = readvalidate("First Name: ").strip()
+    last = readvalidate("Last Name: ").strip()
 
-    names = membook.search(full_name)
+    # TODO: better search function here
+    names = membook.search(first+last)
     if len(names) > 0:
         print("The following people are already in greendex:")
         for n in names:
             print("    " + str(n))
-        print('Are your sure you want to continue, instead of adding a')
+        print('Are your sure you want to continue, instead of editing a')
         print('membership in the edit menu?')
         if not readyes('Continue? [' + Color.yN + '] '):
             return
-    nickname = read("Nickname: ").strip()
     email = reademail("Email (required): ")
-
+    phone = readphone("Phone number: ")
     print()
     print("Postal address that will work long-term:")
     print()
 
-    (addr_type, addr) = readaddress(membook.address_types)
+    address = readaddress()
 
-    if not readyes('Add this patron? [' + Color.yN + '] '):
+    if not readyes('Add this member? [' + Color.yN + '] '):
         return
 
     newmember = Member(dex)
     newmember.create(commit=False)
-
-    member_name = MemberName(
-        dex, member_id=newmember.id, member_name=full_name)
-    member_name.create(commit=False)
-    newmember.member_name_default = member_name.id
-
-    if nickname:
-        nick = MemberName(
-            dex, member_id=newmember.id, member_name=nickname)
-        nick.create(commit=False)
-
-    member_email = MemberEmail(
-        dex, member_id=newmember.id, member_email=email)
-    member_email.create(commit=False)
-    newmember.member_email_default = member_email.id
-
-    member_addr = MemberAddress(
-        dex, member_id=newmember.id,
-        member_address='\n'.join(addr).strip(), address_type='P')
-    member_addr.create(commit=False)
-    newmember.address_default = member_addr.id
+    newmember.first_name = first
+    newmember.last_name = last
+    newmember.email = email
+    newmember.phone = phone
+    newmember.address = address
 
     newmember.commit()
 
@@ -621,7 +595,7 @@ def newmem(line):
     print()
 
     if readyes(
-            'Add a membership to new patron? [' + Color.yN + '] '):
+            'Add a membership to new member? [' + Color.yN + '] '):
         membership(None)
 
 
