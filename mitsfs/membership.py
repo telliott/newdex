@@ -11,10 +11,10 @@ from mitsfs import db
 from mitsfs import dexdb
 from mitsfs import ui
 from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
-
+from mitsfs.dex.membership import Membership
 
 __all__ = [
-    'Membership', 'find_members',
+    'find_members',
     'Checkout', 'MembershipBook', 'TimeWarp', 'star_dissociated',
     'role_members', 'star_cttes',
     ]
@@ -26,9 +26,27 @@ MAX_BOOKS = 8
 
 
 def find_members(db, name, pseudo=False):
-    """returns a list of member objects that match the given name"""
+    """
+    returns a list of member objects that match the given name
+
+    Parameters
+    ----------
+    db : db object
+        The db to query against.
+    name : str
+        aAstring that will be compared against a concatenation of
+        relevant fields.
+    pseudo : boolen, optional
+        Whether to include the fake members in the search. Default is False.
+
+    Returns
+    -------
+    list(member)
+        A list of member objects that match the given string.
+
+    """
     return [
-        Member(db, i)  # turning the tuple into args
+        Member(db, i)
         for i in
         db.cursor.execute(
             'select member_id'
@@ -38,26 +56,74 @@ def find_members(db, name, pseudo=False):
             (name, pseudo))]
 
 
-class Member(db.Entry):
+def format_name(first, last):
+    """
+    quick helper to format names into last, first.
+
+    Parameters
+    ----------
+    first : str
+        first name.
+    last : str
+        last_name.
+
+    Returns
+    -------
+    str
+        a pretty string with the name
+
+    """
+    if not last:
+        return first or ''
+    if not first:
+        return last
+    return f'{last}, {first}'
+
+
+class Member(db.Entry):    
     def __init__(self, db, member_id=None, **kw):
+        """
+        Class representing an individual member of the library, including
+        their contact information, checkouts, balance, etc.
+
+        Parameters
+        ----------
+        db : database object
+            The db to query against.
+        member_id : int, optional
+            The member to operate on. The default is None.
+            If member_id is omitted, it will hold the data provided until 
+            a create_call is issued.
+        **kw : additional parameters
+            key/value parameters to initiate the member object with
+
+        Returns
+        -------
+        None.
+
+        """
         super(Member, self).__init__(
             'member', 'member_id', db, member_id, **kw)
 
     member_id = db.ReadField('member_id')
 
+    # Core member info from the member table
     first_name = db.Field('first_name')
     last_name = db.Field('last_name')
-    key_initials = db.Field('key_initials')
     email = db.Field('email')
     phone = db.Field('phone')
     address = db.Field('address')
 
-    # used to add permissions to this person for committees, etc
+    # initials if you're a keyholder
+    key_initials = db.Field('key_initials')
+
+    # used to add db permissions to this person for committees, etc
     rolname = db.Field('rolname')
 
-    # fake members representing committees
+    # a flag for fake members representing committees
     pseudo = db.Field('pseudo', coerce_boolean)
 
+    # this is the internal auditing and I'm not sure it's actually needed here
     # created = db.ReadField('member_created')
     # created_by = db.ReadField('member_created_by')
     # created_with = db.ReadField('member_created_with')
@@ -157,11 +223,12 @@ class Member(db.Entry):
 
     @property
     def balance(self):
-        return self.cursor.selectvalue(
+        bal = self.cursor.selectvalue(
             'select sum(transaction_amount)'
             ' from transaction'
             ' where member_id=%s',
             (self.member_id,))
+        return bal or 0
 
     @property
     def memberships(self):
@@ -203,7 +270,7 @@ class Member(db.Entry):
         if self.pseudo:
             return 'pseudo-member/committee: %s' % self.first_name
 
-        info = f"Name: {self.last_name}, {self.first_name}"
+        info = f"Name: {format_name(self.first_name, self.last_name)}"
         if self.key_initials:
             info += f" ({self.key_initials})"
         info += '\n'
@@ -504,67 +571,6 @@ class Member(db.Entry):
         finally:
             c.execute('reset role')
 
-class Membership(db.Entry):
-    def __init__(self, db, membership_id=None, **kw):
-        super(Membership, self).__init__(
-            'membership', 'membership_id', db, membership_id, **kw)
-
-    created = db.ReadField('membership_created')
-    created_by = db.ReadField('membership_created_by')
-    created_with = db.ReadField('membership_created_with')
-    membership_id = db.ReadField('membership_id')
-
-    member_id = db.ReadField('member_id')
-    expires = db.ReadField('membership_expires')
-    membership_type = db.ReadField('membership_type')
-    payment_id = db.ReadField('membership_payment')
-
-    @property
-    def description(self):
-
-        return self.cursor.selectvalue(
-            'select membership_description'
-            ' from membership_type'
-            ' where membership_type=%s',
-            (self.membership_type,))
-
-    @property
-    def expired(self):
-        if self.expires is None:
-            return False
-        return self.expires.replace(tzinfo=None) < datetime.datetime.today()
-
-    @property
-    def cost(self):
-        pid = self.payment_id
-        v = list(self.cursor.execute(
-            'select transaction_id2'
-            ' from transaction_link'
-            '  join transaction on transaction_id2 = transaction_id'
-            " where transaction_id1 = %s and transaction_type='V'",
-            (pid,)))
-        if v:
-            return 0.0
-
-        return self.cursor.selectvalue(
-            'select -transaction_amount'
-            ' from transaction'
-            ' where transaction_id=%s',
-            (pid,))
-
-    def __str__(self):
-        desc = self.description + " "
-
-        if self.expires is None:
-            return desc + ui.Color.good("Expires: Never")
-
-        expires = str(self.expires.date())
-        if self.expired:
-            return desc + ui.Color.warning("Expired: " + expires)
-
-        return desc + ui.Color.good("Expires: " + expires)
-
-
 class Checkout(db.Entry):
     def __init__(self, db, checkout_id=None, **kw):
         super(Checkout, self).__init__(
@@ -818,8 +824,8 @@ class MembershipBook(object):
     def vgg(self):
         bad_people = list(self.db.cursor.execute(
             'select'
-            '  member_email,'
-            '  member_name,'
+            '  email,'
+            '  first_name, last_name, '
             '  array_agg(checkout_stamp),'
             '  array_agg(shelfcode),'
             '  array_agg(title_id)'
@@ -827,8 +833,6 @@ class MembershipBook(object):
             '  checkout'
             ' natural join checkout_member'
             ' natural join member'
-            ' join member_name on member_name_default = member_name_id'
-            ' join member_email on member_email_default = member_email_id'
             ' natural join book'
             ' natural join shelfcode'
             ' where'
@@ -837,11 +841,11 @@ class MembershipBook(object):
             '  and checkout_lost is null'
             '  and checkout_stamp <'
             "   (current_timestamp - interval '3 weeks 1 day')"
-            ' group by member_name, member_email order by member_name'))
+            ' group by email, first_name, last_name order by last_name'))
         return [
             (
                 email,
-                name,
+                f'{last_name}, {first_name}',
                 [
                     (checkout_stamp, shelfcode, dexdb.Title(
                         self.db, title_id))
@@ -849,7 +853,8 @@ class MembershipBook(object):
                     in list(zip(stamps, shelfcodes, title_ids))
                     ]
                 )
-            for (email, name, stamps, shelfcodes, title_ids) in bad_people]
+            for (email, first_name, last_name, stamps, shelfcodes, title_ids)
+            in bad_people]
 
 
 class TimeWarp(db.Entry):

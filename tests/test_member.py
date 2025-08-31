@@ -1,30 +1,27 @@
 import unittest
 import os
 import sys
-import psycopg2
 
 testdir = os.path.dirname(__file__)
-srcdir = '../../..'
+srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dexdb import DexDB
-from tests.test_setup import Case
 from mitsfs.membership import Member, find_members
-
+from tests.test_setup import Case
 
 
 class DexDBTest(Case):
-    def test_search(self):
+    def test_members(self):
         try:
             db = DexDB(dsn=self.dsn)
-
             db.getcursor().execute(
                 'insert into'
                 ' member(first_name, last_name, key_initials, email,'
-                ' address, pseudo)'
-                " values('New', 'Member', 'newb', 'new@new.com',"
+                ' address, phone, pseudo)'
+                " values('New', 'Member', '', 'new@new.com',"
                 " '1235 A St, Washington, DC 12345', '', 'f'),"
-                " ('Old', 'Member', 'oldie', 'old@new.com',"
+                " ('Old', 'Member', 'OMB', 'old@new.com',"
                 " '1235 A St, Washington, DC 12345', '', 'f'),"
                 " ('Thor', 'Odinson', 'TO', 'thor@asgard.com',"
                 " 'Asgard', '', 'f')")
@@ -62,38 +59,51 @@ class DexDBTest(Case):
             self.assertEqual('Thor', new_thor.first_name)
             self.assertEqual('Odinson', new_thor.last_name)
             self.assertEqual('thor@asgard.com', new_thor.email)
-            self.assertEqual('TO', new_thor.nickname)
+            self.assertEqual('TO', new_thor.key_initials)
             self.assertFalse(new_thor.pseudo)
 
+            # create loki from scracth
             loki = Member(db)
             loki.first_name = 'Loki'
             loki.last_name = 'Odinson'
             loki.address = 'Jotunheim'
+
+            # no email, so shouldn't be able to create
             self.assertRaises(Exception, loki.create)
-            
+
             loki.email = 'loki@asgard.com'
             loki.create()
-            
+
             loki_id = loki.member_id
             loki = Member(db, loki_id)
             self.assertEqual('Jotunheim', loki.address)
             self.assertEqual('Loki', loki.first_name)
             self.assertEqual('Odinson', loki.last_name)
             self.assertEqual('loki@asgard.com', loki.email)
-            self.assertEqual(None, loki.nickname)
+            self.assertEqual(None, loki.key_initials)
 
             loki.address = 'Asgard'
             loki.email = 'loki@frostgiants.com'
             loki.phone = '650-555-1212'
-            
+
             loki = Member(db, loki_id)
             self.assertEqual('Asgard', loki.address)
             self.assertEqual('loki@frostgiants.com', loki.email)
             self.assertEqual('650-555-1212', loki.phone)
-                        
-            
+
             results = find_members(db, 'Odins')
             self.assertEqual(2, len(results))
+
+            # set through keyword arguments
+            hela = Member(db, None, first_name='Hela', email='hela@asgard.com',
+                          address='Nifelheim')
+            hela.create()
+            hela_id = hela.member_id
+
+            hela = Member(db, hela_id)
+            self.assertEqual('Nifelheim', hela.address)
+            self.assertEqual('hela@asgard.com', hela.email)
+            self.assertEqual('Hela', hela.first_name)
 
         finally:
             db.db.close()

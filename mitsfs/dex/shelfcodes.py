@@ -87,7 +87,7 @@ class Shelfcodes(dict):
             else:
                 normal.append(shelfcode)
         # This line really likes to indent wrongly. Lines up with the for
-        Shelfcodes.generate_shelfcode_regex(normal, double)
+        Shelfcodes.generate_shelfcode_regex(normal, double, True)
 
     '''
     Making a separate db load method for easier mocking

@@ -15,9 +15,6 @@ from mitsfs.dex.shelfcodes import Shelfcodes
 
 
 class DexfileTest(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        Shelfcodes.generate_shelfcode_regex(['H', 'P', 'C/P', 'PA'], ['D'])
-        super().__init__(*args, **kwargs)
 
     def testFieldtuple(self):
         self.assertEqual((), FieldTuple())
@@ -27,6 +24,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual("FieldTuple(('abc', 'def'))", repr(t))
 
     def testDexline(self):
+        Shelfcodes.generate_shelfcode_regex(['P', 'H'], ['D'], force=True)
         self.assertEqual('<<<', str(DexLine()))
         self.assertEqual('<<<', str(DexLine('<<<')))
         t = DexLine('<<<')
@@ -61,6 +59,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual('FOO', deat('FOO'))
 
     def testDex(self):
+        Shelfcodes.generate_shelfcode_regex(['P', 'H', 'C/P'], [], force=True)
         d = Dex()
         self.assertFalse(isinstance(d, bool))
         d.add('AUTHOR, AN<BOOK, A<<P')
@@ -96,6 +95,7 @@ class DexfileTest(unittest.TestCase):
     #     self.assertEqual('<<<', DexLine().logstr())
 
     def test_load(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         dex = Dex('/Nonexistant-file')
         self.assertEqual('/Nonexistant-file', dex.filename)
         self.assertEqual(0, len(dex))
@@ -114,6 +114,8 @@ class DexfileTest(unittest.TestCase):
             self.assertEqual(3, len(dex))
 
     def test_replace(self):
+        Shelfcodes.generate_shelfcode_regex(['H', 'P', 'C/P', 'PA'], ['D'],
+                                            force=True)
         dex = Dex([
             'A<B<<P',
             'D<E<<P',
@@ -124,6 +126,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual(2, int(dex['A<B<<'].codes))
 
     def test_contains(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         dex = Dex([
             'A<B<<P',
             ])
@@ -133,6 +136,7 @@ class DexfileTest(unittest.TestCase):
         self.assertTrue('C<D<<' not in dex)
 
     def test_merge(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         dex1 = Dex([
             'A<B<<P',
             ])
@@ -146,6 +150,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual(1, len(dex2))
 
     def test_sub(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         dex1 = Dex([
             'A<B<<P',
             ])
@@ -155,6 +160,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual(0, len(dex2))
 
     def test_sorted(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         testlist = [
             'D<E<<P',
             'A<B<<P',
@@ -167,6 +173,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual(sorted(testlist), [str(x) for x in dex])
 
     def test_save(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         testlist = [
             'A<B<<P',
             'D<E<<P',
@@ -184,6 +191,7 @@ class DexfileTest(unittest.TestCase):
             shutil.rmtree(tempdir)
 
     def test_search(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         testlist = [
             'A<B<<P',
             'C<EA<<P',
@@ -196,6 +204,7 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual(testlist[3:4], [str(x) for x in dex.grep('<C')])
 
     def test_string(self):
+        Shelfcodes.generate_shelfcode_regex(['P'], [], force=True)
         testlist = [
             'A<B<<P',
             'D<E<<P',
@@ -208,5 +217,4 @@ class DexfileTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Shelfcodes.generate_shelfcode_regex(['H', 'P', 'C/P', 'PA'],['D'])
-    unittest.main()
+     unittest.main()

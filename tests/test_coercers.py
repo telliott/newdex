@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 testdir = os.path.dirname(__file__)
-srcdir = '../../../'
+srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode

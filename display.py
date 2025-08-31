@@ -1,8 +1,16 @@
 #!/usr/bin/python
 
+'''
+This appears to be old inventory management, along with some basic checkout
+and holding information. Most of it is in icirc and hamster.
+
+We can probably deprecate this and move the relevant parts to hamster or
+inventory (currently found.py)
+'''
+
 from mitsfs.dexdb import DexDB
 from mitsfs.ui import specify, read
-
+from mitsfs.membership import format_name
 
 d = DexDB()
 
@@ -24,19 +32,19 @@ while True:
     checkouts = list(sql(
         'select'
         '  checkout_user, checkout_stamp, checkin_stamp,'
-        '  member_name, shelfcode'
+        '  first_name, last_name, shelfcode'
         ' from book natural join checkout natural left join checkout_member'
         '  natural join member natural join shelfcode'
-        '  join member_name on member_name_default = member_name_id'
         ' where title_id=%s'
         ' order by checkout_stamp',
         (title.title_id,)))
     if checkouts:
         print()
         print('CIRCULATION')
-        for key, checkout, checkin, member, shelfcode in checkouts:
-            print('%-9.9s %-32s %-32s %s' % (
-                key, checkout, (checkin or member), shelfcode))
+        for key, checkout, checkin, fname, lname, shelfcode in checkouts:
+            print('%-9.9s %-32s %-32s %s' %
+                  (key, checkout,
+                   (checkin or format_name(fname, lname)), shelfcode))
 
     found = list(sql(
         'select'

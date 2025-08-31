@@ -3,7 +3,7 @@ import os
 import unittest
 
 testdir = os.path.dirname(__file__)
-srcdir = '../../../'
+srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dex.shelfcodes import Shelfcodes
@@ -13,6 +13,8 @@ from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 class EditionsTest(unittest.TestCase):
 
     def testEdition(self):
+        Shelfcodes.generate_shelfcode_regex(['L', 'C/P', 'PA'], ['D'], True)
+
         x = Edition('C/P:2')
         y = Edition('@D400')
 
@@ -37,6 +39,7 @@ class EditionsTest(unittest.TestCase):
                          'double_info: 400, count: 1)', repr(y))
 
     def testEditions(self):
+        Shelfcodes.generate_shelfcode_regex(['L', 'C/P', 'PA'], ['D'], True)
         x = Editions({'C/P': 2, 'L': 1})
         y = Editions('C/P:2,L')
 
@@ -58,6 +61,7 @@ class EditionsTest(unittest.TestCase):
         self.assertEqual(repr(z), repr(y))
 
     def testEditionsMath(self):
+        Shelfcodes.generate_shelfcode_regex(['L', 'C/P', 'PA'], ['D'], True)
         x = Editions('C/P:2,L,D400:2')
         y = Editions('L, D300, PA:2')
 
@@ -86,5 +90,4 @@ class EditionsTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Shelfcodes.generate_shelfcode_regex(['L', 'C/P', 'PA'], ['D'])
     unittest.main()

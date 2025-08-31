@@ -8,7 +8,7 @@ import sys
 from unittest.mock import patch
 
 testdir = os.path.dirname(__file__)
-srcdir = '../../../'
+srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 

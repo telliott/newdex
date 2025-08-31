@@ -578,14 +578,12 @@ def newmem(line):
         return
 
     newmember = Member(dex)
-    newmember.create(commit=False)
     newmember.first_name = first
     newmember.last_name = last
     newmember.email = email
     newmember.phone = phone
     newmember.address = address
-
-    newmember.commit()
+    newmember.create(commit=True)
 
     global member
     member = Member(dex, newmember.id)
