@@ -53,7 +53,7 @@ class Member(db.Entry):
     address = db.Field('address')
 
     # used to add permissions to this person for committees, etc
-    login = db.Field('login')
+    rolname = db.Field('rolname')
 
     # fake members representing committees
     pseudo = db.Field('pseudo', coerce_boolean)
@@ -430,7 +430,7 @@ class Member(db.Entry):
         return not bool(msgs), msgs, cmsg
 
     def key(self, login):
-        self.login = login
+        self.rolname = login
         cursor = self.db.cursor
         cursor.execute('set role "*chamber"')
         cursor.execute('create role "%s" login' % login)
@@ -454,25 +454,25 @@ class Member(db.Entry):
     def dekey(self):
         cursor = self.db.cursor
         for group in self.committees:
-            cursor.execute('revoke "%s" from "%s"' % (group, self.login))
+            cursor.execute('revoke "%s" from "%s"' % (group, self.rolname))
         cursor.execute('set role "*chamber"')
-        cursor.execute('drop role "%s"' % (self.login,))
+        cursor.execute('drop role "%s"' % (self.rolname,))
         cursor.execute('reset role')
         self.db.commit()
 
-    def grant(self, login):
-        if login == '*chamber':
+    def grant(self, role):
+        if role == '*chamber':
             self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('grant "%s" to "%s"' % (login, self.login))
-        if login == '*chamber':
+        self.db.cursor.execute('grant "%s" to "%s"' % (role, self.rolname))
+        if role == '*chamber':
             self.db.cursor.execute('reset role')
         self.db.commit()
 
-    def revoke(self, login):
-        if login == '*chamber':
+    def revoke(self, role):
+        if role == '*chamber':
             self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('revoke "%s" from "%s"' % (login, self.login))
-        if login == '*chamber':
+        self.db.cursor.execute('revoke "%s" from "%s"' % (role, self.rolname))
+        if role == '*chamber':
             self.db.cursor.execute('reset role')
         self.db.commit()
 
@@ -883,11 +883,11 @@ def star_dissociated(db):
         '  roleid is null and'
         '  rolcanlogin and'
         '  not rolsuper and'
-        '  member.login is null'
+        '  member.rolname is null'
         ' order by rolname'))
 
 
-def role_members(db, login):
+def role_members(db, role):
     """Returns an iterator of member objects associated with a given
     database role."""
     return sorted(
@@ -901,9 +901,9 @@ def role_members(db, login):
                 '   on pg_auth_members.roleid = roleid_.oid'
                 '  join pg_roles member_ on'
                 '   pg_auth_members.member = member_.oid'
-                '  join member on member.login = member_.rolname'
+                '  join member on member.rolname = member_.rolname'
                 ' where roleid_.rolname = %s',
-                (login,))),
+                (role,))),
         key=lambda mem: str(mem.name))
 
 

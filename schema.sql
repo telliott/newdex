@@ -569,13 +569,13 @@ grant select on pinkdex to public;
 create table member (
        member_id integer default nextval('id_seq') not null primary key,
        pseudo boolean default false not null,
+       rolname name,
        first_name text, 
        last_name text, 
        email text not null,
        phone text,
        address text,
        key_initials text,
-       login text,
  
        member_created timestamp with time zone default current_timestamp not null,
        member_created_by varchar(64) default current_user not null,
