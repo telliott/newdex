@@ -8,6 +8,7 @@ Basic information about what membership a person has, along with what it cost
 and when it expires
 '''
 
+
 class Membership(db.Entry):
     def __init__(self, db, membership_id=None, **kw):
         super(Membership, self).__init__(

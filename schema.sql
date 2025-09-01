@@ -794,12 +794,12 @@ insert into membership_type(membership_type, membership_description) values ('L'
 insert into membership_type(membership_type, membership_description) values ('T', '3 month');
 insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('Y', 'old yearly', '2014-08-01 00:00 +0', '1 year');
 
-insert into membership_type(membership_type, membership_description, membership_duration) values ('1', '1 year nonstudent', '1 year');
+insert into membership_type(membership_type, membership_description, membership_duration) values ('1', '1 year Nonstudent', '1 year');
 insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('2', '2 year', '2014-08-15 03:00-04', '2 years');
 insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('3', '3 year', '2014-08-15 03:00-04', '3 years');
-insert into membership_type(membership_type, membership_description, membership_duration) values ('4', '4 year nonstudent', '4 years');
-insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('!', '1 year STUDENT', '2014-08-15 03:00-04', '1 year');
-insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('$', '4 year STUDENT', '2014-08-15 03:00-04', '4 years');
+insert into membership_type(membership_type, membership_description, membership_duration) values ('4', '4 year Nonstudent', '4 years');
+insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('!', '1 year Student', '2014-08-15 03:00-04', '1 year');
+insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('$', '4 year Student', '2014-08-15 03:00-04', '4 years');
 
 
 --alter table membership_type add column membership_type_valid_from timestamp with time zone not null default '1969-07-21 02:56:15 +0';
