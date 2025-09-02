@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 import re
-from collections import namedtuple
 
+from mitsfs import db
 
 '''
 
@@ -15,9 +15,28 @@ integer id in the db for joining with other tables.
 '''
 
 
-class Shelfcode(namedtuple('Shelfcode', ['shelfcode_id', 'code', 'description',
-                                         'code_type',  'cost', 'code_class',
-                                         'is_double'])):
+# Cant' put this into the coercers because it creates a circular dependency
+# with the coercer library needing access to shelfcodes
+def coerce_boolean(field, db=None):
+    if field == 'f':
+        return False
+    return bool(field)
+
+
+class Shelfcode(db.Entry):
+    def __init__(self, db, shelfcode_id=None, **kw):
+        super().__init__('shelfcode', 'shelfcode_id',
+                         db, shelfcode_id, **kw)
+
+    shelfcode_id = db.InfoField('shelfcode_id')
+
+    code = db.InfoField('shelfcode')
+    description = db.InfoField('shelfcode_description')
+    code_type = db.InfoField('shelfcode_type')
+    code_class = db.InfoField('shelfcode_class')
+    replacement_cost = db.InfoField('replacement_cost')
+    is_double = db.InfoField('shelfcode_doublecode', coercer=coerce_boolean)
+
     def __str__(self):
         return "%s (%s)" % (self.code, self.description)
 
@@ -79,8 +98,9 @@ class Shelfcodes(dict):
         for row in self.load_from_db(db):
             (s_id, shelfcode, description, ctype,
              cost, code_class, is_double) = row
-            s = Shelfcode(s_id, shelfcode, description, ctype, cost,
-                          code_class, is_double)
+            s = Shelfcode(db, s_id, code=shelfcode, description=description,
+                          code_type=ctype, replacement_cost=cost,
+                          code_class=code_class, is_double=is_double)
             super().__setitem__(s.code, s)
             if is_double:
                 double.append(shelfcode)
@@ -95,7 +115,10 @@ class Shelfcodes(dict):
 
     def load_from_db(self, db):
         c = db.getcursor()
-        c.execute("select * from shelfcode where shelfcode_type != 'D'")
+        c.execute("select shelfcode_id, shelfcode, shelfcode_description,"
+                  " shelfcode_type, replacement_cost, shelfcode_class,"
+                  " shelfcode_doublecode"
+                  " from shelfcode where shelfcode_type != 'D'")
         return c.fetchall()
 
     '''

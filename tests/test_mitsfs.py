@@ -31,13 +31,13 @@ def create_test_member(d):
     newmember.create(commit=True)
     return newmember.id
 
+
 class MitsfsTest(Case):
     def testConnect(self):
         try:
             d = DexDB(dsn=self.dsn)
         finally:
             d.db.close()
-
 
     def testCreateCheckoutCheckin(self):
         try:
@@ -49,17 +49,14 @@ class MitsfsTest(Case):
                 " values('P', 'Paperbacks', 'C')")
             d.commit()
             d.shelfcodes = Shelfcodes(d)
+            membook = d.membook()
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add(
-                'T',
-                datetime.datetime.today() + datetime.timedelta(weeks=12),
-                0)
+            member.membership_add(membook.membership_types['T'])
             self.assertEqual(member.checkout_good()[0], False)
             member.cash_transaction(-member.balance, 'P', 'pay membership')
-
             self.assertEqual(member.checkout_good()[0], True)
 
             # create a book for us to check out
@@ -130,8 +127,9 @@ class MitsfsTest(Case):
     def testCheckOutLoseNoTimewarp(self):
         # Consider refactoring a bunch of this into a fixture of some sort
         d = DexDB(dsn=self.dsn)
+        membook = d.membook()
         try:
-  
+
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
@@ -143,15 +141,12 @@ class MitsfsTest(Case):
 
             member = Member(d, new_id)
 
-            member.membership_add(
-                'T',
-                datetime.datetime.today() + datetime.timedelta(weeks=12),
-                0)
+            member.membership_add(membook.membership_types['T'])
             self.assertEqual(member.checkout_good()[0], False)
             member.cash_transaction(-member.balance, 'P', 'pay membership')
-            
+
             self.assertEqual(member.checkout_good()[0], True)
-            
+
             # create a book for us to check out
             d.add(DexLine('AUTHOR<TITLE<SERIES<P'))
 
@@ -228,7 +223,7 @@ class MitsfsTest(Case):
             member = Member(d, new_id)
 
            member = Member(d, newmember.id)
-            member.membership_add('4', when='2014-12-01')
+            member.membership_add(membook.membership_types['4'])
 
             self.assertEqual(int(member.balance), -44)
             member.cash_transaction(-member.balance, 'P', 'pay membership')
@@ -238,7 +233,7 @@ class MitsfsTest(Case):
                 '4', when='2035-01-01')
             self.assertTrue(expiration)
             self.assertEqual(cost, 45)
-            member.membership_add('4', when='2035-01-01')
+            member.membership_add(membook.membership_types['4'])
             self.assertEqual(int(member.balance), -45)
         finally:
             d.db.close()
@@ -247,6 +242,7 @@ class MitsfsTest(Case):
     def testCreateFineChanges(self):
         try:
             d = DexDB(dsn=self.dsn)
+            membook = d.membook()
 
             # make sure there is no timewarp
             d.cursor.execute('delete from timewarp')
@@ -264,10 +260,7 @@ class MitsfsTest(Case):
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add(
-                'T',
-                datetime.datetime.today() + datetime.timedelta(weeks=12),
-                0)
+            member.membership_add(membook.membership_types['T'])
             self.assertEqual(member.checkout_good()[0], False)
             member.cash_transaction(-member.balance, 'P', 'pay membership')
 
@@ -316,6 +309,7 @@ class MitsfsTest(Case):
     def testCreateCost(self):
         try:
             d = DexDB(dsn=self.dsn)
+            membook = d.membook()
 
             # make sure there is no timewarp
             d.cursor.execute('delete from timewarp')
@@ -331,7 +325,7 @@ class MitsfsTest(Case):
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add('T')
+            member.membership_add(membook.membership_types['T'])
 
             observed_cost = -member.balance
 
@@ -343,6 +337,7 @@ class MitsfsTest(Case):
     def testCreateUnexpiredDiscount(self):
         try:
             d = DexDB(dsn=self.dsn)
+            membook = d.membook()
 
             # make sure there is no timewarp
             d.cursor.execute('delete from timewarp')
@@ -359,32 +354,32 @@ class MitsfsTest(Case):
 
             member = Member(d, new_id)
 
-            _, life_cost, _ = member.membership_describe('L')
-            _, term_cost, _ = member.membership_describe('T')
-            _, year_cost, _ = member.membership_describe('1')
-            
-            member.membership_add('T')
+            lcost = membook.membership_types['L'].cost
+            tcost = membook.membership_types['T'].cost
+            ycost = membook.membership_types['1'].cost
+
+            member.membership_add(membook.membership_types['T'])
             observed_cost = -member.balance
-            
+
 
             self.assertEqual(observed_cost, member.membership.cost)
-            self.assertEqual(observed_cost, term_cost)
+            self.assertEqual(observed_cost, tcost)
 
             member.cash_transaction(-member.balance, 'P', 'pay membership')
 
-            member.membership_add('1')
+            member.membership_add(membook.membership_types['1'])
             observed_cost = -member.balance
 
             self.assertEqual(observed_cost, member.membership.cost)
-            self.assertEqual(observed_cost, year_cost)
+            self.assertEqual(observed_cost, ycost)
 
             member.cash_transaction(-member.balance, 'P', 'pay membership')
 
-            member.membership_add('L')
+            member.membership_add(membook.membership_types['L'])
             observed_cost = -member.balance
 
             self.assertEqual(observed_cost, member.membership.cost)
-            self.assertEqual(observed_cost, life_cost - year_cost)
+            self.assertEqual(observed_cost, lcost - ycost)
 
         finally:
             d.db.close()
@@ -393,7 +388,7 @@ class MitsfsTest(Case):
 # class MitsfsNoDBTest(unittest.TestCase):
 #     def testHandleException(self):
 #         with patch("mitsfs.error.subprocess.Popen", wraps=MockPopen) as mockP:
-#             try:                
+#             try:
 #                 try:
 #                     {}['foo']
 #                 except Exception:
@@ -433,6 +428,6 @@ class MitsfsTest(Case):
 
 #     def wait(self):
 #         return 0
- 
+
 if __name__ == '__main__':
     unittest.main()

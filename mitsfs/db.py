@@ -273,6 +273,14 @@ class ReadField(ReadFieldUncached):
         obj.cache[self.field] = val
         return val
 
+class InfoField(ReadField):
+    '''
+    ReadField that can also take pregenerated values and not write them back
+    to the db. Useful for bulk load of foundational information such as 
+    shelfcodes and memberships
+    '''
+    def set(self, obj, val):
+        obj.cache[self.field] = val
 
 '''
 This is pulled out for readability and to be clear what it is.

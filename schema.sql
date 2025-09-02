@@ -766,12 +766,14 @@ create index transaction_transaction_created_idx on transaction(transaction_crea
 grant insert, select on transaction to keyholders;
 
 create table membership_type (
+       membership_type_id integer default nextval('id_seq') not null,
        membership_type char(1) primary key,
+       membership_type_cost numeric not null,
        membership_description text not null,
        membership_type_valid_from timestamp with time zone not null default '1969-07-21 02:56:15 +0',
        membership_type_valid_until timestamp with time zone,
        membership_duration interval,
-       membership_type_id integer default nextval('id_seq') not null,
+       membership_type_active bool not null default 't',
        membership_type_created timestamp with time zone default current_timestamp not null,
        membership_type_created_by varchar(64) default current_user not null,
        membership_type_created_with varchar(64) default 'SQL' not null,
@@ -789,17 +791,17 @@ create trigger membership_type_log
 grant select on membership_type to keyholders;
 grant insert, update, delete on membership_type to "*chamber";
 
-insert into membership_type(membership_type, membership_description) values ('P', 'Permanent');
-insert into membership_type(membership_type, membership_description) values ('L', 'Life');
-insert into membership_type(membership_type, membership_description) values ('T', '3 month');
-insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('Y', 'old yearly', '2014-08-01 00:00 +0', '1 year');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_active) values ('P', 3000.0, 'Permanent', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_active) values ('L', 300.0, 'Life', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_active) values ('T', 5.0, '3 month', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_valid_until, membership_duration, membership_type_active) values ('Y', 10.0, 'old yearly', '2014-08-01 00:00 +0', '1 year', 'f');
 
-insert into membership_type(membership_type, membership_description, membership_duration) values ('1', '1 year Nonstudent', '1 year');
-insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('2', '2 year', '2014-08-15 03:00-04', '2 years');
-insert into membership_type(membership_type, membership_description, membership_type_valid_until, membership_duration) values ('3', '3 year', '2014-08-15 03:00-04', '3 years');
-insert into membership_type(membership_type, membership_description, membership_duration) values ('4', '4 year Nonstudent', '4 years');
-insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('!', '1 year Student', '2014-08-15 03:00-04', '1 year');
-insert into membership_type(membership_type, membership_description, membership_type_valid_from, membership_duration) values ('$', '4 year Student', '2014-08-15 03:00-04', '4 years');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_duration, membership_type_active) values ('1', 15.0, '1 year Nonstudent', '1 year', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_valid_until, membership_duration, membership_type_active) values ('2', 28.0, '2 year', '2014-08-15 03:00-04', '2 years', 'f');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_valid_until, membership_duration, membership_type_active) values ('3', 36.0, '3 year', '2014-08-15 03:00-04', '3 years', 'f');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_duration, membership_type_active) values ('4', 45.0, '4 year Nonstudent', '4 years', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_valid_from, membership_duration, membership_type_active) values ('!', 10.0, '1 year Student', '2014-08-15 03:00-04', '1 year', 't');
+insert into membership_type(membership_type, membership_type_cost, membership_description, membership_type_valid_from, membership_duration, membership_type_active) values ('$', 20.0, '4 year Student', '2014-08-15 03:00-04', '4 years', 't');
 
 
 --alter table membership_type add column membership_type_valid_from timestamp with time zone not null default '1969-07-21 02:56:15 +0';

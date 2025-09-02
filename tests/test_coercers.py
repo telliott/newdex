@@ -13,17 +13,10 @@ from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode
 from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
 from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
 
-test_shelfcodes = [
-    (1195341, 'L', 'Large Fiction', 'C', 40, 'F', 'f'),
-    (1195344, 'S', 'Small Fiction', 'C', 15, 'F', 'f'),
-    (74, 'SFWA-TD', 'SFWA Tor Double', 'D', 40, 'D', 't')]
-
-
-def fake_load(self, db):
-    return test_shelfcodes
-
-
-@patch.object(Shelfcodes, 'load_from_db', fake_load)
+'''
+The shelfcode coercers are tested in the Shelfcode tests, where the 
+infrasturcture is better set up for them.
+'''
 class CoercersTest(unittest.TestCase):
 
     def test_coerce_datetime_no_timezone(self):
@@ -38,19 +31,6 @@ class CoercersTest(unittest.TestCase):
         self.assertEqual(True, coerce_boolean('t'))
         self.assertEqual(False, coerce_boolean(0))
         self.assertEqual(False, coerce_boolean(''))
-
-    def test_coerce_shelfcode(self):
-        d = object
-
-        self.assertEqual('SFWA-TD', coerce_shelfcode(74, d).code)
-        self.assertEqual('L', coerce_shelfcode(1195341, d).code)
-
-    def test_uncoerce_shelfcode(self):
-        x = Shelfcode(25, 'L', 'desc', 'C', 40, 'F', None)
-        y = 25
-
-        self.assertEqual(25, uncoerce_shelfcode(x))
-        self.assertEqual(25, uncoerce_shelfcode(y))
 
 
 if __name__ == '__main__':

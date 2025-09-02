@@ -11,7 +11,7 @@ and when it expires
 
 class Membership(db.Entry):
     def __init__(self, db, membership_id=None, **kw):
-        super(Membership, self).__init__(
+        super().__init__(
             'membership', 'membership_id', db, membership_id, **kw)
 
     membership_id = db.ReadField('membership_id')
@@ -26,6 +26,8 @@ class Membership(db.Entry):
     created_by = db.ReadField('membership_created_by')
     created_with = db.ReadField('membership_created_with')
 
+
+    
     @property
     def description(self):
         '''
@@ -35,7 +37,7 @@ class Membership(db.Entry):
         Returns
         -------
         str
-            Description string of tht membership.
+            Description string of the membership.
 
         '''
 
@@ -48,7 +50,7 @@ class Membership(db.Entry):
     @property
     def expired(self):
         '''
-        Figures out whether the current membership  for this person is expired
+        Figures out whether the current membership for this person is expired
 
         Returns
         -------

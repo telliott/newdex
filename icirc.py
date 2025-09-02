@@ -376,31 +376,47 @@ def viewmem(line):
 
 def membership(line):
     def validate(line):
-        line = line.strip().lower()
-        if (len(line) == 1 and
-                0 <= (ord(line) - ord('a')) < len(membook.membership_types)):
+        line = line.strip().upper()
+        if line in membook.membership_types:
             return True
-        print('Input must be a letter between a and', \
-            chr(ord('a') + len(membook.membership_types) - 1))
         return False
+    
+        # if (len(line) == 1 and
+        #         0 <= (ord(line) - ord('a')) < len(membook.membership_types)):
+        #     return True
+        # print('Input must be a letter between a and', \
+        #     chr(ord('a') + len(membook.membership_types) - 1))
+        # return False
+
 
     print("Select membership type:")
-    print(tabulate(
-        [Color.select(chr(ord('a') + n) + '.'), d, '$%.2f' % c]
-        for (n, (t, d, c)) in enumerate(membook.membership_types)))
+    
+    print(tabulate([Color.select(key) + '.', 
+                    membook.membership_types[key].description,
+                    '$%.2f' % membook.membership_types[key].cost]
+                    for key in membook.membership_types.keys()))
+
+    # print(tabulate(
+    #     [Color.select(chr(ord('a') + n) + '.'), d, '$%.2f' % c]
+    #     for (n, (t, d, c)) in enumerate(
+    #             [(m.code, m.description, m.cost) for m in 
+    #              sorted(membook.membership_types.values(), 
+    #                     key=lambda d: d.cost)]
+    #             )))
 
     member_type_char = readvalidate(
-        'Select Membership Type: ', validate=validate).lower()
-    member_type = membook.membership_types[ord(member_type_char) - ord('a')][0]
+        'Select Membership Type: ', validate=validate).upper()
+    member_type = membook.membership_types[member_type_char]
 
-    description, cost, expiration = member.membership_describe(member_type)
-    msg = '%s membership would cost $%.2f' % (description, cost)
+    expiration = member.membership_addition_expiration(member_type)
+    
+    msg = '%s membership would cost $%.2f' % (member_type.description, 
+                                              -member_type.cost)
     if expiration:
-        lfill(
-            (msg + ' and expire at').split() + [str(expiration) + '.'])
+        msg += f" and expire on {expiration.strftime('%Y-%m-%d')}."
     else:
-        pfill(msg + '.')
-
+        msg += '.'
+    print (msg)
     if readyes('Continue? [' + Color.yN + '] '):
         member.membership_add(member_type)
         check_balance(member, 'Membership Payment')

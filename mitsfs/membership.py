@@ -12,6 +12,7 @@ from mitsfs import dexdb
 from mitsfs import ui
 from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
 from mitsfs.dex.membership import Membership
+from mitsfs.dex.membership_info import MembershipOptions
 
 __all__ = [
     'find_members',
@@ -130,96 +131,120 @@ class Member(db.Entry):
     # modified = db.ReadField('member_modified')
     # modified_by = db.ReadField('member_modified_by')
     # modified_with = db.ReadField('member_modified_with')
-
+    
+    membership_ = None
 
     @property
     def membership(self):
-
+        if self.membership_:
+            return self.membership_
+        
         member_id = self.cursor.selectvalue(
             'select membership_id'
             ' from membership'
             ' where member_id=%s'
             ' order by membership_created desc limit 1',
             (self.member_id,))
-        if member_id is None:
-            return None
+        if member_id is not None:
+            self.membership_ = Membership(self.db, membership_id=member_id)   
+        return self.membership_
 
-        return Membership(self.db, membership_id=member_id)
+    def membership_add(self, member_type):
+       
+        desc = member_type.description
+        cost = member_type.cost
+        new_expiration = None
+        
+        if member_type.duration is not None:
+            new_expiration = self.membership_addition_expiration(member_type)
+            desc += f" Expires on {new_expiration.strftime('%Y-%m-%d')}"
+        elif self.membership and not self.membership.expired:
+            # Apply a discount to L/P if they have an active membership
+            cost -= self.membership.cost
+            
+        transaction_id = self.transaction(-cost, 'M', desc, commit=False)
 
-    def membership_add(
-            self, member_type, expiration=None, cost=None, when='now'):
-        # expiration and cost are now ignored
-        description, cost, expiration = self.membership_describe(
-            member_type, when)
-        if expiration:
-            description += ' Expires at %s' % (expiration,)
-
-        transaction_id = self.transaction(
-            -cost, 'M', description, commit=False)
-
-        self.cursor.execute(
+        ms_id = self.cursor.selectvalue(
             'insert into membership ('
             ' membership_type, member_id,'
             ' membership_expires, membership_payment)'
-            ' values (%s, %s, %s, %s)',
-            (member_type, self.member_id, expiration, transaction_id))
+            ' values (%s, %s, %s, %s)'
+            ' returning membership_id',
+            (member_type.code, self.member_id, new_expiration, transaction_id))
 
         self.db.commit()
-
-    def membership_describe(self, membership_type, when='now'):
-        '''Describe a new membership: text description, how much it would cost,
-         and wnen it would expire'''
-
-        c = self.cursor.execute(
-            'select'
-            '  membership_description, membership_cost, membership_duration'
-            ' from membership_type'
-            '  natural join membership_cost'
-            '  natural join ('
-            '   select'
-            '    membership_type,'
-            '    max(membership_cost_valid_from) as membership_cost_valid_from'
-            '   from membership_cost'
-            '   where membership_cost_valid_from < %s'
-            '   group by membership_type) as current'
-            ' where membership_type=%s',
-            (when, membership_type))
-
-        if c.rowcount == 0:
+        self.membership_ = Membership(self.db, membership_id=ms_id) 
+        
+    def membership_addition_expiration(self, mtype):
+        if mtype.duration is None:
             return None
 
-        (description, cost, duration) = c.fetchone()
+        return self.cursor.selectvalue(
+               'select'
+               "  date_trunc("
+               "     'day', max(membership_expires at time zone 'PST8PDT'))"
+               "   at time zone 'PST8PDT' at time zone 'EST5EDT'"
+               '  + %s'
+               ' from (select membership_expires from membership'
+               '        where member_id=%s'
+               '       union select current_timestamp as membership_expires'
+               '      ) as ifnotnow',
+               (mtype.duration, self.member_id))
 
-        if duration:
-            # + postgres is better at python at time intervals
-            # + the return value of date_trunc doesn't always have a time zone;
-            #   thus the first "at time zone" on line 4 puts it in a time zone
-            #   then converts back to ostensible local time
+    # def membership_describe(self, membership_type, when='now'):
+    #     '''Describe a new membership: text description, how much it would cost,
+    #      and wnen it would expire'''
 
-            c = self.cursor.execute(
-                'select'
-                "  date_trunc("
-                "     'day', max(membership_expires at time zone 'PST8PDT'))"
-                "   at time zone 'PST8PDT' at time zone 'EST5EDT'"
-                '  + (select membership_duration'
-                '      from membership_type'
-                '      where membership_type=%s)'
-                ' from (select membership_expires from membership'
-                '        where member_id=%s'
-                '       union select current_timestamp as membership_expires'
-                '      ) as ifnotnow',
-                (membership_type, self.member_id))
-            if c.rowcount == 0:
-                expiration = None
-            else:
-                expiration = c.fetchone()[0]
-        else:
-            expiration = None
+    #     c = self.cursor.execute(
+    #         'select'
+    #         '  membership_description, membership_cost, membership_duration'
+    #         ' from membership_type'
+    #         '  natural join membership_cost'
+    #         '  natural join ('
+    #         '   select'
+    #         '    membership_type,'
+    #         '    max(membership_cost_valid_from) as membership_cost_valid_from'
+    #         '   from membership_cost'
+    #         '   where membership_cost_valid_from < %s'
+    #         '   group by membership_type) as current'
+    #         ' where membership_type=%s',
+    #         (when, membership_type))
 
-        if self.membership and not self.membership.expired and not expiration:
-            cost -= self.membership.cost
+    #     if c.rowcount == 0:
+    #         return None
 
-        return description, cost, expiration
+    #     (description, cost, duration) = c.fetchone()
+
+    #     if duration:
+    #         # + postgres is better at python at time intervals
+    #         # + the return value of date_trunc doesn't always have a time zone;
+    #         #   thus the first "at time zone" on line 4 puts it in a time zone
+    #         #   then converts back to ostensible local time
+
+    #         c = self.cursor.execute(
+    #             'select'
+    #             "  date_trunc("
+    #             "     'day', max(membership_expires at time zone 'PST8PDT'))"
+    #             "   at time zone 'PST8PDT' at time zone 'EST5EDT'"
+    #             '  + (select membership_duration'
+    #             '      from membership_type'
+    #             '      where membership_type=%s)'
+    #             ' from (select membership_expires from membership'
+    #             '        where member_id=%s'
+    #             '       union select current_timestamp as membership_expires'
+    #             '      ) as ifnotnow',
+    #             (membership_type, self.member_id))
+    #         if c.rowcount == 0:
+    #             expiration = None
+    #         else:
+    #             expiration = c.fetchone()[0]
+    #     else:
+    #         expiration = None
+
+    #     if self.membership and not self.membership.expired and not expiration:
+    #         cost -= self.membership.cost
+
+    #     return description, cost, expiration
 
     @property
     def balance(self):
@@ -678,7 +703,7 @@ class Checkout(db.Entry):
             'update checkout set checkout_lost=%s where checkout_id=%s',
             (when, self.id))
 
-        fine = -self.book.shelfcode.cost
+        fine = -self.book.shelfcode.replacement_cost
         self.member.fine_transaction(
             fine,
             'Lost book %s' % (self.book,),
@@ -789,23 +814,7 @@ class MembershipBook(object):
             '  transaction_type, transaction_type_description'
             ' from transaction_type'
             ' where not transaction_type_basic'))
-        self.membership_types = list(self.db.cursor.execute(
-            'select membership_type, membership_description, membership_cost'
-            ' from membership_type'
-            ' natural join membership_cost'
-            ' natural join ('
-            '  select'
-            '   membership_type,'
-            '   max(membership_cost_valid_from) as membership_cost_valid_from'
-            '  from membership_cost'
-            '  where membership_cost_valid_from < current_timestamp'
-            '  group by membership_type) as current_costs'
-            ' where'
-            '  (membership_type_valid_until is null'
-            '   or current_timestamp < membership_type_valid_until)'
-            '  and current_timestamp > membership_type_valid_from'
-            ' order by membership_duration, membership_type'
-            ))
+        self.membership_types = MembershipOptions(db)
         self.db.rollback()
 
     def complete_name(self, s):
