@@ -29,3 +29,7 @@ else:
     CODEBASE = os.path.join(LOCKER, 'newdex')
 DATADEX_FILE = os.path.join(DEXBASE, 'datadex')
 DATABASE_DSN = 'dbname=mitsfs host=localhost'
+
+
+OVERDUE_DAY = 0.1
+MAX_OVERDUE = 4.0

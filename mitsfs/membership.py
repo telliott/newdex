@@ -13,6 +13,8 @@ from mitsfs import ui
 from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
 from mitsfs.dex.membership import Membership
 from mitsfs.dex.membership_info import MembershipOptions
+from mitsfs.dex.transactions import get_transactions, Transaction, \
+    FineTransaction, OverdueTransaction
 
 __all__ = [
     'find_members',
@@ -81,7 +83,7 @@ def format_name(first, last):
     return f'{last}, {first}'
 
 
-class Member(db.Entry):    
+class Member(db.Entry):
     def __init__(self, db, member_id=None, **kw):
         """
         Class representing an individual member of the library, including
@@ -93,7 +95,7 @@ class Member(db.Entry):
             The db to query against.
         member_id : int, optional
             The member to operate on. The default is None.
-            If member_id is omitted, it will hold the data provided until 
+            If member_id is omitted, it will hold the data provided until
             a create_call is issued.
         **kw : additional parameters
             key/value parameters to initiate the member object with
@@ -131,14 +133,26 @@ class Member(db.Entry):
     # modified = db.ReadField('member_modified')
     # modified_by = db.ReadField('member_modified_by')
     # modified_with = db.ReadField('member_modified_with')
-    
+
     membership_ = None
 
     @property
     def membership(self):
+        '''
+        The current active membership for the person (if any). Returns a
+        Membership object.
+
+        Note that it caches the object to avoid excessive db lookups.
+
+        Returns
+        -------
+        Membership
+            The active or most recent membership associated with a member.
+
+        '''
         if self.membership_:
             return self.membership_
-        
+
         member_id = self.cursor.selectvalue(
             'select membership_id'
             ' from membership'
@@ -146,23 +160,38 @@ class Member(db.Entry):
             ' order by membership_created desc limit 1',
             (self.member_id,))
         if member_id is not None:
-            self.membership_ = Membership(self.db, membership_id=member_id)   
+            self.membership_ = Membership(self.db, membership_id=member_id)
         return self.membership_
 
     def membership_add(self, member_type):
-       
+        '''
+        Adds new membership of the provided MembershipInfo object
+        to the member, including logging the transaction.
+
+        Parameters
+        ----------
+        member_type : MembershipInfo
+            The membership type to add
+
+        Returns
+        -------
+        None.
+
+        '''
         desc = member_type.description
         cost = member_type.cost
         new_expiration = None
-        
+
         if member_type.duration is not None:
             new_expiration = self.membership_addition_expiration(member_type)
             desc += f" Expires on {new_expiration.strftime('%Y-%m-%d')}"
         elif self.membership and not self.membership.expired:
             # Apply a discount to L/P if they have an active membership
             cost -= self.membership.cost
-            
-        transaction_id = self.transaction(-cost, 'M', desc, commit=False)
+
+        tx = Transaction(self.db, self.member_id, amount=-cost,
+                         transaction_type='M', description=desc)
+        tx.create(commit=False)
 
         ms_id = self.cursor.selectvalue(
             'insert into membership ('
@@ -170,12 +199,28 @@ class Member(db.Entry):
             ' membership_expires, membership_payment)'
             ' values (%s, %s, %s, %s)'
             ' returning membership_id',
-            (member_type.code, self.member_id, new_expiration, transaction_id))
+            (member_type.code, self.member_id, new_expiration, tx.id))
 
         self.db.commit()
-        self.membership_ = Membership(self.db, membership_id=ms_id) 
-        
+        self.membership_ = Membership(self.db, membership_id=ms_id)
+
     def membership_addition_expiration(self, mtype):
+        '''
+        Calculates the new expiration date for a member if the
+        MembershipInfo object is purchased. Takes into account how much
+        time is remaining on their current membership.
+
+        Parameters
+        ----------
+        member_type : MembershipInfo
+            Proposed MembershipInfo to purchase
+
+        Returns
+        -------
+        datetime
+            The date the membership will expire.
+
+        '''
         if mtype.duration is None:
             return None
 
@@ -248,6 +293,13 @@ class Member(db.Entry):
 
     @property
     def balance(self):
+        '''
+        Returns
+        -------
+        decimal
+            The current member balance.
+
+        '''
         bal = self.cursor.selectvalue(
             'select sum(transaction_amount)'
             ' from transaction'
@@ -256,8 +308,13 @@ class Member(db.Entry):
         return bal or 0
 
     @property
-    def memberships(self):
-
+    def membership_history(self):
+        '''
+        Returns
+        -------
+        list
+            List of all memberships purchased by the user historically
+        '''
         return [
             Membership(self.db, membership_id=x)
             for x in self.cursor.execute(
@@ -292,6 +349,13 @@ class Member(db.Entry):
                 else 'COMMITTEE'))
 
     def info(self):
+        '''
+        Returns
+        -------
+        string
+            Helpful summary display of basic user information.
+
+        '''
         if self.pseudo:
             return 'pseudo-member/committee: %s' % self.first_name
 
@@ -314,142 +378,165 @@ class Member(db.Entry):
         return info
 
     @property
-    def transactions(self):
-        return list(self.cursor.execute(
-            'select'
-            '  transaction_amount, transaction_description,'
-            '  transaction_type, transaction_created_by, transaction_created'
-            ' from transaction'
-            ' where member_id = %s'
-            ' order by transaction_created',
-            (self.member_id,)))
+    def transactions(self, include_voided=True):
+        '''
+        Returns
+        -------
+        list (Transactions).
+            A list of transaction objects, sorted oldest to newest
 
-    def transaction(self, amount, txntype, desc, commit=True):
-        txn_id = self.cursor.selectvalue(
-            'insert into transaction'
-            '  (transaction_amount, member_id,'
-            '   transaction_type, transaction_description)'
-            ' values (%s, %s, %s, %s) returning transaction_id',
-            (amount, self.member_id, txntype, desc))
-        if commit:
-            self.db.commit()
-        return txn_id
+        '''
+        return get_transactions(self.db, self.member_id, include_voided)
 
-    def cash_transaction(self, amount, txntype, desc):
-        cash = find_members(self.db, 'CASH', pseudo=True)[0]
-        txn1_id = self.transaction(amount, txntype, desc, commit=False)
-        txn2_id = cash.transaction(amount, txntype, desc, commit=False)
-        self.cursor.execute(
-            'insert into transaction_link values (%s, %s)',
-            (txn1_id, txn2_id))
-        self.db.commit()
+    # def transaction(self, amount, txntype, desc, commit=True):
+    #     '''
+    #     Adds a transaction to the transaction table for this member
 
-    def fine_transaction(self, amount, desc, checkout_id, commit=True):
-        txn_id = self.transaction(amount, 'F', desc, commit=False)
-        self.cursor.execute(
-            'insert into fine_payment values (%s, %s)',
-            (checkout_id, txn_id))
-        if commit:
-            self.db.commit()
+    #     Parameters
+    #     ----------
+    #     amount : TYPE
+    #         DESCRIPTION.
+    #     txntype : TYPE
+    #         DESCRIPTION.
+    #     desc : TYPE
+    #         DESCRIPTION.
+    #     commit : TYPE, optional
+    #         DESCRIPTION. The default is True.
 
-    def late_transaction(self, days, book, checkout_id, when, commit=False):
-        'Factor out some late finage.  Does not commit by default. '
-        fines = dict(self.db.getcursor().execute(
-            'select fine_name, fine'
-            ' from fine'
-            '  natural join ('
-            '   select fine_name, max(fine_valid_from) as fine_valid_from'
-            '  from fine where fine_valid_from < %s'
-            '  group by fine_name) as current',
-            (when,)))
-        fine = -min(days * fines['lateday'], fines['maxlate'])
-        self.fine_transaction(
-            fine,
-            'Book %s overdue %d days.' % (book, days),
-            checkout_id,
-            commit=commit)
-        return fine
+    #     Returns
+    #     -------
+    #     txn_id : TYPE
+    #         DESCRIPTION.
 
-    @property
-    def non_void_transactions(self):
-        return list(self.cursor.execute(
-            "select"
-            "  transaction_id, transaction_amount, transaction_description,"
-            "  transaction_type, transaction_created_by, transaction_created"
-            " from transaction"
-            " where transaction_id in ("
-            "  select t0.transaction_id"
-            "  from transaction t0"
-            "  where"
-            "   t0.transaction_type != 'V' and"
-            "   t0.member_id = %s"
-            "  except ("
-            "   select t1.transaction_id"
-            "    from"
-            "     transaction t1"
-            "     inner join transaction_link tl"
-            "      on (t1.transaction_id = tl.transaction_id1)"
-            "     inner join transaction t2"
-            "      on (t2.transaction_id =  tl.transaction_id2)"
-            "    where t2.transaction_type = 'V'"
-            "   union select t1.transaction_id"
-            "    from"
-            "     transaction t1"
-            "     inner join transaction_link tl"
-            "      on (t1.transaction_id = tl.transaction_id2)"
-            "     inner join transaction t2"
-            "      on (t2.transaction_id = tl.transaction_id1)"
-            "    where t2.transaction_type = 'V'))"
-            " order by transaction_created",
-            (self.member_id,)))
+    #     '''
+    #     txn_id = self.cursor.selectvalue(
+    #         'insert into transaction'
+    #         '  (transaction_amount, member_id,'
+    #         '   transaction_type, transaction_description)'
+    #         ' values (%s, %s, %s, %s) returning transaction_id',
+    #         (amount, self.member_id, txntype, desc))
+    #     if commit:
+    #         self.db.commit()
+    #     return txn_id
 
-    def void_transaction(self, txn_id):
-        with self.getcursor() as c:
-            txn_ids = self.void_transaction_inner(txn_id, c)
-        voided = []
-        for x in txn_ids:
-            voided += list(self.cursor.execute(
-                'select'
-                '  transaction_amount, transaction_description,'
-                '  transaction_type, transaction_created_by,'
-                '  transaction_created, member_id'
-                ' from transaction'
-                ' where transaction_id = %s',
-                (x,)))
-        return voided
+    # def cash_transaction(self, amount, txntype, desc):
+    #     cash = find_members(self.db, 'CASH', pseudo=True)[0]
+    #     txn1_id = self.transaction(amount, txntype, desc, commit=False)
+    #     txn2_id = cash.transaction(amount, txntype, desc, commit=False)
+    #     self.cursor.execute(
+    #         'insert into transaction_link values (%s, %s)',
+    #         (txn1_id, txn2_id))
+    #     self.db.commit()
 
-    def void_transaction_inner(self, txn_id, c):
-        txn_ids = [(txn_id, '')]
-        txn_ids += list(c.execute(
-            'select transaction_id1, transaction_type'
-            ' from transaction_link'
-            '  join transaction on (transaction_id = transaction_id1)'
-            ' where transaction_id2 = %s'
-            ' union '
-            'select transaction_id2, transaction_type'
-            ' from transaction_link'
-            '  inner join transaction on (transaction_id = transaction_id2)'
-            ' where transaction_id1 = %s', (txn_id, txn_id,)))
-        (txn_ids, types) = list(zip(*txn_ids))
-        if 'V' in types:
-            print("Transaction already void, continuing...")
-            return
-        void_txn_ids = []
-        for x in txn_ids:
-            ((amount, desc, member_id, date),) = tuple(c.execute(
-                'select transaction_amount, transaction_description,'
-                '  member_id, transaction_created'
-                ' from transaction where transaction_id = %s', (x,)))
-            void_txn_ids += c.execute(
-                "insert into transaction (transaction_amount, member_id,"
-                "  transaction_type, transaction_description)"
-                " values (%s, %s, 'V', %s) returning transaction_id",
-                (-amount, member_id,
-                 'VOIDED: ' + str(date.date()) + ' Desc: ' + desc))
-        c.executemany(
-            'insert into transaction_link values (%s, %s)',
-            list(zip(txn_ids, void_txn_ids)))
-        return txn_ids
+    # def fine_transaction(self, amount, desc, checkout_id, commit=True):
+    #     txn_id = self.transaction(amount, 'F', desc, commit=False)
+    #     self.cursor.execute(
+    #         'insert into fine_payment values (%s, %s)',
+    #         (checkout_id, txn_id))
+    #     if commit:
+    #         self.db.commit()
+
+
+
+    # def late_transaction(self, days, book, checkout_id, when, commit=False):
+    #     'Factor out some late finage.  Does not commit by default. '
+    #     fines = dict(self.db.getcursor().execute(
+    #         'select fine_name, fine'
+    #         ' from fine'
+    #         '  natural join ('
+    #         '   select fine_name, max(fine_valid_from) as fine_valid_from'
+    #         '  from fine where fine_valid_from < %s'
+    #         '  group by fine_name) as current',
+    #         (when,)))
+    #     fine = -min(days * fines['lateday'], fines['maxlate'])
+    #     self.fine_transaction(
+    #         fine,
+    #         'Book %s overdue %d days.' % (book, days),
+    #         checkout_id,
+    #         commit=commit)
+    #     return fine
+
+    # @property
+    # def non_void_transactions(self):
+    #     return list(self.cursor.execute(
+    #         "select"
+    #         "  transaction_id, transaction_amount, transaction_description,"
+    #         "  transaction_type, transaction_created_by, transaction_created"
+    #         " from transaction"
+    #         " where transaction_id in ("
+    #         "  select t0.transaction_id"
+    #         "  from transaction t0"
+    #         "  where"
+    #         "   t0.transaction_type != 'V' and"
+    #         "   t0.member_id = %s"
+    #         "  except ("
+    #         "   select t1.transaction_id"
+    #         "    from"
+    #         "     transaction t1"
+    #         "     inner join transaction_link tl"
+    #         "      on (t1.transaction_id = tl.transaction_id1)"
+    #         "     inner join transaction t2"
+    #         "      on (t2.transaction_id =  tl.transaction_id2)"
+    #         "    where t2.transaction_type = 'V'"
+    #         "   union select t1.transaction_id"
+    #         "    from"
+    #         "     transaction t1"
+    #         "     inner join transaction_link tl"
+    #         "      on (t1.transaction_id = tl.transaction_id2)"
+    #         "     inner join transaction t2"
+    #         "      on (t2.transaction_id = tl.transaction_id1)"
+    #         "    where t2.transaction_type = 'V'))"
+    #         " order by transaction_created",
+    #         (self.member_id,)))
+
+    # def void_transaction(self, txn_id):
+    #     with self.getcursor() as c:
+    #         txn_ids = self.void_transaction_inner(txn_id, c)
+    #     voided = []
+    #     for x in txn_ids:
+    #         voided += list(self.cursor.execute(
+    #             'select'
+    #             '  transaction_amount, transaction_description,'
+    #             '  transaction_type, transaction_created_by,'
+    #             '  transaction_created, member_id'
+    #             ' from transaction'
+    #             ' where transaction_id = %s',
+    #             (x,)))
+    #     return voided
+
+    # need to keep this around until I can unwind line 846
+    # def void_transaction_inner(self, txn_id, c):
+    #     txn_ids = [(txn_id, '')]
+    #     txn_ids += list(c.execute(
+    #         'select transaction_id1, transaction_type'
+    #         ' from transaction_link'
+    #         '  join transaction on (transaction_id = transaction_id1)'
+    #         ' where transaction_id2 = %s'
+    #         ' union '
+    #         'select transaction_id2, transaction_type'
+    #         ' from transaction_link'
+    #         '  inner join transaction on (transaction_id = transaction_id2)'
+    #         ' where transaction_id1 = %s', (txn_id, txn_id,)))
+    #     (txn_ids, types) = list(zip(*txn_ids))
+    #     if 'V' in types:
+    #         print("Transaction already void, continuing...")
+    #         return
+    #     void_txn_ids = []
+    #     for x in txn_ids:
+    #         ((amount, desc, member_id, date),) = tuple(c.execute(
+    #             'select transaction_amount, transaction_description,'
+    #             '  member_id, transaction_created'
+    #             ' from transaction where transaction_id = %s', (x,)))
+    #         void_txn_ids += c.execute(
+    #             "insert into transaction (transaction_amount, member_id,"
+    #             "  transaction_type, transaction_description)"
+    #             " values (%s, %s, 'V', %s) returning transaction_id",
+    #             (-amount, member_id,
+    #              'VOIDED: ' + str(date.date()) + ' Desc: ' + desc))
+    #     c.executemany(
+    #         'insert into transaction_link values (%s, %s)',
+    #         list(zip(txn_ids, void_txn_ids)))
+    #     return txn_ids
 
     @property
     def checkouts(self):
@@ -464,7 +551,7 @@ class Member(db.Entry):
             ' order by checkout_stamp',
             (self.member_id,))
 
-        return [ Checkout(self.db, checkout_id=x[0]) for x in c.fetchall() ]
+        return [Checkout(self.db, checkout_id=x[0]) for x in c.fetchall()]
 
     @property
     def checkout_history(self):
@@ -477,12 +564,11 @@ class Member(db.Entry):
             ' order by checkout_stamp desc',
             (self.member_id,))
 
-        return [ Checkout(self.db, checkout_id=x[0]) for x in c.fetchall() ]
+        return [Checkout(self.db, checkout_id=x[0]) for x in c.fetchall()]
 
     def checkout_good(self, override=False):
         msgs = []
         correct = []
-
 
         if self.balance < 0:
             msgs.append(str(self) + ' has a negative balance.')
@@ -590,11 +676,12 @@ class Member(db.Entry):
                 'delete from member where member_id=%s',
                 (other_id,))
             self.db.commit()
-        except:
+        except Exception:
             self.db.rollback()
             raise
         finally:
             c.execute('reset role')
+
 
 class Checkout(db.Entry):
     def __init__(self, db, checkout_id=None, **kw):
@@ -608,7 +695,7 @@ class Checkout(db.Entry):
     checkout_user = db.ReadField('checkout_user')
 
     checkin_user = db.ReadField('checkin_user')
-    checkin_stamp = db.ReadField('checkin_stamp',coerce_datetime_no_timezone)
+    checkin_stamp = db.ReadField('checkin_stamp', coerce_datetime_no_timezone)
 
     checkout_lost = db.ReadFieldUncached(
         'checkout_lost', coerce_datetime_no_timezone)
@@ -616,11 +703,11 @@ class Checkout(db.Entry):
     @property
     def title(self):
         return dexdb.Title(self.db,
-            self.cursor.selectvalue(
-                'select title_id'
-                ' from book'
-                ' where book_id = %s',
-                (self.book_id,)))
+                           self.cursor.selectvalue(
+                               'select title_id'
+                               ' from book'
+                               ' where book_id = %s',
+                               (self.book_id,)))
 
     @property
     def book(self):
@@ -695,20 +782,22 @@ class Checkout(db.Entry):
 
         late = self.overdue_days(when)
         if late:
-            fine = self.member.late_transaction(late, self.book, self.id, when)
-            msgs.append('FINE: %s, book was overdue %d days' % (
-                ui.money_str(-fine), late))
+            fine = OverdueTransaction(self, self.member.id, self.id, late, 
+                                      self.book)
+            fine.create()
+            msgs.append('FINE: %s, %s was overdue %d days' % (
+                ui.money_str(-fine.amount), self.book, late))
 
         self.cursor.execute(
             'update checkout set checkout_lost=%s where checkout_id=%s',
             (when, self.id))
 
         fine = -self.book.shelfcode.replacement_cost
-        self.member.fine_transaction(
-            fine,
-            'Lost book %s' % (self.book,),
-            self.id,
-            commit=True)
+        tx = FineTransaction(self, self.member.member_id, self.id,
+                             amount=fine,
+                             description=f'Lost book {self.book}')
+        tx.create()
+
         msgs.append(
             'FINE: %s for lost %s' % (-fine, self.book.shelfcode.description))
 
@@ -745,10 +834,10 @@ class Checkout(db.Entry):
                 ' where checkout_id=%s',
                 (self.id,)))
             if len(checkouts) != 1:
-                raise dexdb.CirculationException(
-                    "%d checkout rows, can't proceed; apologize and"
-                    " convey book to libcomm"
-                    % len(checkouts))
+                raise dexdb.CirculationException("%d checkout rows, can't "
+                                                 "proceed; apologize and "
+                                                 "convey book to libcomm"
+                                                 % len(checkouts))
             ((member_id, checkout_stamp, checkin_stamp),) = checkouts
 
             if checkin_stamp:
@@ -756,20 +845,24 @@ class Checkout(db.Entry):
                     '%s already checked in' % (str(self),))
 
             if not self.member.pseudo:
+                # when I get to this section, we should do a selection
+                # for the lost book, not hope it's the last one
                 if self.lost:
                     ltxns = self.lost_txns
                     if ltxns:
-                        self.member.void_transaction_inner(ltxns[-1], c)
+                        tx = Transaction(self.db, self.member.id, ltxns[-1])
+                        tx.void()
                         msgs.append('Lost book fine voided.')
                 else:
                     days = self.overdue_days(when)
                     if days and not self.member.pseudo:
                         msgs.append('Book is overdue %d days' % (days,))
-                        fine = self.member.late_transaction(
-                            days, self.book, self.id, when)
-                        msgs.append(
-                            'FINE: %s added to balance' % (
-                                ui.money_str(fine),))
+                        fine = OverdueTransaction(self.db, self.member.id,
+                                                  self.id, days=days,
+                                                  book=self.title)
+                        fine.create()
+                        msgs.append('FINE: %s added to balance' % (
+                            ui.money_str(fine.amount),))
 
             c.execute(
                 'update checkout'

@@ -1724,7 +1724,6 @@ class Title(dexfile.DexLine, db.Entry):
             elif len(series) == 1:
                 titles = ['%s [%s]' % (i, series[0]) for i in titles]
             else:  # this is apparently Officially Weird
-                print('Wacky title/series match: ', str(self))
                 ntitles = ['%s [%s]' % i for i in zip(titles, series)]
                 if len(self.series) < len(titles):
                     ntitles += titles[len(series):]

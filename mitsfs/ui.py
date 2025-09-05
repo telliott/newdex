@@ -707,60 +707,57 @@ def lfill(l):
 def pfill(s):
     lfill(s.split())
 
+# class HISTORY_STATE(ctypes.Structure):
+#     _fields_ = [
+#             ('entries', ctypes.c_void_p),
+#             # HIST_ENTRY **entries; # Pointer to the entries themselves.
+#             ('offset', ctypes.c_int),
+#             # int offset;           # The location pointer within this array.
+#             ('length', ctypes.c_int),
+#             # int length;           # Number of elements within this array.
+#             ('size', ctypes.c_int),
+#             # int size;             # Number of slots allocated to this array.
+#             ('flags', ctypes.c_int),
+#             # int flags;
+#             ]
 
-'''
-class HISTORY_STATE(ctypes.Structure):
-    _fields_ = [
-            ('entries', ctypes.c_void_p),
-            # HIST_ENTRY **entries; # Pointer to the entries themselves.
-            ('offset', ctypes.c_int),
-            # int offset;           # The location pointer within this array.
-            ('length', ctypes.c_int),
-            # int length;           # Number of elements within this array.
-            ('size', ctypes.c_int),
-            # int size;             # Number of slots allocated to this array.
-            ('flags', ctypes.c_int),
-            # int flags;
-            ]
+# HISTORY_STATE_p = ctypes.POINTER(HISTORY_STATE)
 
-HISTORY_STATE_p = ctypes.POINTER(HISTORY_STATE)
+# readline.history_get_history_state.restype = HISTORY_STATE_p
+# readline.history_get_history_state.argtypes = []
 
-readline.history_get_history_state.restype = HISTORY_STATE_p
-readline.history_get_history_state.argtypes = []
+# readline.history_set_history_state.restype = ctypes.c_void_p
+# readline.history_set_history_state.argtypes = [HISTORY_STATE_p]
 
-readline.history_set_history_state.restype = ctypes.c_void_p
-readline.history_set_history_state.argtypes = [HISTORY_STATE_p]
-
-history_state = {}
-history_saved = None
-history_key = None
+# history_state = {}
+# history_saved = None
+# history_key = None
 
 
-def stash_and_switch_history(key):
-    global history_key, history_saved
-    if history_key is None:
-        history_saved = readline.history_get_history_state()
-    else:
-        if history_key != key:
-            history_state[history_key] = (
-                readline.history_get_history_state().contents)
-    if key is not None:
-        if key not in history_state:
-            history_state[key] = HISTORY_STATE(None, 0, 0, 0, 0)
-        readline.history_set_history_state(ctypes.byref(history_state[key]))
-    else:
-        readline.history_set_history_state(
-            ctypes.pointer(HISTORY_STATE(None, 0, 0, 0, 0)))
-    history_key = key
+# def stash_and_switch_history(key):
+#     global history_key, history_saved
+#     if history_key is None:
+#         history_saved = readline.history_get_history_state()
+#     else:
+#         if history_key != key:
+#             history_state[history_key] = (
+#                 readline.history_get_history_state().contents)
+#     if key is not None:
+#         if key not in history_state:
+#             history_state[key] = HISTORY_STATE(None, 0, 0, 0, 0)
+#         readline.history_set_history_state(ctypes.byref(history_state[key]))
+#     else:
+#         readline.history_set_history_state(
+#             ctypes.pointer(HISTORY_STATE(None, 0, 0, 0, 0)))
+#     history_key = key
 
 
-def unstash_and_unswitch_history():
-    global history_key, history_saved
-    if history_key is not None:
-        history_state[history_key] = (
-            readline.history_get_history_state().contents)
-    history_key = None
-    if history_saved is not None:
-        readline.history_set_history_state(history_saved)
-    history_saved = None
-'''
+# def unstash_and_unswitch_history():
+#     global history_key, history_saved
+#     if history_key is not None:
+#         history_state[history_key] = (
+#             readline.history_get_history_state().contents)
+#     history_key = None
+#     if history_saved is not None:
+#         readline.history_set_history_state(history_saved)
+#     history_saved = None

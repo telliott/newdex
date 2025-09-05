@@ -6,7 +6,7 @@ from mitsfs import db
 from mitsfs import ui
 
 '''
-Basic information memberships 
+Basic foundational information about available memberships 
 '''
 
 

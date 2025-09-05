@@ -214,6 +214,9 @@ class Field(property):
     '''
 
     def get(self, obj):
+        if self.field in obj.cache:
+            return obj.cache[self.field]
+        
         command = 'select %s from %s where %s = %%s' \
             % (self.field, obj.table, obj.idfield)
         val = obj.cursor.selectvalue(command, (obj.id,))
@@ -381,15 +384,13 @@ class Entry(object):
         if self.id is not None:
             raise AssertionError('object is already created')
         if self.cache:
-            c = self.cursor.execute(
+            self.id = self.cursor.selectvalue(
                 'insert into %s (%s) values (%s) returning %s' %
                 (self.table,
                  ', '.join(list(self.cache.keys())),
                  ', '.join(['%s'] * len(self.cache)),
                  self.idfield),
                 list(self.cache.values()))
-            result = c.fetchone()
-            self.id = result[0]
         else:
             self.id = self.cursor.selectvalue(
                 'insert into %s default values returning %s' %

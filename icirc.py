@@ -13,6 +13,7 @@ from mitsfs.ui import Color, banner, menu, tabulate, money_str, lfill, pfill, \
 
 from mitsfs.constants import DATABASE_DSN
 from mitsfs.membership import Member
+from mitsfs.dex.transactions import Transaction, CashTransaction
 
 __release__ = '1.1'
 
@@ -345,12 +346,13 @@ need to go meditate on the database logs.""")
 
 def viewmem(line):
     def fin(line):
+        print (str(member.transactions))
         print('Transactions of ', member)
         print(tabulate(
             [('Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-            [(money_str(amount), by, when.date(),
-                membook.txn_types[txn_type], desc)
-                for (amount, desc, txn_type, by, when) in member.transactions]))
+            [(money_str(t.amount), t.created_by, t.created.date(),
+                membook.txn_types[t.transaction_type], t.description)
+                for t in member.transactions]))
 
     def history(line):
         print("History of: ", str(member))
@@ -361,7 +363,7 @@ def viewmem(line):
         print(tabulate(
             [("Membership History", "Keyholder", "Bought")] +
             [(str(m), str(m.created_by), str(m.created.date()))
-             for m in member.memberships]))
+             for m in member.membership_history]))
 
     print()
     print(member.info())
@@ -410,8 +412,14 @@ def membership(line):
 
     expiration = member.membership_addition_expiration(member_type)
     
+    calc_cost = member_type.cost
+    if member.membership and member_type.duration is None \
+        and not member.membership.expired:
+            # Apply a discount to L/P if they have an active membership
+            calc_cost -= member.membership.cost
+
     msg = '%s membership would cost $%.2f' % (member_type.description, 
-                                              -member_type.cost)
+                                              -calc_cost)
     if expiration:
         msg += f" and expire on {expiration.strftime('%Y-%m-%d')}."
     else:
@@ -642,7 +650,7 @@ def do_transaction(txntype):
     print()
 
     if txntype == 'V':
-        txns = member.non_void_transactions
+        txns = member.transactions(False)
 
         if len(txns) == 0:
             print("No transactions to void.")
@@ -653,8 +661,9 @@ def do_transaction(txntype):
         print('Non-void Transactions of ', member)
         print(tabulate(
             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-            [(Color.select(str(i + 1) + '.'), money_str(tx[1]),
-                tx[4], tx[5].date(), membook.txn_types[tx[3]], tx[2])
+            [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
+                tx.created_by, tx.created.date(), 
+                membook.txn_types[tx.transaction_type], tx.description)
                 for (i, tx) in enumerate(txns)] +
             [quit_item]))
 
@@ -663,14 +672,15 @@ def do_transaction(txntype):
 
         if num is not None:
             print()
-            voided = member.void_transaction(txns[num - 1][0])
+            voided = txns[num - 1].void() 
             print("Voided transactions:")
             print(tabulate(
                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
                     'Description')] +
-                [(Member(dex, mem_id).name, money_str(amount),
-                    by, when.date(), membook.txn_types[txn_type], desc)
-                    for (amount, desc, txn_type, by, when, mem_id) in voided]))
+                [(Member(dex, tx.member_id).name, money_str(tx.amount),
+                    tx.created_by, tx.created.date(), 
+                    membook.txn_types[tx.transaction_type], tx.desc)
+                    for tx in voided]))
         return
 
     if txntype in ['D', 'P']:
@@ -713,10 +723,20 @@ this will decrease the patron's balance.""")
         return
 
     if txntype not in ['P', 'R']:
-        member.transaction(amount, txntype, desc)
+        tx = Transaction(dex, member.id)
+        tx.amount = amount
+        tx.transaction_type = txntype
+        tx.description = desc
+        tx.create()
     else:
-        cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
-        member.cash_transaction(amount, txntype, cash_desc)
+        cash_tx = CashTransaction(dex, member.id, member.normal_str)
+        cash_tx.amount = amount
+        cash_tx.transaction_type = txntype
+        cash_tx.description = desc
+        cash_tx.create()
+        
+        #cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
+        #member.cash_transaction(amount, txntype, cash_desc)
 
 
 def check_balance(member, desc="Payment", print_notices=False):
@@ -735,7 +755,11 @@ def check_balance(member, desc="Payment", print_notices=False):
                 prompt='Amount they are paying: ')
 
             desc = desc + ' by ' + member.normal_str
-            member.cash_transaction(amount, 'P', desc)
+            tx = CashTransaction(dex, member.member_id, member.normal_str,
+                                 amount=amount, transaction_type='M', 
+                                 description=desc)
+            tx.create()
+           
     elif print_notices:
         print("Member doesn't have a negative balance")
 

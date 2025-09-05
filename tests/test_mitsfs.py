@@ -20,7 +20,7 @@ from mitsfs.membership import Member, TimeWarp
 from mitsfs.dexfile import DexLine
 from mitsfs.error import handle_exception
 from mitsfs.dex.shelfcodes import Shelfcodes
-
+from mitsfs.dex.transactions import CashTransaction
 
 def create_test_member(d):
     # create a user to do the checking out
@@ -56,7 +56,10 @@ class MitsfsTest(Case):
             member = Member(d, new_id)
             member.membership_add(membook.membership_types['T'])
             self.assertEqual(member.checkout_good()[0], False)
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='pay membership')
+            tx.create()
             self.assertEqual(member.checkout_good()[0], True)
 
             # create a book for us to check out
@@ -111,8 +114,10 @@ class MitsfsTest(Case):
             # now owes a fine
             self.assertEqual(member.checkout_good()[0], False)
 
-            member.cash_transaction(
-                -member.balance, 'P', 'simulate fine payment')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='simulate fine payment')
+            tx.create()
 
             # should be able to check out books again
             self.assertEqual(member.checkout_good()[0], True)
@@ -133,7 +138,7 @@ class MitsfsTest(Case):
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
+                " values('S', 'Paperbacks', 'C')")
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
@@ -143,12 +148,15 @@ class MitsfsTest(Case):
 
             member.membership_add(membook.membership_types['T'])
             self.assertEqual(member.checkout_good()[0], False)
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='pay membership')
+            tx.create()
 
             self.assertEqual(member.checkout_good()[0], True)
 
             # create a book for us to check out
-            d.add(DexLine('AUTHOR<TITLE<SERIES<P'))
+            d.add(DexLine('AUTHOR<TITLE<SERIES<S'))
 
             titles = list(d.search('AUTHOR', 'TITLE'))
             self.assertEqual(len(titles), 1)
@@ -192,8 +200,10 @@ class MitsfsTest(Case):
             # owes a fine
             self.assertEqual(member.checkout_good()[0], False)
 
-            member.cash_transaction(
-                -member.balance, 'P', 'simulate fine payment')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='simulate fine payment')
+            tx.create()
 
             # should be able to check out books again
             self.assertEqual(member.checkout_good()[0], True)
@@ -204,40 +214,6 @@ class MitsfsTest(Case):
             self.assertEqual(member.checkout_good()[0], True)
         finally:
             d.db.close()
-
-    ''' This section is not working and if we actually used it we'd need to '
-    start from scratch
-    def testDuesChange(self):
-        try:
-            d = DexDB(dsn=self.dsn)
-
-            d.getcursor().execute(
-                "insert into"
-                " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
-            d.commit()
-            d.shelfcodes = Shelfcodes(d)
-
-            new_id = create_test_member(d)
-
-            member = Member(d, new_id)
-
-           member = Member(d, newmember.id)
-            member.membership_add(membook.membership_types['4'])
-
-            self.assertEqual(int(member.balance), -44)
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
-            self.assertTrue(member.membership)
-            self.assertTrue(not member.membership.expired)
-            _, cost, expiration = member.membership_describe(
-                '4', when='2035-01-01')
-            self.assertTrue(expiration)
-            self.assertEqual(cost, 45)
-            member.membership_add(membook.membership_types['4'])
-            self.assertEqual(int(member.balance), -45)
-        finally:
-            d.db.close()
-        '''
 
     def testCreateFineChanges(self):
         try:
@@ -253,7 +229,7 @@ class MitsfsTest(Case):
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
+                " values('S', 'Paperbacks', 'C')")
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
@@ -261,13 +237,15 @@ class MitsfsTest(Case):
 
             member = Member(d, new_id)
             member.membership_add(membook.membership_types['T'])
-            self.assertEqual(member.checkout_good()[0], False)
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='simulate membership payment')
+            tx.create()
 
             self.assertEqual(member.checkout_good()[0], True)
 
             # create a book for us to check out
-            d.add(DexLine('AUTHOR<TITLE<SERIES<P'))
+            d.add(DexLine('AUTHOR<TITLE<SERIES<S'))
 
             titles = list(d.search('AUTHOR', 'TITLE'))
             self.assertEqual(len(titles), 1)
@@ -278,31 +256,14 @@ class MitsfsTest(Case):
 
             book = title.books[0]
 
-            # instantly overdue, January 2014 edition
             book.checkout(member, datetime.datetime(2014, 1, 1))
-
-            # before the rate change
-            member.checkouts[0].checkin(datetime.datetime(2014, 8, 14, 12))
-
-            self.assertEqual(member.balance, -10)
-            member.cash_transaction(
-                -member.balance, 'P', 'simulate fine payment')
-
-            book.checkout(member, datetime.datetime(2014, 1, 1))
-            # after the first rate change
-            member.checkouts[0].checkin(datetime.datetime(2014, 8, 15, 12))
-
-            self.assertEqual(member.balance, 0)
-            member.cash_transaction(
-                -member.balance, 'P', 'simulate fine payment')
-
-            book.checkout(member, datetime.datetime(2014, 1, 1))
-            # after the second rate change
             member.checkouts[0].checkin(datetime.datetime(2014, 9, 6, 12))
 
             self.assertEqual(member.balance, -4)
-            member.cash_transaction(
-                -member.balance, 'P', 'simulate fine payment')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='simulate fine payment')
+            tx.create()
         finally:
             d.db.close()
 
@@ -318,7 +279,7 @@ class MitsfsTest(Case):
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
+                " values('S', 'Paperbacks', 'C')")
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
@@ -346,7 +307,7 @@ class MitsfsTest(Case):
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
+                " values('S', 'Paperbacks', 'C')")
             d.commit()
             d.shelfcodes = Shelfcodes(d)
 
@@ -361,11 +322,13 @@ class MitsfsTest(Case):
             member.membership_add(membook.membership_types['T'])
             observed_cost = -member.balance
 
-
             self.assertEqual(observed_cost, member.membership.cost)
             self.assertEqual(observed_cost, tcost)
 
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='pay membership')
+            tx.create()
 
             member.membership_add(membook.membership_types['1'])
             observed_cost = -member.balance
@@ -373,7 +336,10 @@ class MitsfsTest(Case):
             self.assertEqual(observed_cost, member.membership.cost)
             self.assertEqual(observed_cost, ycost)
 
-            member.cash_transaction(-member.balance, 'P', 'pay membership')
+            tx = CashTransaction(d, new_id, member.normal_str,
+                                 amount=-member.balance, transaction_type='P',
+                                 description='pay membership')
+            tx.create()
 
             member.membership_add(membook.membership_types['L'])
             observed_cost = -member.balance
