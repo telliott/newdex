@@ -67,11 +67,13 @@ def get_transactions(db, member, include_voided=True):
             for i in
             db.cursor.execute(sql, (member,))]
 
+
 def get_CASH_id(db):
     # Can't use find_members here because it would create a
     # circular dependency
     return db.cursor.selectvalue('select member_id from member'
-                                      " where email = 'CASH'")
+                                 " where email = 'CASH'")
+
 
 class Transaction(db.Entry):
     def __init__(self, db, member_id, transaction_id=None, **kw):
@@ -172,7 +174,7 @@ class Transaction(db.Entry):
         # However, since we already checked to see if we were void, any
         # transactions remaining should also be voided.
 
-        for t in [i for i in self.linked_transaction 
+        for t in [i for i in self.linked_transaction
                   if i.transaction_type != 'V']:
             # can't call void directly, because it will try to link and find us
             t._void_transaction()
@@ -256,7 +258,7 @@ class CashTransaction(Transaction):
         self.db.cursor.execute(
              'insert into transaction_link values (%s, %s)',
              (self.id, cash.id))
-        
+
         # reset the cache on linked because we added a transaction
         self.linked = None
 

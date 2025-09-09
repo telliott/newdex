@@ -25,7 +25,7 @@ def create_test_member(d):
 
 
 class DexDBTest(Case):
-    def test_members(self):
+    def test_transactions(self):
         try:
             db = DexDB(dsn=self.dsn)
 
@@ -46,7 +46,7 @@ class DexDBTest(Case):
             book = title.books[0]
 
 
-            #add a couple basic transactions
+            # add a couple basic transactions
             tx1 = Transaction(db, thor.id, amount=10, transaction_type='M',
                               description='Transaction one')
             tx1.create()
@@ -119,7 +119,7 @@ class DexDBTest(Case):
             result = r.fetchall()
             self.assertEqual(1, len(result))
 
-            self.assertEqual(result[0][0], checkout.id[0])
+            self.assertEqual(result[0][0], checkout.id)
             self.assertEqual(result[0][1], tx4.id)
 
             # now a short and a max overdue transaction

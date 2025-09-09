@@ -5,7 +5,7 @@ import optparse
 import datetime
 
 from mitsfs.dexdb import DexDB, CirculationException
-from mitsfs.ui import Color, banner, menu, tabulate, money_str, lfill, pfill, \
+from mitsfs.ui import Color, banner, menu, tabulate, money_str, \
                 read, readmoney, readaddress, readdate, readbarcode, \
                 readvalidate, readnumber, readyes, reademail, readphone, \
                 readinitials, specify, specify_book, specify_member, \
@@ -69,7 +69,7 @@ def main(args):
                 member,
                 ll - lm - ls - 13, '',
                 'Membership: ' + str(member.membership)))
-            checkouts = member.checkouts
+            checkouts = member.checkouts.out
             if checkouts:
                 if not member.pseudo:
                     print_checkouts(checkouts)
@@ -182,16 +182,18 @@ def checkin(line, advanced=False, bookdrop=False):
         if not book:
             break
 
+        # TODO: it is pretty messed up that we have both book checkouts and
+        # member checkouts. Need to clean this up
         checkouts = book.checkouts
-        if len(checkouts) > 1:
+        if len(checkouts.out) > 1:
             print('Warning: %s is checked out more than once' % (book,))
-        for checkout in checkouts:
+        for checkout in checkouts.out:
             member = checkin_internal(checkout, advanced, bookdrop)
 
 
 def checkin_member(line, advanced=False, bookdrop=False):
     while True:
-        if not member.checkouts:
+        if not member.checkouts.out:
             print('No books are checked out.')
             break
 
@@ -214,23 +216,22 @@ def checkin_internal(checkout, advanced, bookdrop):
     print('Checking in: ')
 
     try:
-            print(checkout)
-            print(checkout.checkin(checkin_date))
+        print(checkout)
+        print(checkout.checkin(checkin_date))
     except CirculationException as exc:
         print(exc)
         print('Book NOT checked in.')
     print()
-    return checkout.member
+    return Member(dex, checkout.member_id)
 
 
 def lost(line):
-    if not member.checkouts:
+    if not member.checkouts.out:
         print('No books are checked out.')
         return
 
     while True:
-        if not [checkout for checkout in member.checkouts
-                if not checkout.lost]:
+        if not member.checkouts.out:
             break
 
         checkout = select_checkedout('Select book to declare as lost: ')
@@ -247,20 +248,20 @@ def lost(line):
 
 
 def select_checkedout(prompt):
-    print_checkouts(checkouts=member.checkouts, enum=True)
+    print_checkouts(checkouts=member.checkouts.out, enum=True)
     print(Color.select('Q.'), 'Back to Main Menu')
     print()
 
     num = readnumber(
         prompt,
         1,
-        len(member.checkouts) + 1,
+        len(member.checkouts.out) + 1,
         escape='Q')
 
     if num is None:
         return None
 
-    return member.checkouts[num - 1]
+    return member.checkouts.out[num - 1]
 
 
 def checkout(line, advanced=False):
@@ -269,7 +270,7 @@ def checkout(line, advanced=False):
         check_balance(member)
 
     while True:
-        ok, msgs, correct = member.checkout_good(advanced)
+        ok, msgs, correct = member.can_checkout(advanced)
 
         if not ok:
             if advanced:
@@ -346,7 +347,7 @@ need to go meditate on the database logs.""")
 
 def viewmem(line):
     def fin(line):
-        print (str(member.transactions))
+        print(str(member.transactions))
         print('Transactions of ', member)
         print(tabulate(
             [('Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
@@ -356,7 +357,7 @@ def viewmem(line):
 
     def history(line):
         print("History of: ", str(member))
-        print_checkouts(checkouts=member.checkout_history)
+        print_checkouts(checkouts=member.checkouts)
 
     def mem(line):
         print("History of: ", str(member))
@@ -382,7 +383,7 @@ def membership(line):
         if line in membook.membership_types:
             return True
         return False
-    
+
         # if (len(line) == 1 and
         #         0 <= (ord(line) - ord('a')) < len(membook.membership_types)):
         #     return True
@@ -390,19 +391,18 @@ def membership(line):
         #     chr(ord('a') + len(membook.membership_types) - 1))
         # return False
 
-
     print("Select membership type:")
-    
-    print(tabulate([Color.select(key) + '.', 
+
+    print(tabulate([Color.select(key) + '.',
                     membook.membership_types[key].description,
                     '$%.2f' % membook.membership_types[key].cost]
-                    for key in membook.membership_types.keys()))
+                   for key in membook.membership_types.keys()))
 
     # print(tabulate(
     #     [Color.select(chr(ord('a') + n) + '.'), d, '$%.2f' % c]
     #     for (n, (t, d, c)) in enumerate(
-    #             [(m.code, m.description, m.cost) for m in 
-    #              sorted(membook.membership_types.values(), 
+    #             [(m.code, m.description, m.cost) for m in
+    #              sorted(membook.membership_types.values(),
     #                     key=lambda d: d.cost)]
     #             )))
 
@@ -411,20 +411,19 @@ def membership(line):
     member_type = membook.membership_types[member_type_char]
 
     expiration = member.membership_addition_expiration(member_type)
-    
+
     calc_cost = member_type.cost
     if member.membership and member_type.duration is None \
-        and not member.membership.expired:
-            # Apply a discount to L/P if they have an active membership
-            calc_cost -= member.membership.cost
+            and not member.membership.expired:
+        calc_cost -= member.membership.cost
 
-    msg = '%s membership would cost $%.2f' % (member_type.description, 
+    msg = '%s membership would cost $%.2f' % (member_type.description,
                                               -calc_cost)
     if expiration:
         msg += f" and expire on {expiration.strftime('%Y-%m-%d')}."
     else:
         msg += '.'
-    print (msg)
+    print(msg)
     if readyes('Continue? [' + Color.yN + '] '):
         member.membership_add(member_type)
         check_balance(member, 'Membership Payment')
@@ -442,24 +441,24 @@ def editmem(line):
               f'Last Name: {member.last_name}')
         first = read("New First Name (blank to retain): ").strip()
         last = read("New Last Name (blank to retain): ").strip()
- 
+
         if first:
-             member.first_name = first
-        if last: 
+            member.first_name = first
+        if last:
             member.last_name = last
 
     def edit_email(line):
         print(f'Current: {member.email}')
         email = reademail("New Email: ").strip()
- 
+
         if email:
-             member.email = email
+            member.email = email
 
     def edit_address(line):
         print(f'Current: {member.address}')
         address = readaddress()
         if address:
-             member.address = address
+            member.address = address
 
     def edit_phone(line):
         print(f'Current: {member.phone}')
@@ -662,7 +661,7 @@ def do_transaction(txntype):
         print(tabulate(
             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
             [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
-                tx.created_by, tx.created.date(), 
+                tx.created_by, tx.created.date(),
                 membook.txn_types[tx.transaction_type], tx.description)
                 for (i, tx) in enumerate(txns)] +
             [quit_item]))
@@ -672,13 +671,13 @@ def do_transaction(txntype):
 
         if num is not None:
             print()
-            voided = txns[num - 1].void() 
+            voided = txns[num - 1].void()
             print("Voided transactions:")
             print(tabulate(
                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
                     'Description')] +
                 [(Member(dex, tx.member_id).name, money_str(tx.amount),
-                    tx.created_by, tx.created.date(), 
+                    tx.created_by, tx.created.date(),
                     membook.txn_types[tx.transaction_type], tx.desc)
                     for tx in voided]))
         return
@@ -734,9 +733,9 @@ this will decrease the patron's balance.""")
         cash_tx.transaction_type = txntype
         cash_tx.description = desc
         cash_tx.create()
-        
-        #cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
-        #member.cash_transaction(amount, txntype, cash_desc)
+
+        # cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
+        # member.cash_transaction(amount, txntype, cash_desc)
 
 
 def check_balance(member, desc="Payment", print_notices=False):
@@ -756,10 +755,10 @@ def check_balance(member, desc="Payment", print_notices=False):
 
             desc = desc + ' by ' + member.normal_str
             tx = CashTransaction(dex, member.member_id, member.normal_str,
-                                 amount=amount, transaction_type='M', 
+                                 amount=amount, transaction_type='M',
                                  description=desc)
             tx.create()
-           
+
     elif print_notices:
         print("Member doesn't have a negative balance")
 
@@ -790,7 +789,8 @@ def color_due_date(stamp):
 
 
 def print_member_checkouts(line):
-    print_checkouts(sorted(member.checkouts, key=lambda x: x.title.sortkey()))
+    print_checkouts(sorted(member.checkouts.out,
+                           key=lambda x: x.title.sortkey()))
 
 
 def print_checkouts(checkouts, enum=False):
@@ -809,6 +809,8 @@ def print_checkouts(checkouts, enum=False):
         offset + ' ' * (ll - 43) + 'Code' + (3 * ' ') + 'Check Out' +
         (9 * ' ') + 'Check In/Due' + (6 * ' '))
     sgr0()
+    lookup_member = None
+
     for n, c in enumerate(list(checkouts)):
         title = c.book.title.titletxt
         if c.book.visible:
@@ -817,6 +819,12 @@ def print_checkouts(checkouts, enum=False):
         author = c.book.title.authortxt
         width = len(title) + len(author)
 
+        # most of the time you will just look up the member associated with
+        # the checkouts, but if you passed in checkouts by a book, they
+        # will belong to different people, possibly pseudo
+
+        if lookup_member is None or c.member_id != member.member_id:
+            lookup_member = Member(dex, c.member_id)
         if enum:
             print('%d.' % (n + 1),)
 
@@ -830,14 +838,14 @@ def print_checkouts(checkouts, enum=False):
             duestr = c.checkin_user
             duedate = c.checkin_stamp.date()
         elif c.lost:
-            duedate = c.lost.date()
+            duedate = c.checkin_stamp.date()
             duestr = Color.warning('LOST')
-        elif c.member.pseudo:
+        elif lookup_member.pseudo:
             duestr = ''
             duedate = ''
         else:
             duestr = 'Due:'
-            duedate = color_due_date(c.due_date)
+            duedate = color_due_date(c.due_stamp)
 
         print(offset + ' %*s %8s %s %s %s' % (
             ll - 41,

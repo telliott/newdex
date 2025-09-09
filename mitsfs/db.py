@@ -108,11 +108,48 @@ class EasyCursor(psycopg2.extensions.cursor):
     '''
 
     def selectvalue(self, sql, args=None):
+        '''
+        For a query that wants a single result, return it.
+
+        Parameters
+        ----------
+        sql : str
+            SQL string.
+        args : tuple, optional
+            list of the values to flow into the SQL statement
+
+        Returns
+        -------
+        value from the statement
+        '''
         self.execute(sql, args)
         if self.rowcount == 0:
             return None
         return self.fetchone()[0]
 
+    def fetchlist(self, sql, args=None):
+        '''
+        For a query that provides a single value in the select statement, 
+        returns the multiple single values as a list. 
+
+        Parameters
+        ----------
+        sql : str
+            SQL string.
+        args : tuple, optional
+            list of the values to flow into the SQL statement
+
+        Returns
+        -------
+        list
+            list of the results from the sql statement.
+
+        '''
+        self.execute(sql, args)
+        if self.rowcount == 0:
+            return []
+        return [x[0] for x in self.fetchall()]
+        
     '''
     Pass in a query and a list of args tuples, and executes the sql repeatedly
     for each tuple provided
@@ -165,11 +202,12 @@ class NotFoundException(Exception):
 
 
 '''
-These three classes allow reading a single field from the db in a generic
+These  classes allow reading a single field from the db in a generic
 fashion. They are used in the membership section of the code.
 
 Field enables full getting and setting of the field.
-ReadFieldUncached prohibits setting. it is used once, for the checkout_lost
+ReadFieldUncached is currently unused (used to be for checkout_lost, not
+                                       sure why)
 ReadField is the most common. Does a read (no write) but wraps it in a cache.
 
 '''
@@ -216,7 +254,7 @@ class Field(property):
     def get(self, obj):
         if self.field in obj.cache:
             return obj.cache[self.field]
-        
+
         command = 'select %s from %s where %s = %%s' \
             % (self.field, obj.table, obj.idfield)
         val = obj.cursor.selectvalue(command, (obj.id,))
@@ -276,30 +314,41 @@ class ReadField(ReadFieldUncached):
         obj.cache[self.field] = val
         return val
 
+
 class InfoField(ReadField):
     '''
     ReadField that can also take pregenerated values and not write them back
-    to the db. Useful for bulk load of foundational information such as 
+    to the db. Useful for bulk load of foundational information such as
     shelfcodes and memberships
     '''
+
     def set(self, obj, val):
         obj.cache[self.field] = val
 
-'''
-This is pulled out for readability and to be clear what it is.
-
-Given an object and an attribute in the object, figure out if it has a field
-attribute in it (which defines the db column) and return the value.
-Lets you define the fields of a class by the objects above
-
-@param obj: the object being examined
-@param attribute name: the attribute name to be examined
-
-@return: the value of the field attribute (or None if there wasn't one)
-'''
-
 
 def get_field_name_if_has_field_attribute(obj, attribute_name):
+    '''
+    This is pulled out for readability and to be clear what it is.
+
+    Given an object and an attribute in the object, figure out if it has a
+    field attribute in it (which defines the db column) and return the value.
+    Lets you define the fields of a class by the objects above
+
+
+    Parameters
+    ----------
+    obj : object
+        the object being examined
+    attribute_name : str
+        The name of the attribute we are checking to see if it has a field
+        property.
+
+    Returns
+    -------
+    str
+        The name of the column in the database contained in this attribute
+
+    '''
     attr = getattr(obj, attribute_name)
     return getattr(attr, 'field', None)
 
@@ -316,11 +365,12 @@ class Entry(object):
         self.docommit = True
 
         # this is at the heart of the whole thing.
-        # each subclass of this method has class (not instance) attributes
+        # each subclass of this method has attributes
         # that are objects with a set field attribute (presumably Field/
         # ReadField/ReadFieldUncached). So it loops through all the attributes
         # of the object to grab them and put them in a field array with the
-        # name and the field value
+        # name and the field value, which represents the column name in the
+        # table.
         me = self.__class__
 
         self._fields = dict(
@@ -331,6 +381,9 @@ class Entry(object):
                 for attribute_name in dir(me))
             if column_name is not None)
 
+        # This allows us to pre-seed data into the attributes by passing them
+        # in as keyword arguments. You can only pass in fields this way to the
+        # base class or it will complain.
         for (k, v) in kw.items():
             if k not in self._fields:
                 raise AssertionError(

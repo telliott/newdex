@@ -597,20 +597,61 @@ insert into member(member_id, email, pseudo) select currval('id_seq'), 'CASH', t
 
 
 
+create table transaction_type (
+       transaction_type char(1) primary key,
+       transaction_type_description text not null,
+       transaction_type_basic boolean not null);
+
+grant select on transaction_type to keyholders;
+grant insert, delete, update on transaction_type to libcomm;
+
+insert into transaction_type values ('F', 'Asssess Fine', true);
+insert into transaction_type values ('P', 'Payment', true);
+insert into transaction_type values ('D', 'Donation for Fine Credit', true);
+insert into transaction_type values ('K', 'Asssess Keyfine', true);
+insert into transaction_type values ('M', 'Membership', false);
+insert into transaction_type values ('R', 'Reimbursement', false);
+insert into transaction_type values ('V', 'Void Previous', false);
+insert into transaction_type values ('O', 'Other', false);
+insert into transaction_type values ('L', 'LHE', false);
+
+
+create table transaction (
+       transaction_id integer default nextval('id_seq') not null primary key,
+       transaction_amount numeric not null,
+       member_id integer references member not null,
+       transaction_type char references transaction_type not null,
+       transaction_description text not null,
+
+       transaction_created timestamp with time zone default current_timestamp not null,
+       transaction_created_by varchar(64) default current_user not null,
+       transaction_created_with varchar(64) default current_client());
+
+create trigger transaction_log
+       before update or delete on transaction for each row execute procedure log_row();
+-- note no insert, log is implicit
+
+create index transaction_member_id_idx on transaction(member_id);
+create index transaction_transaction_created_idx on transaction(transaction_created);
+
+grant insert, select on transaction to keyholders;
+
+
 create table checkout (
        checkout_id integer default nextval('id_seq') not null primary key,
+       member_id integer not null,
        checkout_stamp timestamp with time zone default current_timestamp,
        book_id integer references book,
        checkout_user text not null default current_user,
        checkin_user text default null,
        checkin_stamp timestamp with time zone default null,
-       checkout_lost timestamp with time zone default null,
+       checkout_lost int references transaction,
        checkout_modified timestamp with time zone default null,
        checkout_modified_by varchar(64) default null,
        checkout_modified_with varchar(64) default null);
 
 create index checkout_book_idx on checkout(book_id);
-
+create index checkout_member_id on checkout(member_id);
 grant insert, update, select on checkout to keyholders;
 
 create trigger checkout_update
@@ -619,15 +660,28 @@ create trigger checkout_log
        before insert or update or delete on checkout for each row execute procedure log_row();
 
 
-create table checkout_member (
-       checkout_id integer not null references checkout,
-       member_id integer not null references member);
+-- create table checkout_member (
+--        checkout_id integer not null references checkout,
+--        member_id integer not null references member);
+-- 
+-- create unique index checkout_member_checkout_member_idx on checkout_member (checkout_id, member_id);
+-- create unique index checkout_member_checkout_id_idx on checkout_member(checkout_id);
+-- create index checkout_member_member_id_idx on checkout_member(member_id);
+-- 
+-- grant insert, update, select on checkout_member to keyholders;
 
-create unique index checkout_member_checkout_member_idx on checkout_member (checkout_id, member_id);
-create unique index checkout_member_checkout_id_idx on checkout_member(checkout_id);
-create index checkout_member_member_id_idx on checkout_member(member_id);
+create view top_checkout_titles as
+ SELECT count(DISTINCT checkout.member_id) AS checkouts,
+    book.title_id
+   FROM checkout
+	JOIN member USING (member_id)
+    JOIN book USING (book_id)
+    
+  WHERE NOT member.pseudo
+  GROUP BY book.title_id
+  ORDER BY (count(DISTINCT checkout.member_id)) DESC;
 
-grant insert, update, select on checkout_member to keyholders;
+
 
 
 create table inventory (
@@ -709,61 +763,6 @@ create table inventory_checkout (
 grant select on inventory_missing to public;
 grant insert, update, delete on inventory_entry to libcomm;
 
-
-
--- create table member_comment (
---       member_comment_id integer default nextval('id_seq') primary key,
---       member_id integer not null references member,
---       member_comment text not null);
-
--- create trigger member_comment_insert
---       before insert or update or delete on member_comment
---       for each row execute procedure collateral_update('member');
--- create trigger member_comment_log
---       before insert or update or delete on member_comment
---       for each row execute procedure log_row();
-
--- grant insert, delete, select on member_comment to keyholders;
-
-
-create table transaction_type (
-       transaction_type char(1) primary key,
-       transaction_type_description text not null,
-       transaction_type_basic boolean not null);
-
-grant select on transaction_type to keyholders;
-grant insert, delete, update on transaction_type to libcomm;
-
-insert into transaction_type values ('F', 'Asssess Fine', true);
-insert into transaction_type values ('P', 'Payment', true);
-insert into transaction_type values ('D', 'Donation for Fine Credit', true);
-insert into transaction_type values ('K', 'Asssess Keyfine', true);
-insert into transaction_type values ('M', 'Membership', false);
-insert into transaction_type values ('R', 'Reimbursement', false);
-insert into transaction_type values ('V', 'Void Previous', false);
-insert into transaction_type values ('O', 'Other', false);
-insert into transaction_type values ('L', 'LHE', false);
-
-
-create table transaction (
-       transaction_id integer default nextval('id_seq') not null primary key,
-       transaction_amount numeric not null,
-       member_id integer references member not null,
-       transaction_type char references transaction_type not null,
-       transaction_description text not null,
-
-       transaction_created timestamp with time zone default current_timestamp not null,
-       transaction_created_by varchar(64) default current_user not null,
-       transaction_created_with varchar(64) default current_client());
-
-create trigger transaction_log
-       before update or delete on transaction for each row execute procedure log_row();
--- note no insert, log is implicit
-
-create index transaction_member_id_idx on transaction(member_id);
-create index transaction_transaction_created_idx on transaction(transaction_created);
-
-grant insert, select on transaction to keyholders;
 
 create table membership_type (
        membership_type_id integer default nextval('id_seq') not null,
@@ -857,37 +856,37 @@ insert into membership_cost(membership_type, membership_cost, membership_cost_va
 insert into membership_cost(membership_type, membership_cost, membership_cost_valid_from) values ('L', 300, '2014-08-15 03:00:00-04');
 insert into membership_cost(membership_type, membership_cost, membership_cost_valid_from) values ('P', 3000, '2014-08-15 03:00:00-04');
 
-create table fine (
-       fine_id integer default nextval('id_seq') primary key,
-       fine_name text not null,
-       fine numeric not null,
-       fine_valid_from timestamp with time zone not null default '1969-07-21 02:56:15 +0',
-       fine_created timestamp with time zone default current_timestamp not null,
-       fine_created_by varchar(64) default current_user not null,
-       fine_created_with varchar(64) default 'SQL' not null,
-       fine_modified timestamp with time zone default current_timestamp not null,
-       fine_modified_by varchar(64) default current_user not null,
-       fine_modified_with varchar(64) default 'SQL' not null);
+-- create table fine (
+--        fine_id integer default nextval('id_seq') primary key,
+--        fine_name text not null,
+--        fine numeric not null,
+--        fine_valid_from timestamp with time zone not null default '1969-07-21 02:56:15 +0',
+--        fine_created timestamp with time zone default current_timestamp not null,
+--        fine_created_by varchar(64) default current_user not null,
+--        fine_created_with varchar(64) default 'SQL' not null,
+--        fine_modified timestamp with time zone default current_timestamp not null,
+--        fine_modified_by varchar(64) default current_user not null,
+--        fine_modified_with varchar(64) default 'SQL' not null);
+-- 
+-- create index fine_fine_name_idx on fine(fine_name);
+-- create index fine_fine_name_valid_from on fine(fine_name, fine_valid_from);
+-- 
+-- create trigger fine_insert
+--        before insert on fine for each row execute procedure insert_row_created_with();
+-- create trigger fine_update
+--        before update on fine for each row execute procedure update_row_modified();
+-- create trigger fine_log
+--        before insert or update or delete on fine for each row execute procedure log_row();
 
-create index fine_fine_name_idx on fine(fine_name);
-create index fine_fine_name_valid_from on fine(fine_name, fine_valid_from);
-
-create trigger fine_insert
-       before insert on fine for each row execute procedure insert_row_created_with();
-create trigger fine_update
-       before update on fine for each row execute procedure update_row_modified();
-create trigger fine_log
-       before insert or update or delete on fine for each row execute procedure log_row();
-
-grant select on fine to keyholders;
-grant insert, update, delete on fine to "*chamber";
-
-insert into fine(fine_name, fine) values ('lateday', 0.25);
-insert into fine(fine_name, fine) values ('maxlate', 10);
-insert into fine(fine_name, fine, fine_valid_from) values ('lateday', 0.0, '2014-08-15 03:00-04');
-insert into fine(fine_name, fine, fine_valid_from) values ('maxlate', 0, '2014-08-15 03:00-04');
-insert into fine(fine_name, fine, fine_valid_from) values ('lateday', 0.10, '2014-09-06 03:00-04');
-insert into fine(fine_name, fine, fine_valid_from) values ('maxlate', 4, '2014-09-06 03:00-04');
+-- grant select on fine to keyholders;
+-- grant insert, update, delete on fine to "*chamber";
+-- 
+-- insert into fine(fine_name, fine) values ('lateday', 0.25);
+-- insert into fine(fine_name, fine) values ('maxlate', 10);
+-- insert into fine(fine_name, fine, fine_valid_from) values ('lateday', 0.0, '2014-08-15 03:00-04');
+-- insert into fine(fine_name, fine, fine_valid_from) values ('maxlate', 0, '2014-08-15 03:00-04');
+-- insert into fine(fine_name, fine, fine_valid_from) values ('lateday', 0.10, '2014-09-06 03:00-04');
+-- insert into fine(fine_name, fine, fine_valid_from) values ('maxlate', 4, '2014-09-06 03:00-04');
 
 create table membership (
        membership_id integer default nextval('id_seq') primary key,

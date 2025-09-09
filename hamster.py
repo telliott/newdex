@@ -472,7 +472,7 @@ def filebug(line):
 
     desc = read('Short description: ')
     print()
-    body = readlines()
+    body = readlines('Details: ')
 
     # assemble the e-mail message
     report = [

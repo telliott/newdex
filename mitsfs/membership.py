@@ -15,17 +15,14 @@ from mitsfs.dex.membership import Membership
 from mitsfs.dex.membership_info import MembershipOptions
 from mitsfs.dex.transactions import get_transactions, Transaction, \
     FineTransaction, OverdueTransaction
+from mitsfs.dex.timewarps import Timewarps
+from mitsfs.dex.checkouts import Checkouts
+from mitsfs.constants import MAX_BOOKS
 
 __all__ = [
-    'find_members',
-    'Checkout', 'MembershipBook', 'TimeWarp', 'star_dissociated',
+    'find_members', 'MembershipBook', 'star_dissociated',
     'role_members', 'star_cttes',
     ]
-
-
-# these really should be in the database somewhere
-MAXDAYSOUT = 21
-MAX_BOOKS = 8
 
 
 def find_members(db, name, pseudo=False):
@@ -135,6 +132,7 @@ class Member(db.Entry):
     # modified_with = db.ReadField('member_modified_with')
 
     membership_ = None
+    checkouts_ = None
 
     @property
     def membership(self):
@@ -236,61 +234,6 @@ class Member(db.Entry):
                '      ) as ifnotnow',
                (mtype.duration, self.member_id))
 
-    # def membership_describe(self, membership_type, when='now'):
-    #     '''Describe a new membership: text description, how much it would cost,
-    #      and wnen it would expire'''
-
-    #     c = self.cursor.execute(
-    #         'select'
-    #         '  membership_description, membership_cost, membership_duration'
-    #         ' from membership_type'
-    #         '  natural join membership_cost'
-    #         '  natural join ('
-    #         '   select'
-    #         '    membership_type,'
-    #         '    max(membership_cost_valid_from) as membership_cost_valid_from'
-    #         '   from membership_cost'
-    #         '   where membership_cost_valid_from < %s'
-    #         '   group by membership_type) as current'
-    #         ' where membership_type=%s',
-    #         (when, membership_type))
-
-    #     if c.rowcount == 0:
-    #         return None
-
-    #     (description, cost, duration) = c.fetchone()
-
-    #     if duration:
-    #         # + postgres is better at python at time intervals
-    #         # + the return value of date_trunc doesn't always have a time zone;
-    #         #   thus the first "at time zone" on line 4 puts it in a time zone
-    #         #   then converts back to ostensible local time
-
-    #         c = self.cursor.execute(
-    #             'select'
-    #             "  date_trunc("
-    #             "     'day', max(membership_expires at time zone 'PST8PDT'))"
-    #             "   at time zone 'PST8PDT' at time zone 'EST5EDT'"
-    #             '  + (select membership_duration'
-    #             '      from membership_type'
-    #             '      where membership_type=%s)'
-    #             ' from (select membership_expires from membership'
-    #             '        where member_id=%s'
-    #             '       union select current_timestamp as membership_expires'
-    #             '      ) as ifnotnow',
-    #             (membership_type, self.member_id))
-    #         if c.rowcount == 0:
-    #             expiration = None
-    #         else:
-    #             expiration = c.fetchone()[0]
-    #     else:
-    #         expiration = None
-
-    #     if self.membership and not self.membership.expired and not expiration:
-    #         cost -= self.membership.cost
-
-    #     return description, cost, expiration
-
     @property
     def balance(self):
         '''
@@ -387,6 +330,181 @@ class Member(db.Entry):
 
         '''
         return get_transactions(self.db, self.member_id, include_voided)
+
+    @property
+    def checkouts(self):
+        if self.checkouts_ is None:
+            self.checkouts_ = Checkouts(self.db, member_id=self.member_id)
+        return self.checkouts_
+
+    def can_checkout(self, override=False):
+        msgs = []
+        correct = []
+
+        if self.balance < 0:
+            msgs.append(str(self) + ' has a negative balance.')
+            correct.append('pay fines')
+
+        if self.membership is None:
+            msgs.append(str(self) + ' has no membership.')
+            correct.append('get a membership')
+        elif self.membership.expired:
+            msgs.append(str(self) + ' has an expired membership.')
+            correct.append('get new membership')
+
+        books_due = self.checkouts.overdue
+
+        if books_due:
+            msg = str(self) + ' has overdue books.'
+            if not override:
+                msg += '\n' + '\n'.join(str(book) for book in books_due)
+            msgs.append(msg)
+            correct.append('return books')
+
+        count = len([x for x in self.checkouts if not x.lost])
+        if count >= MAX_BOOKS:
+            msgs.append(('%s has %d books out.' % (str(self), count)))
+            if 'return books' not in correct:
+                correct.append('return books')
+
+        cmsg = ''
+
+        if len(correct) > 0:
+            cmsg = correct[0].capitalize()
+        if len(correct) > 2:
+            cmsg += ', ' + ', '.join(correct[1:-1]) + ','
+        if len(correct) > 1:
+            cmsg += ' and ' + correct[-1]
+
+        return not bool(msgs), msgs, cmsg
+
+    def key(self, login):
+        self.rolname = login
+        cursor = self.db.cursor
+        cursor.execute('set role "*chamber"')
+        cursor.execute('create role "%s" login' % login)
+        cursor.execute('grant keyholders to "%s"' % login)
+        cursor.execute('reset role')
+        self.db.commit()
+
+    @property
+    def committees(self):
+        return list(self.db.cursor.execute(
+            "select roleid_.rolname"
+            " from"
+            "  pg_auth_members"
+            "  join pg_roles roleid_ on roleid=roleid_.oid"
+            "  join pg_roles member_ on member = member_.oid"
+            " where"
+            " member_.rolname = %s and"
+            " roleid_.rolname != 'keyholders'",
+            (self.role,)))
+
+    def dekey(self):
+        cursor = self.db.cursor
+        for group in self.committees:
+            cursor.execute('revoke "%s" from "%s"' % (group, self.rolname))
+        cursor.execute('set role "*chamber"')
+        cursor.execute('drop role "%s"' % (self.rolname,))
+        cursor.execute('reset role')
+        self.db.commit()
+
+    def grant(self, role):
+        if role == '*chamber':
+            self.db.cursor.execute('set role "*chamber"')
+        self.db.cursor.execute('grant "%s" to "%s"' % (role, self.rolname))
+        if role == '*chamber':
+            self.db.cursor.execute('reset role')
+        self.db.commit()
+
+    def revoke(self, role):
+        if role == '*chamber':
+            self.db.cursor.execute('set role "*chamber"')
+        self.db.cursor.execute('revoke "%s" from "%s"' % (role, self.rolname))
+        if role == '*chamber':
+            self.db.cursor.execute('reset role')
+        self.db.commit()
+
+    def merge(self, other):
+        other_id = other.member_id
+        assert self.id != other_id
+        c = self.db.getcursor()
+        c.execute('set role "speaker-to-postgres"')
+        try:
+            c.execute(
+                'update checkout_member set member_id=%s where member_id=%s',
+                (self.id, other_id))
+            c.execute(
+                'update membership set member_id=%s where member_id=%s',
+                (self.id, other_id))
+            c.execute(
+                'update transaction set member_id=%s where member_id=%s',
+                (self.id, other_id))
+            c.execute(
+                'delete from member where member_id=%s',
+                (other_id,))
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        finally:
+            c.execute('reset role')
+
+
+    # def membership_describe(self, membership_type, when='now'):
+    #     '''Describe a new membership: text description, how much it would cost,
+    #      and wnen it would expire'''
+
+    #     c = self.cursor.execute(
+    #         'select'
+    #         '  membership_description, membership_cost, membership_duration'
+    #         ' from membership_type'
+    #         '  natural join membership_cost'
+    #         '  natural join ('
+    #         '   select'
+    #         '    membership_type,'
+    #         '    max(membership_cost_valid_from) as membership_cost_valid_from'
+    #         '   from membership_cost'
+    #         '   where membership_cost_valid_from < %s'
+    #         '   group by membership_type) as current'
+    #         ' where membership_type=%s',
+    #         (when, membership_type))
+
+    #     if c.rowcount == 0:
+    #         return None
+
+    #     (description, cost, duration) = c.fetchone()
+
+    #     if duration:
+    #         # + postgres is better at python at time intervals
+    #         # + the return value of date_trunc doesn't always have a time zone;
+    #         #   thus the first "at time zone" on line 4 puts it in a time zone
+    #         #   then converts back to ostensible local time
+
+    #         c = self.cursor.execute(
+    #             'select'
+    #             "  date_trunc("
+    #             "     'day', max(membership_expires at time zone 'PST8PDT'))"
+    #             "   at time zone 'PST8PDT' at time zone 'EST5EDT'"
+    #             '  + (select membership_duration'
+    #             '      from membership_type'
+    #             '      where membership_type=%s)'
+    #             ' from (select membership_expires from membership'
+    #             '        where member_id=%s'
+    #             '       union select current_timestamp as membership_expires'
+    #             '      ) as ifnotnow',
+    #             (membership_type, self.member_id))
+    #         if c.rowcount == 0:
+    #             expiration = None
+    #         else:
+    #             expiration = c.fetchone()[0]
+    #     else:
+    #         expiration = None
+
+    #     if self.membership and not self.membership.expired and not expiration:
+    #         cost -= self.membership.cost
+
+    #     return description, cost, expiration
 
     # def transaction(self, amount, txntype, desc, commit=True):
     #     '''
@@ -538,355 +656,197 @@ class Member(db.Entry):
     #         list(zip(txn_ids, void_txn_ids)))
     #     return txn_ids
 
-    @property
-    def checkouts(self):
-        c = self.cursor.execute(
-            'select checkout_id'
-            ' from'
-            '  checkout_member'
-            '  natural join checkout'
-            ' where'
-            '  member_id = %s and'
-            '  checkin_stamp is null'
-            ' order by checkout_stamp',
-            (self.member_id,))
 
-        return [Checkout(self.db, checkout_id=x[0]) for x in c.fetchall()]
+# class Checkout(db.Entry):
+#     def __init__(self, db, checkout_id=None, **kw):
+#         super(Checkout, self).__init__(
+#             'checkout', 'checkout_id', db, checkout_id, **kw)
 
-    @property
-    def checkout_history(self):
-        c = self.cursor.execute(
-            'select checkout_id'
-            ' from'
-            '  checkout_member'
-            '  natural join checkout'
-            ' where member_id = %s'
-            ' order by checkout_stamp desc',
-            (self.member_id,))
+#     checkout_id = db.ReadField('checkout_id')
+#     checkout_stamp = db.ReadField(
+#         'checkout_stamp', coerce_datetime_no_timezone)
+#     book_id = db.ReadField('book_id')
+#     checkout_user = db.ReadField('checkout_user')
 
-        return [Checkout(self.db, checkout_id=x[0]) for x in c.fetchall()]
+#     checkin_user = db.ReadField('checkin_user')
+#     checkin_stamp = db.ReadField('checkin_stamp', coerce_datetime_no_timezone)
 
-    def checkout_good(self, override=False):
-        msgs = []
-        correct = []
+#     lost = db.ReadFieldUncached(
+#         'checkout_lost', coerce_datetime_no_timezone)
 
-        if self.balance < 0:
-            msgs.append(str(self) + ' has a negative balance.')
-            correct.append('pay fines')
+#     @property
+#     def title(self):
+#         return dexdb.Title(self.db,
+#                            self.cursor.selectvalue(
+#                                'select title_id'
+#                                ' from book'
+#                                ' where book_id = %s',
+#                                (self.book_id,)))
 
-        if self.membership is None:
-            msgs.append(str(self) + ' has no membership.')
-            correct.append('get a membership')
-        elif self.membership.expired:
-            msgs.append(str(self) + ' has an expired membership.')
-            correct.append('get new membership')
+#     @property
+#     def book(self):
+#         return dexdb.Book(self.title, self.book_id)
 
-        books_due = [out for out in self.checkouts if out.due]
+#     @property
+#     def due_stamp(self):
+#         when = self.checkout_stamp + datetime.timedelta(days=MAXDAYSOUT)
+#         new = datetime.datetime(when.year, when.month, when.day, 3, 0, 0, 0)
+#         if when.hour >= 3:
+#             new += datetime.timedelta(days=1)
+#         return new
 
-        if books_due:
-            msg = str(self) + ' has overdue books.'
-            if not override:
-                msg += '\n' + '\n'.join(str(book) for book in books_due)
-            msgs.append(msg)
-            correct.append('return books')
+#     @property
+#     def due_date(self):
+#         # visible due date should be the day before the 3am actual due datetime
+#         when = self.due_stamp - datetime.timedelta(days=1)
+#         return datetime.datetime(when.year, when.month, when.day, 3, 0, 0, 0)
 
-        count = len([x for x in self.checkouts if not x.lost])
-        if count >= MAX_BOOKS:
-            msgs.append(('%s has %d books out.' % (str(self), count)))
-            if 'return books' not in correct:
-                correct.append('return books')
+#     @property
+#     def due(self):
+#         return self.due_stamp < datetime.datetime.now() and not self.lost
 
-        cmsg = ''
+#     def overdue_days(self, when=None):
+#         '''Returns the number of days something is overdue by,
+#         possibly vs. a specified checkin date'''
+#         if when is None:
+#             when = datetime.datetime.now()
 
-        if len(correct) > 0:
-            cmsg = correct[0].capitalize()
-        if len(correct) > 2:
-            cmsg += ', ' + ', '.join(correct[1:-1]) + ','
-        if len(correct) > 1:
-            cmsg += ' and ' + correct[-1]
+#         # Looks up in database every time. Should globalize a timewarps
+#         # object?
+#         timewarps = Timewarps(self.db)
+#         delta = (when - timewarps.warp_date(self.due_stamp))
 
-        return not bool(msgs), msgs, cmsg
+#         return max(delta.days, 0)
 
-    def key(self, login):
-        self.rolname = login
-        cursor = self.db.cursor
-        cursor.execute('set role "*chamber"')
-        cursor.execute('create role "%s" login' % login)
-        cursor.execute('grant keyholders to "%s"' % login)
-        cursor.execute('reset role')
-        self.db.commit()
+#     @property
+#     def member(self):
+#         # uncached for the moment, so use it somewhat sparingly
+#         member_ids = list(self.cursor.execute(
+#             'select member_id from checkout_member where checkout_id = %s',
+#             (self.id,)))
+#         if not member_ids:
+#             # database constraints say there will be one or zero
+#             return None
+#         return Member(self.db, member_ids[0])
 
-    @property
-    def committees(self):
-        return list(self.db.cursor.execute(
-            "select roleid_.rolname"
-            " from"
-            "  pg_auth_members"
-            "  join pg_roles roleid_ on roleid=roleid_.oid"
-            "  join pg_roles member_ on member = member_.oid"
-            " where"
-            " member_.rolname = %s and"
-            " roleid_.rolname != 'keyholders'",
-            (self.role,)))
+#     def lose(self, when=None):
+#         '''Declare a book lost.  Return what to tell the user.'''
 
-    def dekey(self):
-        cursor = self.db.cursor
-        for group in self.committees:
-            cursor.execute('revoke "%s" from "%s"' % (group, self.rolname))
-        cursor.execute('set role "*chamber"')
-        cursor.execute('drop role "%s"' % (self.rolname,))
-        cursor.execute('reset role')
-        self.db.commit()
+#         msgs = []
 
-    def grant(self, role):
-        if role == '*chamber':
-            self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('grant "%s" to "%s"' % (role, self.rolname))
-        if role == '*chamber':
-            self.db.cursor.execute('reset role')
-        self.db.commit()
+#         if when is None:
+#             when = datetime.datetime.today()
 
-    def revoke(self, role):
-        if role == '*chamber':
-            self.db.cursor.execute('set role "*chamber"')
-        self.db.cursor.execute('revoke "%s" from "%s"' % (role, self.rolname))
-        if role == '*chamber':
-            self.db.cursor.execute('reset role')
-        self.db.commit()
+#         if self.lost:  # you can only lose a book once per checkout
+#             return
 
-    def merge(self, other):
-        other_id = other.member_id
-        assert self.id != other_id
-        c = self.db.getcursor()
-        c.execute('set role "speaker-to-postgres"')
-        try:
-            c.execute(
-                'update checkout_member set member_id=%s where member_id=%s',
-                (self.id, other_id))
-            c.execute(
-                'update member_comment set member_id=%s where member_id=%s',
-                (self.id, other_id))
-            c.execute(
-                'update membership set member_id=%s where member_id=%s',
-                (self.id, other_id))
-            c.execute(
-                'update transaction set member_id=%s where member_id=%s',
-                (self.id, other_id))
-            c.execute(
-                'delete from member where member_id=%s',
-                (other_id,))
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-            raise
-        finally:
-            c.execute('reset role')
+#         late = self.overdue_days(when)
+#         if late:
+#             fine = OverdueTransaction(self, self.member.id, self.id, late,
+#                                       self.book)
+#             fine.create()
+#             msgs.append('FINE: %s, %s was overdue %d days' % (
+#                 ui.money_str(-fine.amount), self.book, late))
 
+#         self.cursor.execute(
+#             'update checkout set checkout_lost=%s where checkout_id=%s',
+#             (when, self.id))
 
-class Checkout(db.Entry):
-    def __init__(self, db, checkout_id=None, **kw):
-        super(Checkout, self).__init__(
-            'checkout', 'checkout_id', db, checkout_id, **kw)
+#         fine = -self.book.shelfcode.replacement_cost
+#         tx = FineTransaction(self, self.member.member_id, self.id,
+#                              amount=fine,
+#                              description=f'Lost book {self.book}')
+#         tx.create()
 
-    checkout_id = db.ReadField('checkout_id')
-    checkout_stamp = db.ReadField(
-        'checkout_stamp', coerce_datetime_no_timezone)
-    book_id = db.ReadField('book_id')
-    checkout_user = db.ReadField('checkout_user')
+#         msgs.append(
+#             'FINE: %s for lost %s' % (-fine, self.book.shelfcode.description))
 
-    checkin_user = db.ReadField('checkin_user')
-    checkin_stamp = db.ReadField('checkin_stamp', coerce_datetime_no_timezone)
+#         return '\n'.join(msgs)
 
-    checkout_lost = db.ReadFieldUncached(
-        'checkout_lost', coerce_datetime_no_timezone)
+#     def _fine_txns(self, match):  # match='%'
+#         return list(self.cursor.execute(
+#             'select transaction_id'
+#             ' from'
+#             '  transaction'
+#             '  natural join fine_payment'
+#             ' where'
+#             '  checkout_id=%s and'
+#             '  transaction_description like %s',
+#             (self.id, match)))
 
-    @property
-    def title(self):
-        return dexdb.Title(self.db,
-                           self.cursor.selectvalue(
-                               'select title_id'
-                               ' from book'
-                               ' where book_id = %s',
-                               (self.book_id,)))
+#     @property
+#     def lost_txns(self):
+#         '''returns a list.  If it has more than one member, things
+#         will likely go pear shaped relatively rapidly .'''
+#         return self._fine_txns('Lost book %')
 
-    @property
-    def book(self):
-        return dexdb.Book(self.title, self.book_id)
+#     def checkin(self, when=None):
+#         msgs = []
+#         if when is None:
+#             when = datetime.datetime.now()
+#         with self.getcursor() as c:
+#             checkouts = list(c.execute(
+#                 'select'
+#                 '  member_id, checkout_stamp, checkin_stamp'
+#                 ' from'
+#                 '  checkout'
+#                 '  natural join checkout_member'
+#                 ' where checkout_id=%s',
+#                 (self.id,)))
+#             if len(checkouts) != 1:
+#                 raise dexdb.CirculationException("%d checkout rows, can't "
+#                                                  "proceed; apologize and "
+#                                                  "convey book to libcomm"
+#                                                  % len(checkouts))
+#             ((member_id, checkout_stamp, checkin_stamp),) = checkouts
 
-    @property
-    def due_stamp(self):
-        when = self.checkout_stamp + datetime.timedelta(days=MAXDAYSOUT)
-        new = datetime.datetime(when.year, when.month, when.day, 3, 0, 0, 0)
-        if when.hour >= 3:
-            new += datetime.timedelta(days=1)
-        return new
+#             if checkin_stamp:
+#                 raise dexdb.CirculationException(
+#                     '%s already checked in' % (str(self),))
 
-    @property
-    def due_date(self):
-        # visible due date should be the day before the 3am actual due datetime
-        when = self.due_stamp - datetime.timedelta(days=1)
-        return datetime.datetime(when.year, when.month, when.day, 3, 0, 0, 0)
+#             if not self.member.pseudo:
+#                 # when I get to this section, we should do a selection
+#                 # for the lost book, not hope it's the last one
+#                 if self.lost:
+#                     ltxns = self.lost_txns
+#                     if ltxns:
+#                         tx = Transaction(self.db, self.member.id, ltxns[-1])
+#                         tx.void()
+#                         msgs.append('Lost book fine voided.')
+#                 else:
+#                     days = self.overdue_days(when)
+#                     if days and not self.member.pseudo:
+#                         msgs.append('Book is overdue %d days' % (days,))
+#                         fine = OverdueTransaction(self.db, self.member.id,
+#                                                   self.id, days=days,
+#                                                   book=self.title)
+#                         fine.create()
+#                         msgs.append('FINE: %s added to balance' % (
+#                             ui.money_str(fine.amount),))
 
-    def _timewarp(self, stamp):
-        timewarp = self.cursor.selectvalue(
-            'select timewarp_end'
-            ' from timewarp'
-            ' where'
-            '  timewarp_start < %s'
-            '  and timewarp_end > %s',
-            (stamp, stamp,))
-        if timewarp is None:
-            return stamp
+#             c.execute(
+#                 'update checkout'
+#                 ' set checkin_stamp = %s, checkin_user = current_user'
+#                 ' where checkout_id=%s',
+#                 (when, self.id))
 
-        return coerce_datetime_no_timezone(timewarp)
+#             msgs.append(
+#                 'Book checked out to %s has been checked in' % (self.member,))
 
-    @property
-    def due(self):
-        return self.due_stamp < datetime.datetime.now() and not self.lost
+#             if self.book.withdrawn:
+#                 msgs += [
+#                     '',
+#                     '***',
+#                     'Returned book was withdrawn from the library.',
+#                     'Please place it on the Panthercomm shelf with a note.',
+#                     '***',
+#                     ]
+#         return '\n'.join(msgs)
 
-    def overdue_days(self, when=None):
-        '''Returns the number of days something is overdue by,
-        possibly vs. a specified checkin date'''
-        if when is None:
-            when = datetime.datetime.now()
-
-        delta = (when - self._timewarp(self.due_stamp))
-
-        return max(delta.days, 0)
-
-    @property
-    def lost(self):
-        return self.checkout_lost
-
-    @property
-    def member(self):
-        # uncached for the moment, so use it somewhat sparingly
-        member_ids = list(self.cursor.execute(
-            'select member_id from checkout_member where checkout_id = %s',
-            (self.id,)))
-        if not member_ids:
-            # database constraints say there will be one or zero
-            return None
-        return Member(self.db, member_ids[0])
-
-    def lose(self, when=None):
-        '''Declare a book lost.  Return what to tell the user.'''
-
-        msgs = []
-
-        if when is None:
-            when = datetime.datetime.today()
-
-        if self.lost:  # you can only lose a book once per checkout
-            return
-
-        late = self.overdue_days(when)
-        if late:
-            fine = OverdueTransaction(self, self.member.id, self.id, late, 
-                                      self.book)
-            fine.create()
-            msgs.append('FINE: %s, %s was overdue %d days' % (
-                ui.money_str(-fine.amount), self.book, late))
-
-        self.cursor.execute(
-            'update checkout set checkout_lost=%s where checkout_id=%s',
-            (when, self.id))
-
-        fine = -self.book.shelfcode.replacement_cost
-        tx = FineTransaction(self, self.member.member_id, self.id,
-                             amount=fine,
-                             description=f'Lost book {self.book}')
-        tx.create()
-
-        msgs.append(
-            'FINE: %s for lost %s' % (-fine, self.book.shelfcode.description))
-
-        return '\n'.join(msgs)
-
-    def _fine_txns(self, match):  # match='%'
-        return list(self.cursor.execute(
-            'select transaction_id'
-            ' from'
-            '  transaction'
-            '  natural join fine_payment'
-            ' where'
-            '  checkout_id=%s and'
-            '  transaction_description like %s',
-            (self.id, match)))
-
-    @property
-    def lost_txns(self):
-        '''returns a list.  If it has more than one member, things
-        will likely go pear shaped relatively rapidly .'''
-        return self._fine_txns('Lost book %')
-
-    def checkin(self, when=None):
-        msgs = []
-        if when is None:
-            when = datetime.datetime.now()
-        with self.getcursor() as c:
-            checkouts = list(c.execute(
-                'select'
-                '  member_id, checkout_stamp, checkin_stamp'
-                ' from'
-                '  checkout'
-                '  natural join checkout_member'
-                ' where checkout_id=%s',
-                (self.id,)))
-            if len(checkouts) != 1:
-                raise dexdb.CirculationException("%d checkout rows, can't "
-                                                 "proceed; apologize and "
-                                                 "convey book to libcomm"
-                                                 % len(checkouts))
-            ((member_id, checkout_stamp, checkin_stamp),) = checkouts
-
-            if checkin_stamp:
-                raise dexdb.CirculationException(
-                    '%s already checked in' % (str(self),))
-
-            if not self.member.pseudo:
-                # when I get to this section, we should do a selection
-                # for the lost book, not hope it's the last one
-                if self.lost:
-                    ltxns = self.lost_txns
-                    if ltxns:
-                        tx = Transaction(self.db, self.member.id, ltxns[-1])
-                        tx.void()
-                        msgs.append('Lost book fine voided.')
-                else:
-                    days = self.overdue_days(when)
-                    if days and not self.member.pseudo:
-                        msgs.append('Book is overdue %d days' % (days,))
-                        fine = OverdueTransaction(self.db, self.member.id,
-                                                  self.id, days=days,
-                                                  book=self.title)
-                        fine.create()
-                        msgs.append('FINE: %s added to balance' % (
-                            ui.money_str(fine.amount),))
-
-            c.execute(
-                'update checkout'
-                ' set checkin_stamp = %s, checkin_user = current_user'
-                ' where checkout_id=%s',
-                (when, self.id))
-
-            msgs.append(
-                'Book checked out to %s has been checked in' % (self.member,))
-
-            if self.book.withdrawn:
-                msgs += [
-                    '',
-                    '***',
-                    'Returned book was withdrawn from the library.',
-                    'Please place it on the Panthercomm shelf with a note.',
-                    '***',
-                    ]
-        return '\n'.join(msgs)
-
-    def __str__(self):
-        return ' '.join(str(x) for x in (
-            self.book, self.checkout_stamp, self.checkout_user,
-            self.checkin_stamp, self.checkin_user))
+#     def __str__(self):
+#         return ' '.join(str(x) for x in (
+#             self.book, self.checkout_stamp, self.checkout_user,
+#             self.checkin_stamp, self.checkin_user))
 
 
 class MembershipBook(object):
@@ -957,25 +917,6 @@ class MembershipBook(object):
                 )
             for (email, first_name, last_name, stamps, shelfcodes, title_ids)
             in bad_people]
-
-
-class TimeWarp(db.Entry):
-    def __init__(self, db, timewarp_id=None, **kw):
-        super(TimeWarp, self).__init__(
-            'timewarp', 'timewarp_id', db, timewarp_id, **kw)
-
-    timewarp_id = db.ReadField('timewarp_id')
-    start = db.Field('timewarp_start', coerce_datetime_no_timezone)
-    end = db.Field('timewarp_end', coerce_datetime_no_timezone)
-
-    created = db.ReadField('timewarp_created')
-    created_by = db.ReadField('timewarp_created_by')
-    created_with = db.ReadField('timewarp_created_with')
-
-    modified = db.ReadField('timewarp_modified')
-    modified_by = db.ReadField('timewarp_modified_by')
-    modified_with = db.ReadField('timewarp_modified_with')
-
 
 def star_dissociated(db):
     """Returns a list of roles in the database that can log in, with

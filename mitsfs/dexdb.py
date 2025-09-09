@@ -25,6 +25,7 @@ from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.dex.checkouts import Checkouts, Checkout
 
 # if we ever switch away from postgres, we may need to export a different
 # exception type as DataError
@@ -172,15 +173,7 @@ class Book(db.Entry):
 
     @property
     def checkouts(self):
-        c = [
-            membership.Checkout(self.db, checkout_id=x)
-            for x in self.cursor.execute(
-                'select checkout_id from checkout'
-                ' where book_id=%s and checkin_stamp is null',
-                (self.id,))]
-        if len(c) > 1:
-            warnings.warn('%s is checked out more than once' % (self,))
-        return c
+        return Checkouts(self.db, book_id=self.id)
 
     @property
     def outto(self):
@@ -204,15 +197,10 @@ class Book(db.Entry):
             if self.out:
                 raise CirculationException(
                     'Book already checked out to ' + str(self.outto))
-            (checkout_id,) = c.execute(
-                'insert into checkout (book_id, checkout_stamp) '
-                'values (%s, %s) returning checkout_id',
-                (self.book_id, date))
-            c.execute(
-                'insert into checkout_member (member_id, checkout_id)'
-                ' values (%s, %s)',
-                (member.member_id, checkout_id))
-        return membership.Checkout(self.db, checkout_id=checkout_id)
+            c = Checkout(self.db, None, member_id=member.id,
+                         checkout_stamp=date, book_id=self.book_id)
+            c.create()
+            return c
 
     def __str__(self):
         return '%s<%s<%s<%s<%s' % (
