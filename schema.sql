@@ -595,32 +595,11 @@ grant insert, update, select on member to keyholders;
 
 insert into member(member_id, email, pseudo) select currval('id_seq'), 'CASH', true;
 
-
-
-create table transaction_type (
-       transaction_type char(1) primary key,
-       transaction_type_description text not null,
-       transaction_type_basic boolean not null);
-
-grant select on transaction_type to keyholders;
-grant insert, delete, update on transaction_type to libcomm;
-
-insert into transaction_type values ('F', 'Asssess Fine', true);
-insert into transaction_type values ('P', 'Payment', true);
-insert into transaction_type values ('D', 'Donation for Fine Credit', true);
-insert into transaction_type values ('K', 'Asssess Keyfine', true);
-insert into transaction_type values ('M', 'Membership', false);
-insert into transaction_type values ('R', 'Reimbursement', false);
-insert into transaction_type values ('V', 'Void Previous', false);
-insert into transaction_type values ('O', 'Other', false);
-insert into transaction_type values ('L', 'LHE', false);
-
-
 create table transaction (
        transaction_id integer default nextval('id_seq') not null primary key,
        transaction_amount numeric not null,
        member_id integer references member not null,
-       transaction_type char references transaction_type not null,
+       transaction_type char not null,
        transaction_description text not null,
 
        transaction_created timestamp with time zone default current_timestamp not null,
