@@ -3,8 +3,8 @@
 import sys
 
 from mitsfs.dexdb import DexDB
-from mitsfs.library import DATABASE_DSN
-from mitsfs.circulation import format_name
+from mitsfs.core.settings import DATABASE_DSN
+from mitsfs.circulation.members import format_name
 
 
 def main():

@@ -20,7 +20,6 @@ from mitsfs import constants
 from mitsfs.core import db
 from mitsfs import dexfile
 from mitsfs import lock_file
-from mitsfs import membership
 from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode

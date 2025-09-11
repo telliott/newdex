@@ -4,7 +4,7 @@ import sys
 
 from mitsfs.ui import read, specify
 from mitsfs.dexdb import DexDB
-from mitsfs.library import DATABASE_DSN
+from mitsfs.core.settings import DATABASE_DSN
 
 d = DexDB(dsn=DATABASE_DSN)
 

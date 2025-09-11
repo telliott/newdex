@@ -6,7 +6,7 @@ import optparse
 from mitsfs.inventory import Inventory
 from mitsfs.dexdb import DexDB, Title
 from mitsfs.dexfile import Dex, DexLine
-from mitsfs.library import DATABASE_DSN
+from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.ui import tabulate
 
 CLOSING_GLOSS = """

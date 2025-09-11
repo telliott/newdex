@@ -8,16 +8,19 @@ import itertools
 import smtplib
 
 from mitsfs.library import Library
+
 from mitsfs.ui import banner, menu, specify, specify_book, readinitials
 from mitsfs.ui import specify_member, tabulate, read, readlines, readyes
 from mitsfs.dexdb import DexDB, DataError
 from mitsfs.constants import DEXBASE
-from mitsfs.library import DATABASE_DSN
+from mitsfs.core import settings
 from mitsfs.dexfile import Dex, DexLine
-from mitsfs.dex.members import star_dissociated, role_members, star_cttes
-from mitsfs.dex.editions import InvalidShelfcode
-from mitsfs.dex.editions import Editions, Edition
+
+from mitsfs.dex.editions import InvalidShelfcode, Editions, Edition
+
 from mitsfs.circulation.checkouts import Checkouts
+from mitsfs.circulation.members import star_dissociated, role_members, \
+    star_cttes
 
 __release__ = '2'
 
@@ -50,7 +53,7 @@ def main(args):
 
     sys.stdout.write('Connecting to dex...')
     sys.stdout.flush()
-    dex = DexDB(client='dexhamster', dsn=dsn or DATABASE_DSN)
+    dex = DexDB(client='dexhamster', dsn=dsn or settings.DATABASE_DSN)
     library = Library(dex)
 
     print('done. (%s)' % dex.filename)

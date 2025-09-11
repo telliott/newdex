@@ -10,7 +10,7 @@ inventory (currently found.py)
 
 from mitsfs.dexdb import DexDB
 from mitsfs.ui import specify, read
-from mitsfs.circulation import format_name
+from mitsfs.circulation.members import format_name
 
 d = DexDB()
 

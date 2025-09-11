@@ -11,7 +11,7 @@ import time
 from io import open
 from functools import reduce
 
-from mitsfs.library import DATABASE_DSN
+from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.constants import DEXBASE
 from mitsfs.dexdb import DexDB, Title
 from mitsfs.inventory import Inventory, InventoryUnknown

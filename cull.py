@@ -5,7 +5,7 @@ import sys
 from mitsfs.ui import read
 from mitsfs.dexdb import DexDB, Title
 from mitsfs.dexfile import DexLine
-from mitsfs.library import DATABASE_DSN
+from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.dex.Shelfcodes import Shelfcodes
 
 
