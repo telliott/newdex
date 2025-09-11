@@ -100,7 +100,7 @@ class Checkouts(list):
             overdue.
 
         '''
-        bad_people = list(db.cursor.execute(
+        bad_people = list(self.db.cursor.execute(
             'select'
             '  email, first_name, last_name, '
             '  array_agg(checkout_stamp),'
@@ -108,7 +108,6 @@ class Checkouts(list):
             '  array_agg(title_id)'
             ' from'
             '  checkout'
-            '  natural join checkout_member'
             '  natural join member'
             '  natural join book'
             '  natural join shelfcode'
@@ -125,7 +124,7 @@ class Checkouts(list):
                 email,
                 f'{last_name}, {first_name}',
                 [
-                    (checkout_stamp, shelfcode, Title(db, title_id))
+                    (checkout_stamp, shelfcode, Title(self.db, title_id))
                     for (checkout_stamp, shelfcode, title_id)
                     in list(zip(stamps, shelfcodes, title_ids))
                     ]

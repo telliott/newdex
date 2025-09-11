@@ -1044,7 +1044,7 @@ def merge(line):
 
 
 def vgg(line):
-    checkouts = Checkouts()
+    checkouts = Checkouts(dex)
     for email, name, overdue in checkouts.vgg():
         print(name, '<' + email + '>')
         for stamp, code, title in overdue:
