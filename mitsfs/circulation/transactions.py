@@ -1,4 +1,4 @@
-from mitsfs import db
+from mitsfs.core import db
 from mitsfs.ui import money_str
 from mitsfs.constants import OVERDUE_DAY, MAX_OVERDUE
 
@@ -8,7 +8,7 @@ engage in.
 '''
 
 
-def get_transactions(db, member, include_voided=True):
+def get_transactions(db, member_id, include_voided=True):
     """
     returns a list of transactions associated with a member
 
@@ -63,9 +63,9 @@ def get_transactions(db, member, include_voided=True):
                "    where t2.transaction_type = 'V'))"
                " order by transaction_created")
 
-    return [Transaction(db, member, i)
+    return [Transaction(db, member_id, i)
             for i in
-            db.cursor.execute(sql, (member,))]
+            db.cursor.execute(sql, (member_id,))]
 
 
 def get_CASH_id(db):
@@ -94,6 +94,27 @@ class Transaction(db.Entry):
     created_by = db.ReadField('transaction_created_by')
     created_with = db.ReadField('transaction_created_with')
 
+    @property
+    def type_description(self):
+        '''
+        Text descriptions of the types of transactions
+
+        Returns
+        -------
+        type: str
+            text description
+        '''
+        descriptions = {'D': 'Donation',
+                        'F': 'Fine',
+                        'K': 'Keyfine',
+                        'P': 'Payment',
+                        'L': 'LHE',
+                        'M': 'Membership',
+                        'R': 'Reimbursement',
+                        'V': 'Void'
+                        }
+        return descriptions[self.transaction_type]        
+        
     @property
     def linked_transaction(self):
         '''

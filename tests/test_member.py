@@ -6,15 +6,16 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dexdb import DexDB
-from mitsfs.membership import Member, find_members
 from tests.test_setup import Case
 
+from mitsfs.circulation.members import Member, Members
+from mitsfs.library import Library
 
 class DexDBTest(Case):
     def test_members(self):
         try:
-            db = DexDB(dsn=self.dsn)
+            library = Library(dsn=self.dsn)
+            db = library.db
             db.getcursor().execute(
                 'insert into'
                 ' member(first_name, last_name, key_initials, email,'
@@ -27,24 +28,24 @@ class DexDBTest(Case):
                 " 'Asgard', '', 'f')")
             db.commit()
 
-            results = find_members(db, 'NotaMember')
+            results = library.members.find('NotaMember')
             self.assertEqual(0, len(results))
 
-            results = find_members(db, 'Memb')
+            results = library.members.find('Memb')
             self.assertEqual(2, len(results))
             self.assertEqual('Member', results[0].last_name)
             first_names = [r.first_name for r in results]
             self.assertIn('New', first_names)
             self.assertIn('Old', first_names)
 
-            results = find_members(db, 'new.com')
+            results = library.members.find('new.com')
             self.assertEqual(2, len(results))
             self.assertEqual('Member', results[0].last_name)
             first_names = [r.first_name for r in results]
             self.assertIn('New', first_names)
             self.assertIn('Old', first_names)
 
-            results = find_members(db, 'Thor')
+            results = library.members.find('Thor')
             self.assertEqual(1, len(results))
             self.assertEqual('Odinson', results[0].last_name)
 
@@ -91,7 +92,7 @@ class DexDBTest(Case):
             self.assertEqual('loki@frostgiants.com', loki.email)
             self.assertEqual('650-555-1212', loki.phone)
 
-            results = find_members(db, 'Odins')
+            results = library.members.find('Odins')
             self.assertEqual(2, len(results))
 
             # set through keyword arguments

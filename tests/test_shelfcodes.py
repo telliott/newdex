@@ -8,10 +8,10 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode
 from mitsfs.dexdb import DexDB
 from tests.test_setup import Case
-from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode
 
 test_shelfcodes = [
     ]

@@ -13,7 +13,6 @@ import re
 
 import psycopg2
 
-
 __all__ = [
     'Database', 'Field', 'ReadField', 'ReadFieldUncached',
     'Entry', 'cached', 'EntryDeletable',
@@ -58,6 +57,7 @@ class Database(object):
 
     def rollback(self):
         self.db.rollback()
+      
 
 
 class EasyCursor(psycopg2.extensions.cursor):
@@ -80,7 +80,7 @@ class EasyCursor(psycopg2.extensions.cursor):
 
     def execute(self, sql, args=None):
         log = logging.getLogger('mitsfs.sql')
-
+ 
         log.debug('%s', self.mogrify(sql, args))
         try:
             psycopg2.extensions.cursor.execute(self, sql, args)

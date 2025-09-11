@@ -1,5 +1,5 @@
 '''
-Unit tests for the mitsfs (python) library.
+Unit tests for the mitsfs (python) lib.
 '''
 
 from io import StringIO
@@ -14,14 +14,21 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
+from mitsfs.core import settings
+
 from test_setup import Case
+from mitsfs.library import Library
+
+from mitsfs.dex.shelfcodes import Shelfcodes
+
+from mitsfs.circulation.transactions import CashTransaction
+from mitsfs.circulation.timewarps import Timewarp
+from mitsfs.circulation.members import Member
+
 from mitsfs.dexdb import DexDB
-from mitsfs.membership import Member
 from mitsfs.dexfile import DexLine
 from mitsfs.error import handle_exception
-from mitsfs.dex.shelfcodes import Shelfcodes
-from mitsfs.dex.transactions import CashTransaction
-from mitsfs.dex.timewarps import Timewarp
+
 
 def create_test_member(d):
     # create a user to do the checking out
@@ -44,18 +51,20 @@ class MitsfsTest(Case):
         try:
             d = DexDB(dsn=self.dsn)
 
-            d.getcursor().execute(
+            d.cursor.execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('P', 'Paperbacks', 'C')")
+                " values('S', 'Paperbacks', 'C')")
             d.commit()
-            d.shelfcodes = Shelfcodes(d)
-            membook = d.membook()
+
+            # set our globals
+            lib = Library(db=d)
+            d.shelfcodes = lib.shelfcodes
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add(membook.membership_types['T'])
+            member.membership_add(lib.membership_types['T'])
             self.assertEqual(member.can_checkout()[0], False)
             tx = CashTransaction(d, new_id, member.normal_str,
                                  amount=-member.balance, transaction_type='P',
@@ -64,7 +73,7 @@ class MitsfsTest(Case):
             self.assertEqual(member.can_checkout()[0], True)
 
             # create a book for us to check out
-            d.add(DexLine('AUTHOR<TITLE<SERIES<P'))
+            d.add(DexLine('AUTHOR<TITLE<SERIES<S'))
 
             titles = list(d.search('AUTHOR', 'TITLE'))
             self.assertEqual(len(titles), 1)
@@ -96,17 +105,14 @@ class MitsfsTest(Case):
                 member,
                 datetime.datetime.today() - datetime.timedelta(weeks=4))
             member.checkouts.reload()
-            
+
             # because the book was due a week ago
             self.assertEqual(member.can_checkout()[0], False)
 
             # declare a timewarp encompassing the due date and now
-            t = Timewarp(
-                d, None,
+            lib.timewarps.add(
                 start=datetime.datetime.today() - datetime.timedelta(weeks=2),
-                end=datetime.datetime.today() + datetime.timedelta(weeks=1),
-                )
-            t.create()
+                end=datetime.datetime.today() + datetime.timedelta(weeks=1))
 
             # because the book was due a week ago, *still*
             self.assertEqual(member.can_checkout()[0], False)
@@ -114,7 +120,7 @@ class MitsfsTest(Case):
             losing_book = member.checkouts.out[0]
             self.assertEqual(member.checkouts.out[0].overdue_days(), 0)
             member.checkouts.out[0].lose()
- 
+
             # now owes a fine
             self.assertEqual(member.can_checkout()[0], False)
 
@@ -136,7 +142,7 @@ class MitsfsTest(Case):
     def testCheckOutLoseNoTimewarp(self):
         # Consider refactoring a bunch of this into a fixture of some sort
         d = DexDB(dsn=self.dsn)
-        membook = d.membook()
+
         try:
 
             d.getcursor().execute(
@@ -144,13 +150,16 @@ class MitsfsTest(Case):
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
                 " values('S', 'Paperbacks', 'C')")
             d.commit()
-            d.shelfcodes = Shelfcodes(d)
+
+            # set our globals
+            lib = Library(db=d)
+            d.shelfcodes = lib.shelfcodes
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
 
-            member.membership_add(membook.membership_types['T'])
+            member.membership_add(lib.membership_types['T'])
             self.assertEqual(member.can_checkout()[0], False)
             tx = CashTransaction(d, new_id, member.normal_str,
                                  amount=-member.balance, transaction_type='P',
@@ -226,11 +235,6 @@ class MitsfsTest(Case):
     def testCreateFineChanges(self):
         try:
             d = DexDB(dsn=self.dsn)
-            membook = d.membook()
-
-            # make sure there is no timewarp
-            d.cursor.execute('delete from timewarp')
-            d.commit()
 
             # fake up a shelfcode; has to be a real one until we can get our
             # configuration from the db
@@ -239,12 +243,15 @@ class MitsfsTest(Case):
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
                 " values('S', 'Paperbacks', 'C')")
             d.commit()
-            d.shelfcodes = Shelfcodes(d)
+
+            # set our globals
+            lib = Library(db=d)
+            d.shelfcodes = lib.shelfcodes
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add(membook.membership_types['T'])
+            member.membership_add(lib.membership_types['T'])
             tx = CashTransaction(d, new_id, member.normal_str,
                                  amount=-member.balance, transaction_type='P',
                                  description='simulate membership payment')
@@ -279,23 +286,21 @@ class MitsfsTest(Case):
     def testCreateCost(self):
         try:
             d = DexDB(dsn=self.dsn)
-            membook = d.membook()
-
-            # make sure there is no timewarp
-            d.cursor.execute('delete from timewarp')
-            d.commit()
-
+ 
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
                 " values('S', 'Paperbacks', 'C')")
             d.commit()
-            d.shelfcodes = Shelfcodes(d)
+
+            # set our globals
+            lib = Library(db=d)
+            d.shelfcodes = lib.shelfcodes
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
-            member.membership_add(membook.membership_types['T'])
+            member.membership_add(lib.membership_types['T'])
 
             observed_cost = -member.balance
 
@@ -307,28 +312,26 @@ class MitsfsTest(Case):
     def testCreateUnexpiredDiscount(self):
         try:
             d = DexDB(dsn=self.dsn)
-            membook = d.membook()
-
-            # make sure there is no timewarp
-            d.cursor.execute('delete from timewarp')
-            d.commit()
 
             d.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
                 " values('S', 'Paperbacks', 'C')")
             d.commit()
-            d.shelfcodes = Shelfcodes(d)
+
+            # set our globals
+            lib = Library(db=d)
+            d.shelfcodes = lib.shelfcodes
 
             new_id = create_test_member(d)
 
             member = Member(d, new_id)
 
-            lcost = membook.membership_types['L'].cost
-            tcost = membook.membership_types['T'].cost
-            ycost = membook.membership_types['1'].cost
+            lcost = lib.membership_types['L'].cost
+            tcost = lib.membership_types['T'].cost
+            ycost = lib.membership_types['1'].cost
 
-            member.membership_add(membook.membership_types['T'])
+            member.membership_add(lib.membership_types['T'])
             observed_cost = -member.balance
 
             self.assertEqual(observed_cost, member.membership.cost)
@@ -339,7 +342,7 @@ class MitsfsTest(Case):
                                  description='pay membership')
             tx.create()
 
-            member.membership_add(membook.membership_types['1'])
+            member.membership_add(lib.membership_types['1'])
             observed_cost = -member.balance
 
             self.assertEqual(observed_cost, member.membership.cost)
@@ -350,7 +353,7 @@ class MitsfsTest(Case):
                                  description='pay membership')
             tx.create()
 
-            member.membership_add(membook.membership_types['L'])
+            member.membership_add(lib.membership_types['L'])
             observed_cost = -member.balance
 
             self.assertEqual(observed_cost, member.membership.cost)

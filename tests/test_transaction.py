@@ -8,11 +8,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
-from mitsfs.membership import Member
-from tests.test_setup import Case
-from mitsfs.dex.transactions import get_transactions, Transaction, \
+
+from mitsfs.circulation.members import Member
+from mitsfs.circulation.transactions import get_transactions, Transaction, \
     CashTransaction, FineTransaction, OverdueTransaction, get_CASH_id
 from mitsfs.dex.shelfcodes import Shelfcodes
+
+from tests.test_setup import Case
+
 
 def create_test_member(d):
     # create a user to do the checking out
@@ -45,7 +48,6 @@ class DexDBTest(Case):
             title = titles[0]
             book = title.books[0]
 
-
             # add a couple basic transactions
             tx1 = Transaction(db, thor.id, amount=10, transaction_type='M',
                               description='Transaction one')
@@ -57,6 +59,7 @@ class DexDBTest(Case):
             self.assertEqual(10, transactions[0].amount)
             self.assertEqual(thor.id, transactions[0].member_id)
             self.assertEqual('M', transactions[0].transaction_type)
+            self.assertEqual('Membership', transactions[0].type_description)
             self.assertEqual('Transaction one', transactions[0].description)
             self.assertFalse(transactions[0].linked_transaction)
 
@@ -141,8 +144,6 @@ class DexDBTest(Case):
                                   ' from fine_payment')
             result = r.fetchall()
             self.assertEqual(3, len(result))
-
-
 
         finally:
             db.db.close()

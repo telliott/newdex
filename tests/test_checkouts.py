@@ -10,10 +10,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 from tests.test_setup import Case
 from mitsfs.dexdb import DexDB, CirculationException
 from mitsfs.dexfile import DexLine
-from mitsfs.membership import Member
+
 from mitsfs.dex.shelfcodes import Shelfcodes
-from mitsfs.dex.checkouts import Checkout, Checkouts
-from mitsfs.dex.transactions import get_transactions, Transaction
+
+from mitsfs.circulation.members import Member
+from mitsfs.circulation.checkouts import Checkout, Checkouts
+from mitsfs.circulation.transactions import get_transactions, Transaction
 
 
 def create_test_member(d):
@@ -41,7 +43,7 @@ class DexDBTest(Case):
                 " values('P', 'Paperbacks', 'C')")
             db.commit()
             db.shelfcodes = Shelfcodes(db)
-
+            
             books = {}
 
             for i in range(1, 9):

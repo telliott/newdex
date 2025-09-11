@@ -1,5 +1,5 @@
-from mitsfs import db
-from mitsfs.dex.coercers import coerce_datetime_no_timezone
+from mitsfs.core import db
+from mitsfs.util.coercers import coerce_datetime_no_timezone
 
 
 class Timewarp(db.Entry):
@@ -40,7 +40,7 @@ class Timewarps(list):
     def __init__(self, db):
         '''
         A list of all historical timewarps, sorted by end date.
-        
+
         Primarily used to figure out the new date after a timewarp
 
         Parameters
@@ -59,7 +59,7 @@ class Timewarps(list):
             self.append(Timewarp(db, t_id, start=start, end=end))
         self.sort(key=lambda x: x.end)
         self.db = db
-        
+
     def load_from_db(self, db):
         c = db.getcursor()
         c.execute('select timewarp_id, timewarp_start, timewarp_end'

@@ -7,14 +7,17 @@ import re
 import itertools
 import smtplib
 
-from mitsfs.ui import banner, menu, specify, specify_book
+from mitsfs.library import Library
+from mitsfs.ui import banner, menu, specify, specify_book, readinitials
 from mitsfs.ui import specify_member, tabulate, read, readlines, readyes
 from mitsfs.dexdb import DexDB, DataError
-from mitsfs.constants import DATABASE_DSN, DEXBASE
+from mitsfs.constants import DEXBASE
+from mitsfs.library import DATABASE_DSN
 from mitsfs.dexfile import Dex, DexLine
-from mitsfs.membership import star_dissociated, role_members, star_cttes
+from mitsfs.dex.members import star_dissociated, role_members, star_cttes
 from mitsfs.dex.editions import InvalidShelfcode
 from mitsfs.dex.editions import Editions, Edition
+from mitsfs.circulation.checkouts import Checkouts
 
 __release__ = '2'
 
@@ -28,7 +31,7 @@ review = False
 
 
 def main(args):
-    global dex
+    global dex, library
 
     try:
         import psyco
@@ -48,6 +51,8 @@ def main(args):
     sys.stdout.write('Connecting to dex...')
     sys.stdout.flush()
     dex = DexDB(client='dexhamster', dsn=dsn or DATABASE_DSN)
+    library = Library(dex)
+
     print('done. (%s)' % dex.filename)
 
     starmenu = [
@@ -612,9 +617,8 @@ def dexck(line):
 
 
 def membership(line):
-    mb = dex.membook()
 
-    member = specify_member(mb, line)
+    member = specify_member(library.members, line)
 
     if not member:
         return  # I don't think this can happen at this point, but....
@@ -908,36 +912,38 @@ def title(line):
             print('Unknown option', what)
 
 
+# Should really move all this stuff to icirc or some more privileged script
 def checkdis(line):
     print('Dissociated roles (key them or get the speaker-to-postgres to ')
     print('remove them)')
     print(' '.join(star_dissociated(dex)))
 
-
 def key(line):
-    m = dex.membook()
-    mem = specify_member(m, line)
+    mem = specify_member(library.members, line)
+
     if not mem:
         return
     print('Keying', mem.name)
     role = None
     if mem.role:
         role = mem.role
-    else:
-        emails = [e.member_email for e in mem.emails]
-        emails = [
-            email for email in emails
-            if email.lower().endswith('@mit.edu')]
-        if emails:
-            role = emails[0].split('@')[0]
+    elif mem.email.lower().endswith('@mit.edu'):
+        role = mem.email.split('@')[0].lower()
+    
     role = read('Kerberos name? ', preload=role)
     if not role:
         return
-    mem.key(role)
-
+    while True: 
+        inits = readinitials("Keyholder initials? ").strip()
+        if mem.check_initials_ok(inits):
+            mem.key(role, inits)
+            return
+        else:
+            print("Those initials have already been taken. Please try again.")
+ 
 
 def specify_keyholder(dex, line):
-    m = dex.membook()
+    m = specify_member(library.members, line)
     key_ids = set(mem.id for mem in role_members(dex, 'keyholders'))
     while True:
         mem = specify_member(m, line)  # XXX constrain to keyholders
@@ -1020,12 +1026,12 @@ def merge(line):
     print('This can only be expected to work by a speaker-to-postgres')
     print()
     print('User entry that is going away')
-    other = specify_member(dex.membook(), line)
+    other = specify_member(library.members, line)
     if other is None:
         return
     print('User that is sticking around')
     while True:
-        mem = specify_member(dex.membook())
+        mem = specify_member(library.members, line)
         if mem is None:
             return
         if mem.id != other.id:
@@ -1035,7 +1041,8 @@ def merge(line):
 
 
 def vgg(line):
-    for email, name, overdue in dex.membook().vgg():
+    checkouts = Checkouts()
+    for email, name, overdue in checkouts.vgg():
         print(name, '<' + email + '>')
         for stamp, code, title in overdue:
             print('', stamp, code, title)

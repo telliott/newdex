@@ -17,15 +17,16 @@ import psycopg2
 
 from mitsfs import barcode
 from mitsfs import constants
-from mitsfs import db
+from mitsfs.core import db
 from mitsfs import dexfile
 from mitsfs import lock_file
 from mitsfs import membership
 from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
-from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
-from mitsfs.dex.checkouts import Checkouts, Checkout
+from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.circulation.checkouts import Checkouts, Checkout
+from mitsfs.circulation.members import Member
 
 # if we ever switch away from postgres, we may need to export a different
 # exception type as DataError
@@ -177,14 +178,12 @@ class Book(db.Entry):
 
     @property
     def outto(self):
-        return ' '.join(str(x.member) for x in self.checkouts)
+        return ' '.join(str(Member(self.db, x.member_id))
+                        for x in self.checkouts.out)
 
     @property
     def out(self):
-        return self.cursor.execute(
-            'select checkout_id from checkout'
-            ' where book_id=%s and checkin_stamp is null',
-            (self.id,)).rowcount > 0
+        return len(self.checkouts.out) > 0
 
     @property
     def circulating(self):
@@ -1466,10 +1465,6 @@ class DexDB(db.Database):
                     "  shelfcode_type"
                     " from shelfcode"))
         return self._codes
-
-    def membook(self):
-        return membership.MembershipBook(self)
-
 
 SERIESINDEX_RE = re.compile(r'(?: (#)?([-.,\d]+B?))?$')
 

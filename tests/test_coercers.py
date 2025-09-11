@@ -9,13 +9,11 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode
-from mitsfs.dex.coercers import coerce_datetime_no_timezone, coerce_boolean
-from mitsfs.dex.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.util.coercers import coerce_datetime_no_timezone, coerce_boolean
 
 '''
 The shelfcode coercers are tested in the Shelfcode tests, where the 
-infrasturcture is better set up for them.
+infrastructure is better set up for them.
 '''
 class CoercersTest(unittest.TestCase):
 

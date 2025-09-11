@@ -282,8 +282,8 @@ def reademail(prompt):
 
 
 def readinitials(prompt):
-    def val(email):
-        ok = re.match(r"^[A-Z]{2,4}$", email.strip())
+    def val(initials):
+        ok = re.match(r"^[A-Z]{2,4}$", initials.strip())
         if not ok:
             print("Not valid initials (2-4 all caps)")
         return ok
@@ -498,11 +498,11 @@ def specify_book(
         return books[n - 1][1][0]
 
 
-def specify_member(membook, line=''):
+def specify_member(members, line=''):
     preload = ''
     while True:
         if line:
-            possibles = membook.search(line)
+            possibles = members.find(line)
 
             n = None
             if len(possibles) == 0:
@@ -526,7 +526,7 @@ def specify_member(membook, line=''):
             'Member: ',
             preload=preload,
             history='members',
-            complete=membook.complete_name,
+            complete=members.complete_name,
             ).strip().upper()
 
         if not line:

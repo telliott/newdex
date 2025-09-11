@@ -8,8 +8,9 @@ srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from mitsfs.dexdb import DexDB
-from mitsfs.membership import Member, find_members
-from mitsfs.dex.membership import Membership
+
+from mitsfs.circulation.membership import Membership
+
 from tests.test_setup import Case
 
 
@@ -19,9 +20,8 @@ class DexDBTest(Case):
             future_date = datetime.datetime.now() + datetime.timedelta(days=30)
             expired = datetime.datetime.now() - datetime.timedelta(days=30)
             short_date = future_date.strftime('%Y-%m-%d')
-            short_expired = expired.strftime('%Y-%m-%d')
             description = f'New Membership - Y - Expires: {short_date}'
-            
+
             db = DexDB(dsn=self.dsn)
             member_id = db.getcursor().selectvalue(
                 'insert into'
@@ -58,7 +58,7 @@ class DexDBTest(Case):
             self.assertTrue(new.expired)
             self.assertEqual(-10, new.cost)
             self.assertIn("Expired: " + str(expired.date()), str(new))
-            
+
             # Test an unexpired membership
             membership_id = db.getcursor().selectvalue(
                 'insert into'
@@ -93,16 +93,15 @@ class DexDBTest(Case):
                  f" {transaction_id})"
                  " returning membership_id")
             db.commit()
-           
+
             new = Membership(db, membership_id)
             self.assertEqual('Life', new.description)
             self.assertFalse(new.expired)
             self.assertEqual(-100, new.cost)
             self.assertIn("Expires: Never", str(new))
 
-
             # TODO: test a voided transaction
-            
+
         finally:
             db.db.close()
 

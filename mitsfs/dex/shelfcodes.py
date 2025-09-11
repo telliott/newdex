@@ -2,7 +2,7 @@
 
 import re
 
-from mitsfs import db
+from mitsfs.core import db
 
 '''
 

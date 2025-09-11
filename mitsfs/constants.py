@@ -6,7 +6,7 @@ import os
 
 
 __all__ = [
-    'LOCKER', 'DEXBASE', 'CODEBASE', 'DATADEX_FILE', 'DATABASE_DSN',
+    'LOCKER', 'DEXBASE', 'CODEBASE', 'DATADEX_FILE',
     ]
 
 
@@ -28,7 +28,6 @@ if os.path.exists('/mitsfs/dexcode'):
 else:
     CODEBASE = os.path.join(LOCKER, 'newdex')
 DATADEX_FILE = os.path.join(DEXBASE, 'datadex')
-DATABASE_DSN = 'dbname=mitsfs host=localhost'
 
 # daily fine for an overdue book
 OVERDUE_DAY = 0.1
@@ -36,8 +35,3 @@ OVERDUE_DAY = 0.1
 # maximum fine for an overdue book
 MAX_OVERDUE = 4.0
 
-# how long you can have a book out for
-MAXDAYSOUT = 21
-
-# how many books can you have out at once
-MAX_BOOKS = 8

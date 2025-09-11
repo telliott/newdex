@@ -1,16 +1,11 @@
-# -*- coding: utf-8 -*-
-
-import datetime
-
-from mitsfs import db
-from mitsfs import ui
+from mitsfs.core import db
 
 '''
-Basic foundational information about available memberships 
+Basic foundational information about available memberships
 '''
 
 
-class MembershipInfo(db.Entry):
+class MembershipType(db.Entry):
     def __init__(self, db, membership_type_id=None, **kw):
         super().__init__('membership_type', 'membership_type_id', db,
                          membership_type_id, **kw)
@@ -24,14 +19,14 @@ class MembershipInfo(db.Entry):
     active = db.InfoField('membership_type_active')
 
 
-class MembershipOptions(dict):
+class MembershipTypes(dict):
 
     def __init__(self, db):
         # keep track of these two lists to build the matching regex
         super().__init__()
         for row in self.load_from_db(db):
             (m_id, code, description, duration, cost) = row
-            m = MembershipInfo(db, m_id, code=code, description=description,
+            m = MembershipType(db, m_id, code=code, description=description,
                                duration=duration, cost=cost, active=True)
             super().__setitem__(m.code, m)
 

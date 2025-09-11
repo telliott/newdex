@@ -1,18 +1,19 @@
 import datetime
 
-from mitsfs import db
-from mitsfs import dexdb
+from mitsfs.core import settings
+from mitsfs.core import db
 from mitsfs import ui
 
-from mitsfs.dex.coercers import coerce_datetime_no_timezone
-from mitsfs.dex.timewarps import Timewarps
-from mitsfs.constants import MAXDAYSOUT
-from mitsfs.dex.transactions import Transaction, FineTransaction, \
-    OverdueTransaction
+from mitsfs.util import coercers
+from mitsfs.circulation import transactions
+
+# how long you can have a book out for
+MAXDAYSOUT = 21
 
 
 class Checkouts(list):
-    def __init__(self, db, member_id=None, book_id=None, checkouts=[]):
+    def __init__(self, db, member_id=None,
+                 book_id=None, checkouts=[]):
         '''
         Get a history of checkouts given the provided parameters. It is
         theoretically possible to use more than one of the inputs, but it's
@@ -90,6 +91,48 @@ class Checkouts(list):
         self.clear()
         self.__init__(self.db, member_id=self.member_id, book_id=self.book_id)
 
+    def vgg(self):
+        '''
+        Returns
+        -------
+        list
+            Data structure describing all the people with books currently
+            overdue.
+
+        '''
+        bad_people = list(db.cursor.execute(
+            'select'
+            '  email, first_name, last_name, '
+            '  array_agg(checkout_stamp),'
+            '  array_agg(shelfcode),'
+            '  array_agg(title_id)'
+            ' from'
+            '  checkout'
+            '  natural join checkout_member'
+            '  natural join member'
+            '  natural join book'
+            '  natural join shelfcode'
+            ' where'
+            '  not pseudo'
+            '  and checkin_stamp is null'
+            '  and checkout_lost is null'
+            '  and checkout_stamp <'
+            "   (current_timestamp - interval '3 weeks 1 day')"
+            ' group by email, first_name, last_name order by last_name'))
+        from mitsfs.dexdb import Title
+        return [
+            (
+                email,
+                f'{last_name}, {first_name}',
+                [
+                    (checkout_stamp, shelfcode, Title(db, title_id))
+                    for (checkout_stamp, shelfcode, title_id)
+                    in list(zip(stamps, shelfcodes, title_ids))
+                    ]
+                )
+            for (email, first_name, last_name, stamps, shelfcodes, title_ids)
+            in bad_people]
+
 
 class Checkout(db.Entry):
     def __init__(self, db, checkout_id=None, **kw):
@@ -117,12 +160,14 @@ class Checkout(db.Entry):
 
     checkout_id = db.Field('checkout_id')
     member_id = db.Field('member_id')
-    checkout_stamp = db.Field('checkout_stamp', coerce_datetime_no_timezone)
+    checkout_stamp = db.Field('checkout_stamp',
+                              coercers.coerce_datetime_no_timezone)
     book_id = db.Field('book_id')
     checkout_user = db.Field('checkout_user')
 
     checkin_user = db.Field('checkin_user')
-    checkin_stamp = db.Field('checkin_stamp', coerce_datetime_no_timezone)
+    checkin_stamp = db.Field('checkin_stamp',
+                             coercers.coerce_datetime_no_timezone)
 
     lost = db.Field('checkout_lost')
 
@@ -139,12 +184,12 @@ class Checkout(db.Entry):
             Information about the book.
 
         '''
-        return dexdb.Title(self.db,
-                           self.cursor.selectvalue(
-                               'select title_id'
-                               ' from book'
-                               ' where book_id = %s',
-                               (self.book_id,)))
+        from mitsfs.dexdb import Title
+        return Title(self.db,
+                     self.cursor.selectvalue('select title_id'
+                                             ' from book'
+                                             ' where book_id = %s',
+                                             (self.book_id,)))
 
     # Do we need both book and title?
     @property
@@ -156,7 +201,8 @@ class Checkout(db.Entry):
             Information about the book edition
 
         '''
-        return dexdb.Book(self.title, self.book_id)
+        from mitsfs.dexdb import Book
+        return Book(self.title, self.book_id)
 
     @property
     def due_stamp(self):
@@ -209,11 +255,12 @@ class Checkout(db.Entry):
         '''
         if not when:
             when = datetime.datetime.today()
- 
-        timewarps = Timewarps(self.db)
-        delta = (when - timewarps.warp_date(self.due_stamp))
+        due = self.due_stamp
 
-        return max(delta.days, 0)
+        if settings.timewarps_global:
+            due = settings.timewarps_global.warp_date(due)
+        diff = when - due
+        return max(diff.days, 0)
 
     def lose(self, when=None):
         '''
@@ -226,7 +273,7 @@ class Checkout(db.Entry):
         '''
         if not when:
             when = datetime.datetime.today()
-            
+
         msgs = []
 
         if self.lost:  # you can only lose a book once per checkout
@@ -239,9 +286,9 @@ class Checkout(db.Entry):
 
         # Add a fine transaction for the lost book
         fine = -self.book.shelfcode.replacement_cost
-        tx = FineTransaction(self, self.member_id, self.id,
-                             amount=fine,
-                             description=f'Lost book {self.book}')
+        tx = transactions.FineTransaction(self, self.member_id, self.id,
+                                          amount=fine,
+                                          description=f'Lost book {self.book}')
         tx.create()
 
         # setting the transaction_id marks the book as lost. But that just
@@ -290,27 +337,30 @@ class Checkout(db.Entry):
         '''
         if not when:
             when = datetime.datetime.today()
- 
+
         msgs = []
 
         if self.checkin_stamp and not self.lost:
-            raise dexdb.CirculationException(
+            from mitsfs.dexdb import CirculationException
+            raise CirculationException(
                 '%s already checked in' % (str(self),))
 
         if not is_pseudo:
             if self.lost:
                 # book is being returned, so the lost book fine should be
                 # voided
-                tx = Transaction(self.db, self.member_id, self.lost)
+                tx = transactions.Transaction(self.db, self.member_id,
+                                              self.lost)
                 tx.void()
                 self.lost = None
             else:
                 days = self.overdue_days(when)
                 if days:
                     msgs.append('Book is overdue %d days' % (days,))
-                    fine = OverdueTransaction(self.db, self.member_id,
-                                              self.id, days=days,
-                                              book=self.title)
+                    fine = transactions.OverdueTransaction(self.db,
+                                                           self.member_id,
+                                                           self.id, days=days,
+                                                           book=self.title)
                     fine.create()
                     msgs.append('FINE: %s added to balance' % (
                         ui.money_str(fine.amount),))

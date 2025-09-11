@@ -1,6 +1,6 @@
 import datetime
 
-from mitsfs import db
+from mitsfs.core import db
 from mitsfs import ui
 
 '''

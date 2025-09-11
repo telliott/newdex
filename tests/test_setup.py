@@ -5,7 +5,6 @@ Code to support unit tests for the mitsfs (python) library.
 
 '''
 
-
 import unittest
 import psycopg2
 import itertools

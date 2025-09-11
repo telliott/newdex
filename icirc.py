@@ -11,9 +11,11 @@ from mitsfs.ui import Color, banner, menu, tabulate, money_str, \
                 readinitials, specify, specify_book, specify_member, \
                 len_color_str, bold, smul, sgr0, termwidth
 
-from mitsfs.constants import DATABASE_DSN
-from mitsfs.membership import Member
-from mitsfs.dex.transactions import Transaction, CashTransaction
+from mitsfs.circulation.members import Member
+from mitsfs.circulation.transactions import get_transactions, \
+    Transaction, CashTransaction
+from mitsfs import library
+from mitsfs.core import settings
 
 __release__ = '1.1'
 
@@ -33,7 +35,7 @@ member = None
 
 
 def main(args):
-    global dex, membook, member
+    global dex, member, library
 
     try:
         dex = DexDB(client=program)
@@ -43,7 +45,8 @@ def main(args):
         print(str(e))
         exit(1)
 
-    membook = dex.membook()
+    # eventually Library will replace DexDB, but not there yet
+    library = library.Library(dsn=dex.dsn)
 
     options, args = parser.parse_args(args)
 
@@ -54,7 +57,7 @@ def main(args):
 
     banner(program, __release__)
 
-    if dex.dsn != DATABASE_DSN:
+    if dex.dsn != settings.DATABASE_DSN:
         print('(' + dex.dsn + ')')
 
     def local_banner():
@@ -156,11 +159,11 @@ def select(line):
     line = line.strip()
 
     if line:
-        possibles = membook.search(line)
+        possibles = library.members.find(line)
         if len(possibles) == 1:
             member = possibles[0]
             return
-    member = specify_member(membook, line)
+    member = specify_member(library.members, line)
 
 
 def unselect(line):
@@ -266,8 +269,8 @@ def select_checkedout(prompt):
 
 def checkout(line, advanced=False):
     # move this logic to the library
-    if not member.pseudo:
-        check_balance(member)
+    # if not member.pseudo:
+    #    check_balance(member)
 
     while True:
         ok, msgs, correct = member.can_checkout(advanced)
@@ -347,12 +350,11 @@ need to go meditate on the database logs.""")
 
 def viewmem(line):
     def fin(line):
-        print(str(member.transactions))
         print('Transactions of ', member)
         print(tabulate(
             [('Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
             [(money_str(t.amount), t.created_by, t.created.date(),
-                membook.txn_types[t.transaction_type], t.description)
+                t.type_description, t.description)
                 for t in member.transactions]))
 
     def history(line):
@@ -380,35 +382,35 @@ def viewmem(line):
 def membership(line):
     def validate(line):
         line = line.strip().upper()
-        if line in membook.membership_types:
+        if line in library.membership_types:
             return True
         return False
 
         # if (len(line) == 1 and
-        #         0 <= (ord(line) - ord('a')) < len(membook.membership_types)):
+        #         0 <= (ord(line) - ord('a')) < len(library.membership_types)):
         #     return True
         # print('Input must be a letter between a and', \
-        #     chr(ord('a') + len(membook.membership_types) - 1))
+        #     chr(ord('a') + len(library.membership_types) - 1))
         # return False
 
     print("Select membership type:")
 
     print(tabulate([Color.select(key) + '.',
-                    membook.membership_types[key].description,
-                    '$%.2f' % membook.membership_types[key].cost]
-                   for key in membook.membership_types.keys()))
+                    library.membership_types[key].description,
+                    '$%.2f' % library.membership_types[key].cost]
+                   for key in library.membership_types.keys()))
 
     # print(tabulate(
     #     [Color.select(chr(ord('a') + n) + '.'), d, '$%.2f' % c]
     #     for (n, (t, d, c)) in enumerate(
     #             [(m.code, m.description, m.cost) for m in
-    #              sorted(membook.membership_types.values(),
+    #              sorted(library.membership_types.values(),
     #                     key=lambda d: d.cost)]
     #             )))
 
     member_type_char = readvalidate(
         'Select Membership Type: ', validate=validate).upper()
-    member_type = membook.membership_types[member_type_char]
+    member_type = library.membership_types[member_type_char]
 
     expiration = member.membership_addition_expiration(member_type)
 
@@ -467,7 +469,7 @@ def editmem(line):
         if phone:
             member.phone = phone
 
-    # TODO: Move this to a protected area and expose in a menu
+    # TODO: Move this to a protected area and expose as part of keying
     def edit_initials(line):
         print(f'Current: {member.key_initials}')
         inits = readinitials().strip()
@@ -498,39 +500,6 @@ def editmem(line):
         else:
             info[delete - 1].delete()
 
-    # def default(_, title, info, field):
-    #     if len(info) == 0:
-    #         print("No", title, "to set as default")
-    #         return
-    #     print("Set Default", title + ":")
-    #     table = []
-    #     for n, x in enumerate(info):
-    #         lines = str(x).split("\n")
-    #         table += [(Color.select('%d.' % (n + 1,)), lines[0])]
-    #         table += [('', line) for line in lines[1:]]
-    #     table += [(Color.select('Q.'), 'Back to Set Default Menu')]
-    #     print(tabulate(table))
-    #     print()
-
-    #     select = readnumber(
-    #         'Select %s to set as default: ' % (title,),
-    #         0, len(info) + 1, escape='Q')
-
-    #     if select is None:
-    #         print('Nothing selected.')
-    #         return
-    #     else:
-    #         field(info[select - 1].id)
-
-    # def set_default_name(name):
-    #     member.member_name_default = name
-
-    # def set_default_email(email):
-    #     member.member_email_default = email
-
-    # def set_default_address(address):
-    #     member.member_address_default = address
-
     def edit_member(line):
         rmenu([
             ('N', 'Change Name', edit_name),
@@ -539,30 +508,6 @@ def editmem(line):
             ('P', 'Change Phone', edit_phone),
             ('Q', 'Back to Edit Membership', None)
             ], title='Change Member Information')
-
-    # def remove_info(line):
-    #     rmenu([
-    #         ('N', 'Remove Name',
-    #             lambda x: remove(x, 'name', member.other_names)),
-    #         ('E', 'Remove Email',
-    #             lambda x: remove(x, 'email', member.other_emails)),
-    #         ('A', 'Remove Address',
-    #             lambda x: remove(x, 'address', member.other_addresses)),
-    #         ('Q', 'Back to Edit Membership', None),
-    #         ], title='Remove Patron Information')
-
-    # def set_default_info(line):
-    #     rmenu([
-    #         ('N', 'Set Default Name',
-    #             lambda x: default(x, 'name', member.names, set_default_name)),
-    #         ('E', 'Set Default Email',
-    #             lambda x: default(
-    #                 x, 'email', member.emails, set_default_email)),
-    #         ('A', 'Set Default Address',
-    #             lambda x: default(
-    #                 x, 'address', member.addresses, set_default_address)),
-    #         ('Q', 'Back to Edit Membership', None)
-    #         ], title='Set Default Patron Information')
 
     print()
     print(member.info())
@@ -580,7 +525,7 @@ def newmem(line):
     last = readvalidate("Last Name: ").strip()
 
     # TODO: better search function here
-    names = membook.search(first+last)
+    names = library.members.search(first+last)
     if len(names) > 0:
         print("The following people are already in greendex:")
         for n in names:
@@ -621,35 +566,113 @@ def newmem(line):
 
 
 def financial(line):
-    menu = sorted(
-        (k, v, lambda x, k=k: do_transaction(k))
-        for (k, v) in membook.basic_transactions.items())
-    menu += [
-        ('A', 'Advanced Transactions', financial_other),
-        ('Q', 'Back to Main Menu', None),
-        ]
 
-    rmenu(menu, title='Financial Transactions')
+    def financial_header():
+        print()
+        print('Transaction for', member)
+        print()
 
+    def donation(line):
+        financial_header()
+        print('Enter amount of donation, this will increase'
+              'the patron\'s balance.')
+        amount = readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(dex, member.id, amount=amount,
+                         transaction_type='D', description=desc)
+        tx.create()
 
-def financial_other(line):
-    menu = sorted(
-        (k, v, lambda x, k=k: do_transaction(k))
-        for (k, v) in membook.fancy_transactions.items())
-    menu += [
-        ('Q', 'Back to Financial Transactions', None),
-        ]
+    def assess_fine(line, tx_type='F'):
+        financial_header()
+        print('Enter the fine amount, this will decrease '
+              'the patron\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
 
-    rmenu(menu, title="Advanced Financial Transactions Menu:")
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(dex, member.id, amount=amount,
+                         transaction_type=tx_type, description=desc)
+        tx.create()
 
+    def assess_keyfine(line):
+        assess_fine(line, type='K')
 
-def do_transaction(txntype):
-    print()
-    print('Transaction for', member)
-    print()
+    def payment(line):
+        financial_header()
+        print('Enter the amount being paid, this will increase'
+              'the patron\'s balance.')
+        amount = readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
 
-    if txntype == 'V':
-        txns = member.transactions(False)
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        print(f'Adding {money_str(amount)} to cash drawer')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        cash_tx = CashTransaction(dex, member.id, member.normal_str,
+                                  amount=amount, transaction_type='P',
+                                  description=desc)
+        cash_tx.create()
+
+    def lhe_transaction(line):
+        financial_header()
+        print('Enter amount (negative for fines, positive for credit).')
+        amount = readmoney()
+        desc = read('Enter description: ', history='description')
+
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(dex, member.id, amount=amount,
+                         transaction_type='L', description=desc)
+        tx.create()
+
+    def pay_membership(line):
+        financial_header()
+        print('Warning, this does not update the patron\'s membership.'
+              ' It is only used when the patron previously bought a'
+              ' membership and is now paying. Use the Edit Member menu'
+              ' to add a new membership; They can pay there.')
+        print('Enter an amount; this will decrease the patron\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(dex, member.id, amount=amount,
+                         transaction_type='L', description=desc)
+        tx.create()
+
+    def reimbursement(line):
+        financial_header()
+        print('Enter the amount the patron is being reimbursed, this'
+              ' will decrease the patron\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        print(f'Adding {money_str(amount)} to cash drawer')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        cash_tx = CashTransaction(dex, member.id, member.normal_str,
+                                  amount=amount, transaction_type='R',
+                                  description=desc)
+        cash_tx.create()
+
+    def void_transaction(line):
+        financial_header()
+        txns = get_transactions(dex, member.id, include_voided=False)
 
         if len(txns) == 0:
             print("No transactions to void.")
@@ -662,7 +685,7 @@ def do_transaction(txntype):
             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
             [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
                 tx.created_by, tx.created.date(),
-                membook.txn_types[tx.transaction_type], tx.description)
+                tx.type_description, tx.description)
                 for (i, tx) in enumerate(txns)] +
             [quit_item]))
 
@@ -676,63 +699,119 @@ def do_transaction(txntype):
             print(tabulate(
                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
                     'Description')] +
-                [(Member(dex, tx.member_id).name, money_str(tx.amount),
+                [(Member(dex, tx.member_id).full_name, money_str(tx.amount),
                     tx.created_by, tx.created.date(),
-                    membook.txn_types[tx.transaction_type], tx.desc)
+                    tx.type_description, tx.description)
                     for tx in voided]))
-        return
 
-    if txntype in ['D', 'P']:
-        if txntype == 'D':
-            print('Enter amount of donation, this will increase')
-            print("the patron's balance.")
-        else:
-            print('Enter the amount being paid, this will increase')
-            print("the patron's balance.")
-        amount = readmoney().copy_abs()
-        print(amount)
-    elif txntype in ['K', 'F', 'R', 'M']:
-        if txntype in ['K', 'F']:
-            print('Enter the fine amount, this will decrease')
-            print("the patron's balance.")
-        elif txntype == 'M':
-            print("""Warning, this does not update the patron's membership.
-All this does is create a transaction with the type 'membership'.
-If you want to update a membership, go to 'Edit Member' and add
-a new membership; that will automatically create a new transaction.
+    def advanced_financial(line):
+        menu = [
+            ('L', 'LHE', lhe_transaction),
+            ('M', 'Pay Membership', pay_membership),
+            ('R', 'Reimbursement', reimbursement),
+            ('V', 'Void Previous', void_transaction),
+            ('Q', 'Back to Financial Transactions', None)
+            ]
+        rmenu(menu, title="Advanced Financial Transactions")
 
-Enter an amount; this will decrease the patron's balance.""")
-        else:
-            print("""Enter the amount the patron is being reimbursed,
-this will decrease the patron's balance.""")
-        amount = -readmoney().copy_abs()
-    else:
-        print('Enter amount (negative for fines, positive for credit).')
-        amount = readmoney()
+    menu = [
+        ('D', 'Donation for Fine Credit', donation),
+        ('F', 'Assess Fine', assess_fine),
+        ('K', 'Assess Keyfine', assess_keyfine),
+        ('P', 'Payment', payment),
+        ('A', 'Advanced Transactions', advanced_financial),
+        ('Q', 'Back to Main Menu', None)
+        ]
+    rmenu(menu, title='Financial Transactions')
 
-    desc = read('Enter description: ', history='description')
+# def do_transaction(txntype):
+#     print()
+#     print('Transaction for', member)
+#     print()
 
-    print('Adding %s to account of %s.' % (money_str(amount), member))
+#     if txntype == 'V':
+#         txns = get_transactions()
+#         member.transactions(False)
 
-    if txntype in ['P', 'R']:
-        print('Adding %s to cash drawer' % (money_str(amount),))
+#         if len(txns) == 0:
+#             print("No transactions to void.")
+#             return
 
-    if not readyes(
-            'Commit the transaction? [' + Color.yN + '] '):
-        return
+#         quit_item = (Color.select('Q.'), 'Back to Main Menu')
 
-    if txntype not in ['P', 'R']:
-        tx = Transaction(dex, member.id)
-        tx.amount = amount
-        tx.transaction_type = txntype
-        tx.description = desc
-        tx.create()
-    else:
-        cash_tx = CashTransaction(dex, member.id, member.normal_str)
-        cash_tx.amount = amount
-        cash_tx.transaction_type = txntype
-        cash_tx.description = desc
-        cash_tx.create()
+#         print('Non-void Transactions of ', member)
+#         print(tabulate(
+#             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
+#             [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
+#                 tx.created_by, tx.created.date(),
+#                 tx.type_description, tx.description)
+#                 for (i, tx) in enumerate(txns)] +
+#             [quit_item]))
+
+#         num = readnumber(
+#             'Select transaction to void: ', 1, len(txns) + 1, escape='Q')
+
+#         if num is not None:
+#             print()
+#             voided = txns[num - 1].void()
+#             print("Voided transactions:")
+#             print(tabulate(
+#                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
+#                     'Description')] +
+#                 [(Member(dex, tx.member_id).name, money_str(tx.amount),
+#                     tx.created_by, tx.created.date(),
+#                     tx.type_description, tx.desc)
+#                     for tx in voided]))
+#         return
+
+#     if txntype in ['D', 'P']:
+#         if txntype == 'D':
+#             print('Enter amount of donation, this will increase')
+#             print("the patron's balance.")
+#         else:
+#             print('Enter the amount being paid, this will increase')
+#             print("the patron's balance.")
+#         amount = readmoney().copy_abs()
+#         print(amount)
+#     elif txntype in ['K', 'F', 'R', 'M']:
+#         if txntype in ['K', 'F']:
+#             print('Enter the fine amount, this will decrease')
+#             print("the patron's balance.")
+#         elif txntype == 'M':
+#             print("""Warning, this does not update the patron's membership.
+# All this does is create a transaction with the type 'membership'.
+# If you want to update a membership, go to 'Edit Member' and add
+# a new membership; that will automatically create a new transaction.
+
+# Enter an amount; this will decrease the patron's balance.""")
+#         else:
+#             print("""Enter the amount the patron is being reimbursed,
+# this will decrease the patron's balance.""")
+#         amount = -readmoney().copy_abs()
+#     else:
+#         print('Enter amount (negative for fines, positive for credit).')
+#         amount = readmoney()
+
+#     desc = read('Enter description: ', history='description')
+
+#     print('Adding %s to account of %s.' % (money_str(amount), member))
+
+#     if txntype in ['P', 'R']:
+#         print('Adding %s to cash drawer' % (money_str(amount),))
+
+#     if not readyes(
+#             'Commit the transaction? [' + Color.yN + '] '):
+#         return
+
+#     if txntype not in ['P', 'R']:
+#         tx = Transaction(dex, member.id, amount=amount,
+#                          transaction_type=txntype, description=desc)
+#         tx.create()
+#     else:
+#         cash_tx = CashTransaction(dex, member.id, member.normal_str,
+#                                   amount=amount, transaction_type='D',
+#                                   description=desc)
+#         cash_tx.create()
 
         # cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
         # member.cash_transaction(amount, txntype, cash_desc)
@@ -755,7 +834,7 @@ def check_balance(member, desc="Payment", print_notices=False):
 
             desc = desc + ' by ' + member.normal_str
             tx = CashTransaction(dex, member.member_id, member.normal_str,
-                                 amount=amount, transaction_type='M',
+                                 amount=amount, transaction_type='P',
                                  description=desc)
             tx.create()
 
