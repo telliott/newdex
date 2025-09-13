@@ -551,7 +551,10 @@ def _putcap(capname, default=''):
     return putcapper
 
 
-clear_screen = _putcap('clear', '\n')
+def clear_screen():
+    os.system('clear||cls')
+
+
 smul = _putcap('smul')
 rmul = _putcap('rmul')
 sgr0 = _putcap('sgr0')
@@ -578,9 +581,14 @@ def menu(menu_in, line='', once=False, cleanup=None, title=None):
                     choice = menudict[c]
                     if choice[0] is None:
                         return False
-                    print()
-                    print(choice[1])
-                    choice[0](line[1:].strip())
+                    # print()
+                    # print(choice[1])
+
+                    # a menu item can also go back a level if it explicitly
+                    # returns false
+                    result = choice[0](line[1:].strip())
+                    if type(result) is bool and result is False:
+                        return False
                     if once:
                         break
             menu, menudict, keys = remenu(menu_in)

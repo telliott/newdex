@@ -291,8 +291,6 @@ class Member(db.Entry):
             s += ' <%s>' % email
         if self.pseudo:
             s += ' COMMITTEE'
-        else:
-            s += ' ' + ui.money_str(self.balance)
         return s
 
     @property
@@ -327,9 +325,6 @@ class Member(db.Entry):
         if self.address:
             info += f"Home Address: {self.address}\n"
 
-        info += "\n"
-        info += "Current Membership: " + str(self.membership)
-        info += "\nFine Credit: " + str(self.balance)
         return info
 
     @property
@@ -345,29 +340,31 @@ class Member(db.Entry):
 
     @property
     def checkouts(self):
-        if self.checkouts_ is None:
-            self.checkouts_ = Checkouts(self.db, member_id=self.member_id)
+        self.checkouts_ = Checkouts(self.db, member_id=self.member_id)
         return self.checkouts_
 
+    def reset_checkouts(self):
+        self.checkouts_ = None
+        
     def can_checkout(self, override=False):
         msgs = []
         correct = []
 
         if self.balance < 0:
-            msgs.append(str(self) + ' has a negative balance.')
+            msgs.append(self.first_name + ' has a negative balance.')
             correct.append('pay fines')
 
         if self.membership is None:
-            msgs.append(str(self) + ' has no membership.')
+            msgs.append(self.first_name + ' has no membership.')
             correct.append('get a membership')
         elif self.membership.expired:
-            msgs.append(str(self) + ' has an expired membership.')
+            msgs.append(self.first_name + ' has an expired membership.')
             correct.append('get new membership')
 
         books_due = self.checkouts.overdue
 
         if books_due:
-            msg = str(self) + ' has overdue books.'
+            msg = self.first_name + ' has overdue books.'
             if not override:
                 msg += '\n' + '\n'.join(str(book) for book in books_due)
             msgs.append(msg)
@@ -375,7 +372,7 @@ class Member(db.Entry):
 
         count = len([x for x in self.checkouts.out if not x.lost])
         if count >= MAX_BOOKS:
-            msgs.append(('%s has %d books out.' % (str(self), count)))
+            msgs.append(('%s has %d books out.' % (self.first_name, count)))
             if 'return books' not in correct:
                 correct.append('return books')
 

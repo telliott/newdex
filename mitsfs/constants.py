@@ -18,7 +18,6 @@ if os.path.exists('/mitsfs/dexcode'):
 else:
     CODEBASE = os.path.join(LOCKER, 'dexcode/dexcode')
 DATADEX_FILE = os.path.join(DEXBASE, 'datadex')
-DATABASE_DSN = 'dbname=mitsfs host=pinkdex.mit.edu'
 '''
 
 LOCKER = '/Users/telliott'

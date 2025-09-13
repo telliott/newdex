@@ -62,6 +62,17 @@ class Membership(db.Entry):
         return self.expires.replace(tzinfo=None) < datetime.datetime.today()
 
     @property
+    def expiry(self):
+        if self.expires is None:
+            return ui.Color.good("Expires: Never")
+
+        expires = str(self.expires.date())
+        if self.expired:
+            return ui.Color.warning("Expired: " + expires)
+
+        return ui.Color.good("Expires: " + expires)
+
+    @property
     def cost(self):
         '''
         Returns the cost of the last membership transaction. Checks first
@@ -100,3 +111,4 @@ class Membership(db.Entry):
             return desc + ui.Color.warning("Expired: " + expires)
 
         return desc + ui.Color.good("Expires: " + expires)
+

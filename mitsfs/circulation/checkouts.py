@@ -290,7 +290,7 @@ class Checkout(db.Entry):
                                           description=f'Lost book {self.book}')
         tx.create()
 
-        # setting the transaction_id marks the book as lost. But that just
+        # TODO setting the transaction_id marks the book as lost. But that just
         # marks it in the checkout. Should we also update the book here?
         self.lost = tx.id
         self.db.commit()
