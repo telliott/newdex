@@ -20,6 +20,7 @@ import sys
 import termios
 import traceback
 import pprint
+import datetime
 
 from mitsfs.error import handle_exception
 from mitsfs.barcode import validate_barcode
@@ -306,6 +307,13 @@ def readaddress():
 
 def maxresults():
     return termheight() - 1
+
+
+def color_due_date(stamp):
+    return (
+        Color.good
+        if datetime.datetime.now() < stamp
+        else Color.warning)(stamp.date())
 
 
 def specify(dex, preload=None, predicate=None):

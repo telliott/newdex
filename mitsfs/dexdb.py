@@ -151,10 +151,10 @@ class Book(db.Entry):
 
     @property
     def barcodes(self):
-        return tuple(self.cursor.execute(
+        return self.cursor.fetchlist(
             'select barcode from barcode'
             ' where book_id=%s order by barcode_created',
-            (self.book_id,)))
+            (self.book_id,))
 
     def addbarcode(self, in_barcode):
         in_barcode = barcode.valifrob(in_barcode)

@@ -345,7 +345,7 @@ class Member(db.Entry):
 
     def reset_checkouts(self):
         self.checkouts_ = None
-        
+
     def can_checkout(self, override=False):
         msgs = []
         correct = []

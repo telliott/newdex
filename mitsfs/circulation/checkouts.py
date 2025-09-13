@@ -91,6 +91,53 @@ class Checkouts(list):
         self.clear()
         self.__init__(self.db, member_id=self.member_id, book_id=self.book_id)
 
+    def display(self, width=79, show_members=False, enum=False):
+        results = []
+        for num, checkout in enumerate(self):
+            if checkout.lost:
+                duestr = ui.Color.warning('LOST: ')
+                duedate = checkout.checkin_stamp.date()
+            elif checkout.checkin_stamp:
+                duestr = 'In: '
+                duedate = checkout.checkin_stamp.date()
+            else:
+                duestr = 'Due: '
+                duedate = ui.color_due_date(checkout.due_stamp)
+
+            duestr = f'  {duestr}{duedate}'
+            color_padding = len(duestr) - ui.len_color_str(duestr)
+
+            author = checkout.book.title.authortxt
+            if enum:
+                author = f'{ui.Color.select(num + 1)}. {author}'
+            author = author[:width - ui.len_color_str(duestr)]
+
+            left_offset = width - ui.len_color_str(author) + color_padding
+
+            results.append(f'{author}{duestr:>{left_offset}}')
+
+            title = checkout.book.title.titletxt
+
+            if checkout.book.visible:
+                title = checkout.book.title.seriestxt + ': ' + title
+
+            title = (' ' * 6) + title + \
+                ' < ' + checkout.book.shelfcode.code
+
+            if not show_members:
+                title = title[:width]
+                results.append(title)
+                continue
+
+            from mitsfs.circulation.members import Member, format_name
+            member = Member(self.db, checkout.member_id)
+            memstr = format_name(member.first_name, member.last_name)
+            memstr = '  ' + memstr
+            title = title[:width - len(memstr)]
+            results.append(f'{title}{memstr:>{width - len(title)}}')
+
+        return '\n'.join(results)
+
     def vgg(self):
         '''
         Returns
@@ -340,9 +387,7 @@ class Checkout(db.Entry):
         msgs = []
 
         if self.checkin_stamp and not self.lost:
-            from mitsfs.dexdb import CirculationException
-            raise CirculationException(
-                '%s already checked in' % (str(self),))
+            return f'{self} is already checked in'
 
         if not is_pseudo:
             if self.lost:

@@ -1,16 +1,15 @@
 #!/usr/bin/python3
 
-from os import system
 import sys
 import optparse
 import datetime
 
-from mitsfs.dexdb import DexDB, CirculationException
+from mitsfs.dexdb import DexDB
 from mitsfs.ui import Color, banner, menu, tabulate, money_str, \
-                read, readmoney, readaddress, readdate, readbarcode, \
+                read, readmoney, readaddress, readdate, \
                 readvalidate, readnumber, readyes, reademail, readphone, \
                 readinitials, specify, specify_book, specify_member, \
-                len_color_str, bold, smul, sgr0, termwidth
+                len_color_str, termwidth
 
 from mitsfs import ui
 
@@ -19,6 +18,7 @@ from mitsfs.circulation.transactions import get_transactions, \
     Transaction, CashTransaction
 from mitsfs import library
 from mitsfs.core import settings
+from mitsfs.util import selecters
 
 __release__ = '1.1'
 
@@ -34,6 +34,7 @@ member = None
 parser = optparse.OptionParser(
     usage='usage: %prog [options]',
     version='%prog ' + __release__)
+
 
 def no_member_header():
     ui.clear_screen()
@@ -64,7 +65,6 @@ def member_header(member, title='Member Menu'):
         case _:
             books_out = f'{books_out} books out'
 
-    
     balance = money_str(member.balance)
     balance_len = len('Balance: ') + len_color_str(balance)
     expiry_len = len_color_str(member.membership.expiry)
@@ -116,8 +116,7 @@ def main_menu(line):
         member = specify_member(library.members, line)
         member_menu(line)
 
-    def checkin(line, advanced=False, bookdrop=False):
-        global member
+    def checkin(line, pick_date=False):
         no_member_header()
 
         while True:
@@ -131,15 +130,27 @@ def main_menu(line):
             if not book:
                 break
 
-            # TODO: it is pretty messed up that we have both book checkouts and
-            # member checkouts. Need to clean this up
+            checkin_date = None
+            if pick_date:
+                print("Specify check in date:")
+                checkin_date = readdate(datetime.datetime.today(), False)
+
+            no_member_header()
+            print(book)
             checkouts = book.checkouts
+            if len(checkouts) == 0:
+                print("No editions of this book are checked out right now.")
+                continue
             if len(checkouts.out) > 1:
-                print('Warning: %s is checked out more than once' % (book,))
+                print(Color.warning('Warning: %s is checked out more than once'
+                                    % (book,)))
             for checkout in checkouts.out:
-                member = checkin_internal(checkout, advanced, bookdrop)
+                print(Color.info(checkout.checkin(checkin_date)))
         no_member_header()
-        
+
+    def checkin_advanced(line):
+        checkin(line, pick_date=True)
+
     def newmem(line):
         no_member_header()
         print("Please transfer the patron's information from the sheet.")
@@ -193,7 +204,8 @@ def main_menu(line):
 
         print(title)
         print()
-        print('HOLDINGS - If book is checked out, the member it is checked out to')
+        print('HOLDINGS - If book is checked out, the member'
+              ' it is checked out to')
         print('will be on the next line.')
         for book in title.books:
             print(book)
@@ -208,11 +220,9 @@ def main_menu(line):
     rmenu([
         ('S', 'Select Patron', select),
         ('I', 'Check In Books', checkin),
+        ('A', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
         ('N', 'New Patron', newmem),
         ('D', 'Display Book', display),
-        # ('A', 'Book Drop/Fancy Check In',
-        #     lambda line: rmenu(
-        #         advanced, line, title="Fancy/Book Drop Check In:")),
         ('Q', 'Quit', None),
         ])
 
@@ -281,22 +291,33 @@ def member_menu(line):
 
         member_header(member)
 
-    def checkin_member(line, advanced=False, bookdrop=False):
+    def checkout_member_advanced(line):
+        checkout(line, advanced=True)
+
+    def checkin_member(line, pick_date=False):
         member_header(member)
         while True:
             if not member.checkouts.out:
-                member_header(member)
                 print(Color.warning('No books are checked out.'))
                 return
 
-            checkout = select_checkedout('Select book to check in: ')
+            checkout = selecters.select_checkout(member.checkouts.out)
             if checkout is None:
                 member_header(member)
                 return
 
-            checkin_internal(checkout, advanced, bookdrop)
+            checkin_date = None
+            if pick_date:
+                print("Specify check in date:")
+                checkin_date = readdate(datetime.datetime.today(), False)
+
             member_header(member)
-            
+            print(Color.info(checkout.checkin(checkin_date)))
+            print()
+
+    def checkin_member_advanced(line):
+        checkin_member(line, pick_date=True)
+
     def lost(line):
         member_header(member)
         if not member.checkouts.out:
@@ -307,7 +328,8 @@ def member_menu(line):
             if not member.checkouts.out:
                 break
 
-            checkout = select_checkedout('Select book to declare as lost: ')
+            checkout = selecters.select_checkout('Select book to '
+                                                 'declare as lost: ')
             print()
 
             if checkout is None:
@@ -334,14 +356,16 @@ def member_menu(line):
 
     member_header(member)
     rmenu([
-        ('O', 'Check Out Books by Book', checkout),
-        ('I', 'Check In Books by Patron', checkin_member),
-        ('L', 'Declare Books Lost', lost),
+        ('O', 'Check Out Books', checkout),
+        ('N', 'Check Out Books (nonstandard)', checkout_member_advanced),
+        ('I', 'Check In Books', checkin_member),
+        ('A', 'Check in with Different Date', checkin_member_advanced),
+        ('L', 'Declare Book Lost', lost),
         ('V', 'View Member', viewmem),
         ('E', 'Edit Member and Membership', editmem),
         ('P', 'Pay Outstanding Fines', pay_fines),
         ('F', 'Financial Transaction', financial),
-        ('Q', 'Unselect Patron', unselect),
+        ('Q', 'Unselect Member', unselect),
     ])
 
     # need to print the header for the menu we are returning to
@@ -361,8 +385,8 @@ def viewmem(line):
 
     def history(line):
         member_header(member, 'Checkout History')
-        print_checkouts(checkouts=member.checkouts)
-
+        print(member.checkouts.display())
+        
     def mem(line):
         member_header(member, 'Membership History')
         print(tabulate(
@@ -459,31 +483,6 @@ def editmem(line):
     def renew_membership(line):
         membership(line)
         member_header(member)
-      
-        
-    # def remove(_, title, info):
-    #    member_header(member, 'Remove Member')
-    #    if len(info) == 0:
-    #         print("No non-default", title, "to remove")
-    #         return
-    #     print("Remove a non-default", title + ":")
-    #     table = []
-    #     for n, x in enumerate(info):
-    #         lines = str(x).split("\n")
-    #         table += [(Color.select('%d.' % (n + 1,)), lines[0])]
-    #         table += [('', line) for line in lines[1:]]
-    #     table += [(Color.select('Q.'), 'Back to Remove Menu')]
-    #     print(tabulate(table))
-    #     print()
-
-    #     delete = readnumber(
-    #         'Select %s to delete: ' % (title,), 0, len(info) + 1, escape='Q')
-
-    #     if delete is None:
-    #         print('Nothing removed.')
-    #         return
-    #     else:
-    #         info[delete - 1].delete()
 
     def edit_member(line):
         member_header(member)
@@ -497,7 +496,6 @@ def editmem(line):
             ('Q', 'Back to Membership', None)
             ], title='Change Member Information')
         member_header(member)
-
 
     member_header(member)
     print()
@@ -681,99 +679,6 @@ def financial(line):
     member_header(member)
 
 
-
-
-
-
-
-
-
-
-
-    def advanced():
-        return [
-            # ('B', 'Book Drop Check In',
-            #     lambda line: checkin(line, bookdrop=True)),
-            # ('I', 'Fancy Check In',
-            #     lambda line: checkin(line, advanced=True)),
-            # ('Q', 'Main Menu', None),
-            ] if member is None else [
-            ('B', 'Book Drop Check In',
-                lambda line: checkin_member(line, bookdrop=True)),
-            ('I', 'Fancy Check In',
-                lambda line: checkin_member(line, advanced=True)),
-            ('O', 'Fancy Check Out',
-                lambda line: checkout(line, advanced=True)),
-            ('Q', 'Main Menu', None),
-            ]
-
-
-    # committee_member_menu = [
-    #     ('B', 'Books checked out', print_member_checkouts)
-    #     ] + member_menu
-
-
-
-
-
-def checkin_internal(checkout, advanced, bookdrop):
-    checkin_date = None
-    if advanced or bookdrop:
-        print("Specify check in date:")
-        checkin_date = readdate(datetime.datetime.today(), False)
-
-    print('Checking in: ')
-
-    try:
-        print(checkout)
-        print(checkout.checkin(checkin_date))
-    except CirculationException as exc:
-        print(exc)
-        print('Book NOT checked in.')
-    print()
-    return Member(dex, checkout.member_id)
-
-
-
-def select_checkedout(prompt):
-    print_checkouts(checkouts=member.checkouts.out, enum=True)
-    print(Color.select('Q.'), 'Back to Main Menu')
-    print()
-
-    num = readnumber(
-        prompt,
-        1,
-        len(member.checkouts.out) + 1,
-        escape='Q')
-
-    if num is None:
-        return None
-
-    return member.checkouts.out[num - 1]
-
-
-
-
-# def barcodebook(book):
-#     if len(book.barcodes) == 0:
-#         print()
-#         print("Book has no barcode.  Please attach and scan new barcode.")
-#         while True:
-#             barcode = readbarcode()
-#             if barcode is None:
-#                 break
-#             if book.addbarcode(barcode):
-#                 if len(book.barcodes) > 1:
-#                     print("""
-# WARNING: book has acquired two barcodes when it had zero
-# moments ago; please look to your left or right and see if
-# someone is checking out a similar book and role-play
-# accordingly; otherwise please let libcomm know that they
-# need to go meditate on the database logs.""")
-#                 break
-#             print("Error adding barcode; perhaps it is already in use.")
-
-
 def membership(line):
     def validate(line):
         line = line.strip().upper()
@@ -787,14 +692,6 @@ def membership(line):
                     library.membership_types[key].description,
                     '$%.2f' % library.membership_types[key].cost]
                    for key in library.membership_types.keys()))
-
-    # print(tabulate(
-    #     [Color.select(chr(ord('a') + n) + '.'), d, '$%.2f' % c]
-    #     for (n, (t, d, c)) in enumerate(
-    #             [(m.code, m.description, m.cost) for m in
-    #              sorted(library.membership_types.values(),
-    #                     key=lambda d: d.cost)]
-    #             )))
 
     member_type_char = readvalidate(
         'Select Membership Type: ', validate=validate).upper()
@@ -817,101 +714,6 @@ def membership(line):
     if readyes('Continue? [' + Color.yN + '] '):
         member.membership_add(member_type)
         check_balance(member, 'Membership Payment')
-
-
-
-
-# def do_transaction(txntype):
-#     print()
-#     print('Transaction for', member)
-#     print()
-
-#     if txntype == 'V':
-#         txns = get_transactions()
-#         member.transactions(False)
-
-#         if len(txns) == 0:
-#             print("No transactions to void.")
-#             return
-
-#         quit_item = (Color.select('Q.'), 'Back to Main Menu')
-
-#         print('Non-void Transactions of ', member)
-#         print(tabulate(
-#             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-#             [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
-#                 tx.created_by, tx.created.date(),
-#                 tx.type_description, tx.description)
-#                 for (i, tx) in enumerate(txns)] +
-#             [quit_item]))
-
-#         num = readnumber(
-#             'Select transaction to void: ', 1, len(txns) + 1, escape='Q')
-
-#         if num is not None:
-#             print()
-#             voided = txns[num - 1].void()
-#             print("Voided transactions:")
-#             print(tabulate(
-#                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
-#                     'Description')] +
-#                 [(Member(dex, tx.member_id).name, money_str(tx.amount),
-#                     tx.created_by, tx.created.date(),
-#                     tx.type_description, tx.desc)
-#                     for tx in voided]))
-#         return
-
-#     if txntype in ['D', 'P']:
-#         if txntype == 'D':
-#             print('Enter amount of donation, this will increase')
-#             print("the patron's balance.")
-#         else:
-#             print('Enter the amount being paid, this will increase')
-#             print("the patron's balance.")
-#         amount = readmoney().copy_abs()
-#         print(amount)
-#     elif txntype in ['K', 'F', 'R', 'M']:
-#         if txntype in ['K', 'F']:
-#             print('Enter the fine amount, this will decrease')
-#             print("the patron's balance.")
-#         elif txntype == 'M':
-#             print("""Warning, this does not update the patron's membership.
-# All this does is create a transaction with the type 'membership'.
-# If you want to update a membership, go to 'Edit Member' and add
-# a new membership; that will automatically create a new transaction.
-
-# Enter an amount; this will decrease the patron's balance.""")
-#         else:
-#             print("""Enter the amount the patron is being reimbursed,
-# this will decrease the patron's balance.""")
-#         amount = -readmoney().copy_abs()
-#     else:
-#         print('Enter amount (negative for fines, positive for credit).')
-#         amount = readmoney()
-
-#     desc = read('Enter description: ', history='description')
-
-#     print('Adding %s to account of %s.' % (money_str(amount), member))
-
-#     if txntype in ['P', 'R']:
-#         print('Adding %s to cash drawer' % (money_str(amount),))
-
-#     if not readyes(
-#             'Commit the transaction? [' + Color.yN + '] '):
-#         return
-
-#     if txntype not in ['P', 'R']:
-#         tx = Transaction(dex, member.id, amount=amount,
-#                          transaction_type=txntype, description=desc)
-#         tx.create()
-#     else:
-#         cash_tx = CashTransaction(dex, member.id, member.normal_str,
-#                                   amount=amount, transaction_type='D',
-#                                   description=desc)
-#         cash_tx.create()
-
-        # cash_desc = "Cash transaction for %s: %s" % (member.normal_str, desc)
-        # member.cash_transaction(amount, txntype, cash_desc)
 
 
 def check_balance(member, desc="Payment", print_notices=False):
@@ -939,85 +741,6 @@ def check_balance(member, desc="Payment", print_notices=False):
         print("Member doesn't have a negative balance")
 
     return member.balance >= 0
-
-
-
-def color_due_date(stamp):
-    return (
-        Color.good
-        if datetime.datetime.now() < stamp
-        else Color.warning)(stamp.date())
-
-
-def print_member_checkouts(line):
-    print_checkouts(sorted(member.checkouts.out,
-                           key=lambda x: x.title.sortkey()))
-
-
-def print_checkouts(checkouts, enum=False):
-    ll = min(termwidth(), 80) - 1
-    offset = ''
-    if enum:
-        # We're assuming here that this is for the checkin-by-member function.
-        # Normal users shouldn't have more than eight books out.  Abnormal
-        # users can deal with a little bit of ugly.
-        offset = '   '
-        ll -= 3
-    bold()
-    print(offset + 'Author ' + ' ' * (ll - 12) + 'Title')
-    smul()
-    print(
-        offset + ' ' * (ll - 43) + 'Code' + (3 * ' ') + 'Check Out' +
-        (9 * ' ') + 'Check In/Due' + (6 * ' '))
-    sgr0()
-    lookup_member = None
-
-    for n, c in enumerate(list(checkouts)):
-        title = c.book.title.titletxt
-        if c.book.visible:
-            title = c.book.title.seriestxt + ': ' + title
-
-        author = c.book.title.authortxt
-        width = len(title) + len(author)
-
-        # most of the time you will just look up the member associated with
-        # the checkouts, but if you passed in checkouts by a book, they
-        # will belong to different people, possibly pseudo
-
-        if lookup_member is None or c.member_id != member.member_id:
-            lookup_member = Member(dex, c.member_id)
-        if enum:
-            print('%d.' % (n + 1),)
-
-        if width <= ll - 1:
-            print(author + ' ' * (ll - width) + title)
-        else:
-            print(author)
-            print(offset + ' ' + ' ' * (ll - len(title) - 1) + title)
-
-        if c.checkin_stamp:
-            duestr = c.checkin_user
-            duedate = c.checkin_stamp.date()
-        elif c.lost:
-            duedate = c.checkin_stamp.date()
-            duestr = Color.warning('LOST')
-        elif lookup_member.pseudo:
-            duestr = ''
-            duedate = ''
-        else:
-            duestr = 'Due:'
-            duedate = color_due_date(c.due_stamp)
-
-        print(offset + ' %*s %8s %s %s %s' % (
-            ll - 41,
-            str(c.book.shelfcode) + ((' ' + c.book.barcodes[-1])
-                                     if c.book.barcodes else ''),
-            c.checkout_user,
-            c.checkout_stamp.date(),
-            max(8 - len_color_str(duestr), 0) * ' ' + duestr,
-            duedate,
-            ))
-    dex.db.rollback()
 
 
 def rmenu(*args, **kw):
