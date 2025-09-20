@@ -5,6 +5,7 @@ Code for manipulating the online membership book
 '''
 
 import datetime
+import re
 
 from mitsfs.core import db
 from mitsfs import ui
@@ -54,7 +55,7 @@ class Members(object):
         db : db object
             The db to query against.
         name : str
-            aAstring that will be compared against a concatenation of
+            a string that will be compared against a concatenation of
             relevant fields.
         pseudo : boolen, optional
             Whether to include the fake members in the search.
@@ -66,16 +67,19 @@ class Members(object):
             A list of member objects that match the given string.
 
         """
+        name = re.split(r'[^a-zA-Z]+', name)
+        where = ' and '.join(['concat(first_name, last_name,  key_initials, email) ~* %s'] * len(name))
+
         return [
             Member(self.db, i)
             for i in
             self.db.cursor.execute(
                 'select member_id'
                 ' from member'
-                ' where concat(first_name, last_name,'
-                '  key_initials, email) ~* %s'
+                ' where'
+                f' {where}'
                 ' and pseudo = %s',
-                (name, pseudo))]
+                (*name, pseudo))]
 
     def complete_name(self, s, pseudo=False):
         '''
@@ -92,7 +96,7 @@ class Members(object):
             list of names.
 
         '''
-        return [str(member) for member in self.find(s, pseudo)]
+        return [member.full_name for member in self.find(s, pseudo)]
 
     def __getitem__(self, member_id):
         """returns the unique member object for a given member_id"""
@@ -443,7 +447,7 @@ class Member(db.Entry):
             A list of committees this member is part of.
 
         '''
-        return list(self.db.cursor.execute(
+        return self.db.cursor.fetchlist(
             "select roleid_.rolname"
             " from"
             "  pg_auth_members"
@@ -452,7 +456,7 @@ class Member(db.Entry):
             " where"
             " member_.rolname = %s and"
             " roleid_.rolname != 'keyholders'",
-            (self.role,)))
+            (self.rolname,))
 
     def dekey(self):
         '''
@@ -466,8 +470,9 @@ class Member(db.Entry):
         cursor = self.db.cursor
         for group in self.committees:
             cursor.execute('revoke "%s" from "%s"' % (group, self.rolname))
+        rolname = self.rolname
         cursor.execute('set role "*chamber"')
-        cursor.execute('drop role "%s"' % (self.rolname,))
+        cursor.execute('drop role "%s"' % (rolname,))
         cursor.execute('reset role')
         self.db.commit()
         self.key_initials = None
@@ -515,10 +520,10 @@ class Member(db.Entry):
             c.execute('reset role')
 
 
-def star_dissociated(db):
+def invalid_logins(db):
     """Returns a list of roles in the database that can log in, with
     no associated member."""
-    return list(db.cursor.execute(
+    return db.cursor.fetchlist(
         'select rolname'
         ' from'
         '  pg_roles'
@@ -529,7 +534,7 @@ def star_dissociated(db):
         '  rolcanlogin and'
         '  not rolsuper and'
         '  member.rolname is null'
-        ' order by rolname'))
+        ' order by rolname')
 
 
 def role_members(db, role):
@@ -538,7 +543,7 @@ def role_members(db, role):
     return sorted(
         (
             Member(db, member_id)
-            for member_id in db.getcursor().execute(
+            for member_id in db.getcursor().fetchlist(
                 'select member_id'
                 ' from'
                 '  pg_auth_members'
@@ -549,18 +554,16 @@ def role_members(db, role):
                 '  join member on member.rolname = member_.rolname'
                 ' where roleid_.rolname = %s',
                 (role,))),
-        key=lambda mem: str(mem.name))
+        key=lambda mem: str(mem.full_name))
 
 
-def star_cttes(db):
+def star_committees(db):
     """Returns a list of committee roles"""
-    return list(db.getcursor().execute(
-        'select roleid_.rolname'
+    omit = ['speaker-to-postgres', 'keyholders', 'wheel']
+    committees = db.cursor.fetchlist(
+        'select rolname'
         ' from'
-        '  pg_auth_members'
-        '  join pg_roles roleid_ on roleid = roleid_.oid'
-        '  join pg_roles member_ on member = member_.oid'
-        " where"
-        "  member_.rolname = '*chamber' and"
-        "  admin_option and"
-        "  roleid_.rolname != 'keyholders'")) + ['*chamber']
+        '  pg_roles'
+        ' where not rolcanlogin'
+        "  and rolname !~ '^pg_'")
+    return list(set(committees) - set(omit))

@@ -14,12 +14,6 @@ from functools import total_ordering
 
 from mitsfs.dex.editions import Edition, Editions
 
-__all__ = [
-    'DexLine', 'Dex',
-    'FieldTuple', 'placefilter',
-    # 'Shelfcodes', 'onecode', 'pragma_validate_shelfcode'
-    ]
-
 
 # pragma_validate_shelfcode = True
 
@@ -53,139 +47,123 @@ __all__ = [
 #     return code, count, box
 
 
-# class Shelfcodes(dict):
-#     SPLITRE = re.compile(r'\s*,\s*')
-#     INVENRE = re.compile(r'^([A-Z]+): ')
-
-#     def __init__(self, s=None, inven_type=None):
-#         if s is None:
-#             self.inven_type = inven_type
-#             super(Shelfcodes, self).__init__()
-#         elif isinstance(s, str):
-#             s = s.upper().strip()
-#             if s:
-#                 m = self.INVENRE.match(s)
-#                 if m is not None:
-#                     self.inven_type = m.group(1)
-#                     s = self.INVENRE.sub('', s)
-#                 else:
-#                     self.inven_type = None
-#                 y = [onecode(i) for i in self.SPLITRE.split(s)]
-#                 x = [(code, count) for (code, count, box) in y]
-#                 super(Shelfcodes, self).__init__(x)
-#             else:
-#                 super(Shelfcodes, self).__init__()
-#         else:
-#             self.inven_type = getattr(s, 'inven_type', inven_type)
-#             super(Shelfcodes, self).__init__(s)
-
-#     def list(self):
-#         return [
-#             code + ':' + str(count) if count != 1 else code
-#             for (code, count) in sorted(self.items())]
-
-#     def __str__(self):
-#         return ','.join(self.list())
-
-#     def __repr__(self):
-#         return 'Shelfcodes(' + repr(str(self)) + ')'
-
-#     def logstr(self):
-#         return ','.join(
-#             code + ':' + str(count)
-#             for (code, count) in sorted(self.items()))
-
-#     def __getitem__(self, k):
-#         if k in self:
-#             return super(Shelfcodes, self).__getitem__(k)
-#         else:
-#             return 0
-
-#     def __nonzero__(self):
-#         return sum(abs(i) for i in self.values()) > 0
-
-#     def __add__(self, other):
-#         if not isinstance(other, Shelfcodes):
-#             other = Shelfcodes(other)
-#         result = Shelfcodes(self)
-#         for i in other:
-#             result[i] += other[i]
-#             if result[i] == 0:
-#                 del result[i]
-#         return result
-
-#     def __neg__(self):
-#         return Shelfcodes((code, -count) for (code, count) in self.items())
-
-#     def __sub__(self, other):
-#         if not isinstance(other, Shelfcodes):
-#             other = Shelfcodes(other)
-#         return self + -other
-
-#     def __int__(self):
-#         return sum(self.values())
-
-
-class FieldTuple(tuple):
-    def __new__(cls, x=None):
-        if x is None:
-            return super(FieldTuple, cls).__new__(cls)
-        if isinstance(x, str):
-            x = [i.strip() for i in x.split('|') if i.strip()]
-        return super(FieldTuple, cls).__new__(cls, x)
-
-    def __str__(self):
-        return '|'.join(self)
-
-    logstr = __str__
-
-    def __repr__(self):
-        return 'FieldTuple(' + super(FieldTuple, self).__repr__() + ')'
-
-
 # AAAAAAAAAAAAAAAAAAAIIIIIIIIIIIIIIIIIIIIIIIIIIIIEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+
 NUMBER = re.compile(r'(\d+)')
 TRAILING_ARTICLE = re.compile(', (?:A|AN|THE)$')
 PUNCTUATION_WHITESPACE = re.compile('[-/,: ]+')
+REMOVE_OTHER = re.compile(r'[^A-Z0-9\(\) ]')
 START_PAREN = re.compile(r'^\(')
 START_NUMBER = re.compile(r'^(\d\S+) ?(.*)')
 
 
-def placefilter(s):
+def sanitize_sort_key(s):
+    '''
+    Sortkeys are used to order books on the shelf, so we do a little bit
+    of title/author/series munging to get them ordered appropriately. This
+    function strips down the strings for easier sorting.
+
+    Parameters
+    ----------
+    s : string
+        A string (usually author, title or series)
+
+    Returns
+    -------
+    string
+        the string with a bunch of stuff removed so that it can be sorted
+
+    '''
+    # uppercase the string
     s = s.upper()
+
+    # remove any training articles (a, an, the)
     s = TRAILING_ARTICLE.sub('', s)
+
+    # replace punctuation and multiple witespaces with a single one
     s = PUNCTUATION_WHITESPACE.sub(' ', s)
-    s = ''.join([
-        i for i in s
-        if i in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890() '])
+
+    # remove everything that isn't a letter, number, space or parens
+    s = REMOVE_OTHER.sub('', s)
+
+    # remove an paren at the start. I don't think this is a thing
     s = START_PAREN.sub('', s)
+
+    # Swap any opening number to the end
     s = START_NUMBER.sub(r'\2 \1', s)
 
-    def reint(s):
+    def pad_numbers(s):
         try:
             n = int(s)
         except ValueError:
             return s
         return '%06d' % n
 
-    s = ''.join([reint(i) for i in NUMBER.split(s)])
+    # expand any number to 6 digits by prepending zeroes
+    s = ''.join([pad_numbers(i) for i in NUMBER.split(s)])
+
+    # swap parens for <>. I suspect this is just to make regexes on it easier
     s = s.replace('(', '<')
     s = s.replace(')', '>')
+
     return s
+
+
+SERIES_VISIBLE = re.compile(r'^@')
+SERIES_NUMBERED = re.compile(r' #?[-.,\d]+B?$')
+
+
+def deseries(s):
+    '''
+    Parameters
+    ----------
+    s : string
+        Remove the metadata tags (preceding @, trailing number) from a series.
+
+    Returns
+    -------
+    s : string
+        normalized series value
+
+    '''
+    s = SERIES_VISIBLE.sub('', s)
+    s = SERIES_NUMBERED.sub('', s)
+    return s
+
+
+def deat(s):
+    '''
+    Parameters
+    ----------
+    s : string
+        a shelfcode from a book
+
+    Returns
+    -------
+    string
+        The shelfcode with any starting @ (book series visible) removed.
+
+    '''
+    if len(s) < 1:
+        return s
+    if s[0] == '@':
+        return s[1:]
+    else:
+        return s
 
 
 @total_ordering
 class DexLine(object):
     fieldtypes = (
-        ('authors', FieldTuple, FieldTuple(), False),
-        ('titles', FieldTuple, FieldTuple(), False),
-        ('series', FieldTuple, FieldTuple(), False),
+        ('authors', utils.FieldTuple, utils.FieldTuple(), False),
+        ('titles', utils.FieldTuple, utils.FieldTuple(), False),
+        ('series', utils.FieldTuple, utils.FieldTuple(), False),
         ('codes', Editions, Editions(''), True),
         )
     fields = [name for (name, constructor, default, copy) in fieldtypes]
     splits = ['authors', 'titles', 'series']
-    emptytuple = FieldTuple()
-    emptycodes = Editions()
+    # emptytuple = utils.FieldTuple()
+    # emptycodes = Editions()
 
     def __init__(
             self, line=None, authors=None, titles=None, series=None,
@@ -211,11 +189,11 @@ class DexLine(object):
             for (name, construct, default, copy) in DexLine.fieldtypes:
                 setattr(self, name, default)
         if authors is not None:
-            self.authors = FieldTuple(authors)
+            self.authors = utils.FieldTuple(authors)
         if titles is not None:
-            self.titles = FieldTuple(titles)
+            self.titles = utils.FieldTuple(titles)
         if series is not None:
-            self.series = FieldTuple(series)
+            self.series = utils.FieldTuple(series)
         if codes is not None:
             if isinstance(codes, Editions):
                 self.codes = codes
@@ -247,12 +225,12 @@ class DexLine(object):
     titletxt = property(lambda self: str(self.titles))
     seriestxt = property(lambda self: str(self.series))
 
-    placeauthor = property(lambda self: placefilter(self.authors[0]))
+    placeauthor = property(lambda self: sanitize_sort_key(self.authors[0]))
     placetitle = property(
-        lambda self: placefilter(self.titles[0].split('=')[-1]))
+        lambda self: sanitize_sort_key(self.titles[0].split('=')[-1]))
     TRAILING_NUMBER = re.compile(r' [0-9,]+$')
     placeseries = property(
-        lambda self: len(self.series) and placefilter(
+        lambda self: len(self.series) and sanitize_sort_key(
             self.TRAILING_NUMBER.sub('', self.series[0])) or '')
 
     def sortkey(self):
@@ -277,7 +255,7 @@ class DexLine(object):
                 key += [self.placeseries]
                 m = self.VSRE.search(self.series[0])
                 if m:
-                    key += [placefilter(m.group(0))]
+                    key += [sanitize_sort_key(m.group(0))]
         key += [self.placetitle]
         return tuple(key)
 
@@ -287,26 +265,6 @@ class DexLine(object):
     def __lt__(self, other):
         return (self.authors, self.titles) < (other.authors, other.titles)
 
-
-DESERIESES = [
-    re.compile(r'^@'),
-    re.compile(r' #?[-.,\d]+B?$'),
-    ]
-
-
-def deseries(s):
-    for rx in DESERIESES:
-        s = rx.sub('', s)
-    return s
-
-
-def deat(s):
-    if len(s) < 1:
-        return s
-    if s[0] == '@':
-        return s[1:]
-    else:
-        return s
 
 
 class Dex(object):

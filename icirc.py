@@ -13,9 +13,11 @@ from mitsfs.ui import Color, banner, menu, tabulate, money_str, \
 
 from mitsfs import ui
 
-from mitsfs.circulation.members import Member, format_name
+from mitsfs.circulation import members
 from mitsfs.circulation.transactions import get_transactions, \
     Transaction, CashTransaction
+from mitsfs.circulation.checkouts import Checkouts
+
 from mitsfs import library
 from mitsfs.core import settings
 from mitsfs.util import selecters
@@ -53,8 +55,10 @@ def member_header(member, title='Member Menu'):
     name_len = len_color_str(member)
     membership_head = 'Membership: ' + member.membership.description
     membership_head_len = len(membership_head)
-    spaces = ' ' * max(1, width - name_len - membership_head_len)
-    print(f'{member}{spaces}{membership_head}')
+    keyholder = f' ({member.key_initials})' if member.key_initials else ''
+    spaces = ' ' * max(1, width - name_len -
+                       membership_head_len - len(keyholder))
+    print(f'{member}{keyholder}{spaces}{membership_head}')
 
     books_out = len(member.checkouts.out)
     match books_out:
@@ -87,7 +91,6 @@ def main(args):
 
     # eventually Library will replace DexDB, but not there yet
     library = library.Library(dsn=dex.dsn)
-
     options, args = parser.parse_args(args)
 
     banner(program, __release__)
@@ -97,6 +100,7 @@ def main(args):
 
     if dex.dsn != settings.DATABASE_DSN:
         print('(' + dex.dsn + ')')
+        exit()
 
     main_menu('')
 
@@ -114,7 +118,9 @@ def main_menu(line):
                 member = possibles[0]
                 return
         member = specify_member(library.members, line)
-        member_menu(line)
+        if member:
+            member_menu(line)
+        no_member_header()
 
     def checkin(line, pick_date=False):
         no_member_header()
@@ -124,8 +130,11 @@ def main_menu(line):
                 dex,
                 authorcomplete=dex.indices.authors.complete_checkedout,
                 titlecomplete=dex.indices.titles.complete_checkedout,
+                # TODO: this isn't currently working for books that are
+                # withdrawn but checked out
                 title_predicate=lambda title: title.checkedout,
-                book_predicate=lambda book: book.out)
+                book_predicate=lambda book: book.out
+                )
 
             if not book:
                 break
@@ -136,7 +145,6 @@ def main_menu(line):
                 checkin_date = readdate(datetime.datetime.today(), False)
 
             no_member_header()
-            print(book)
             checkouts = book.checkouts
             if len(checkouts) == 0:
                 print("No editions of this book are checked out right now.")
@@ -153,7 +161,7 @@ def main_menu(line):
 
     def newmem(line):
         no_member_header()
-        print("Please transfer the patron's information from the sheet.")
+        print("Please transfer the memeber's information from the sheet.")
 
         first = readvalidate("First Name: ").strip()
         last = readvalidate("Last Name: ").strip()
@@ -179,12 +187,12 @@ def main_menu(line):
         if not readyes('Add this member? [' + Color.yN + '] '):
             return
 
-        newmember = Member(dex, first_name=first, last_name=last,
-                           email=email, phone=phone, address=address)
+        newmember = members.Member(dex, first_name=first, last_name=last,
+                                   email=email, phone=phone, address=address)
         newmember.create(commit=True)
 
         global member
-        member = Member(dex, newmember.id)
+        member = members.Member(dex, newmember.id)
 
         print()
         print('Member added.')
@@ -194,7 +202,7 @@ def main_menu(line):
                 'Add a membership to new member? [' + Color.yN + '] '):
             membership(None)
         no_member_header()
-        print(Color.info(format_name() + ' added to the members'))
+        print(Color.info(members.format_name() + ' added to the members'))
 
     def display(line):
         no_member_header()
@@ -218,11 +226,12 @@ def main_menu(line):
     print()
 
     rmenu([
-        ('S', 'Select Patron', select),
+        ('S', 'Select Member', select),
         ('I', 'Check In Books', checkin),
-        ('A', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
-        ('N', 'New Patron', newmem),
+        ('B', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
+        ('N', 'New Member', newmem),
         ('D', 'Display Book', display),
+        ('A', 'Admin', admin),
         ('Q', 'Quit', None),
         ])
 
@@ -386,7 +395,7 @@ def viewmem(line):
     def history(line):
         member_header(member, 'Checkout History')
         print(member.checkouts.display())
-        
+
     def mem(line):
         member_header(member, 'Membership History')
         print(tabulate(
@@ -406,7 +415,7 @@ def viewmem(line):
         ('F', 'Financial History', fin),
         ('M', 'Membership History', mem),
         ('Q', 'User Menu', back),
-        ], title="View User/Patron:")
+        ], title="View Member:")
 
     # need to print the header for the menu we are returning to
     member_header(member)
@@ -497,12 +506,14 @@ def editmem(line):
             ], title='Change Member Information')
         member_header(member)
 
+    
     member_header(member)
     print()
     print(member.info())
     rmenu([
         ('M', 'New/Renew Membership', renew_membership),
         ('E', 'Edit Member', edit_member),
+        ('*', 'Star Chamber', starchamber),
         ('Q', 'Main Menu', None),
         ], title='Membership')
 
@@ -518,7 +529,7 @@ def financial(line):
     def donation(line):
         financial_header()
         print('Enter amount of donation, this will increase'
-              'the patron\'s balance.')
+              'the member\'s balance.')
         amount = readmoney().copy_abs()
         desc = read('Enter description: ', history='description')
         print('Adding %s to account of %s.' % (money_str(amount), member))
@@ -533,7 +544,7 @@ def financial(line):
     def assess_fine(line, tx_type='F'):
         financial_header()
         print('Enter the fine amount, this will decrease '
-              'the patron\'s balance.')
+              'the member\'s balance.')
         amount = -readmoney().copy_abs()
         desc = read('Enter description: ', history='description')
 
@@ -552,7 +563,7 @@ def financial(line):
     def payment(line):
         financial_header()
         print('Enter the amount being paid, this will increase'
-              ' the patron\'s balance.')
+              ' the member\'s balance.')
         amount = readmoney().copy_abs()
         desc = read('Enter description: ', history='description')
 
@@ -584,11 +595,11 @@ def financial(line):
 
     def pay_membership(line):
         financial_header()
-        print('Warning, this does not update the patron\'s membership.'
-              ' It is only used when the patron previously bought a'
+        print('Warning, this does not update the member\'s membership.'
+              ' It is only used when the member previously bought a'
               ' membership and is now paying. Use the Edit Member menu'
               ' to add a new membership; They can pay there.')
-        print('Enter an amount; this will decrease the patron\'s balance.')
+        print('Enter an amount; this will decrease the member\'s balance.')
         amount = -readmoney().copy_abs()
         desc = read('Enter description: ', history='description')
 
@@ -603,8 +614,8 @@ def financial(line):
 
     def reimbursement(line):
         financial_header()
-        print('Enter the amount the patron is being reimbursed, this'
-              ' will decrease the patron\'s balance.')
+        print('Enter the amount the member is being reimbursed, this'
+              ' will decrease the member\'s balance.')
         amount = -readmoney().copy_abs()
         desc = read('Enter description: ', history='description')
 
@@ -648,10 +659,10 @@ def financial(line):
             print(tabulate(
                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
                     'Description')] +
-                [(Member(dex, tx.member_id).full_name, money_str(tx.amount),
-                    tx.created_by, tx.created.date(),
-                    tx.type_description, tx.description)
-                    for tx in voided]))
+                [(members.Member(dex, tx.member_id).full_name,
+                  money_str(tx.amount), tx.created_by, tx.created.date(),
+                  tx.type_description, tx.description)
+                 for tx in voided]))
         financial_header()
 
     def advanced_financial(line):
@@ -677,6 +688,159 @@ def financial(line):
     rmenu(menu, title='Financial Transactions')
 
     member_header(member)
+
+
+def starchamber(line):
+
+    def key(line):
+        print('Keying', member.full_name)
+        role = None
+        if member.rolname:
+            role = member.rolname
+        elif member.email.lower().endswith('@mit.edu'):
+            role = member.email.split('@')[0].lower()
+
+        role = read('Kerberos name? ', preload=role)
+        if not role:
+            return
+        while True:
+            inits = readinitials("Keyholder initials? ").strip()
+            if member.check_initials_ok(inits):
+                member.key(role, inits)
+                member_header(member, 'Star Chamber')
+                print(f'{member.full_name} keyed')
+                return
+            else:
+                print('Those initials have already been taken.'
+                      'Please try again.')
+
+    def dekey(line):
+        print('Dekeying', member.full_name)
+        if not readyes('Are you sure? '):
+            return
+        cttes = member.committees
+        member.dekey()
+        member_header(member, 'Star Chamber')
+        print(f'{member.full_name} dekeyed')
+        if cttes:
+            print(f'{member.first_name} was on', ' '.join(cttes))
+
+    def add_to_committee(line):
+        committee = read(
+            'Committee? ',
+            callback=lambda: members.star_cttes(dex) + ['*chamber'],
+            ).lower().strip()
+        if not committee:
+            return
+        member.grant(committee)
+        member_header(member, 'Star Chamber')
+        print(f'{member.full_name} is now in {list_clean(member.committees)}')
+        committee_members = list_clean(str(m.full_name)
+                                       for m in
+                                       members.role_members(dex, committee))
+        print(f'{committee} members: {committee_members}')
+
+    def remove_committee(line):
+        committee = read(
+            'Committee? ',
+            callback=lambda: member.committees,
+            ).lower().strip()
+        if not committee:
+            return
+        member.revoke(committee)
+        member_header(member, 'Star Chamber')
+        print(f'{member.full_name} is removed from {committee}')
+        committee_members = members.role_members(dex, committee)
+
+        if committee_members:
+            memlist = list_clean(str(m.full_name) for m in committee_members)
+            print(f'{committee} members: {memlist}')
+        else:
+            print(f'{committee} now has no members')
+
+    def menu_options():
+        if not member.key_initials:
+            return [
+                ('K', 'Key this member', key),
+                ('Q', 'Back to Other Menu', None),
+                ]
+        else:
+            return [
+                ('D', 'De-key this member', dekey),
+                ('A', 'Add this member to a committee', add_to_committee),
+                ('R', 'Remove this member from a committee', remove_committee),
+                ('Q', 'Back to Other Menu', None),
+                ]
+        
+    member_header(member)
+
+    rmenu(menu_options, title='Star Chamber')
+    member_header(member)
+
+
+def admin(line):
+
+    def invalid_logins(line):
+        no_member_header()
+        logins = members.invalid_logins(library.db)
+        if logins:
+            print('These roles can login, but are not tied to a member.')
+            print('Key them or get the speaker-to-postgres to remove them):')
+            print(' '.join(logins))
+        else:
+            print("No logins are unassociated. Gold star.")
+
+    def committee_list(line):
+        no_member_header()
+        for committee in members.star_committees(library.db):
+            print(committee, list_clean(
+                str(member.key_initials)
+                for member in members.role_members(library.db, committee)))
+
+    def keylist(line):
+        no_member_header()
+        for key in members.role_members(library.db, 'keyholders'):
+            print(key.full_name, list_clean(key.committees))
+        print()
+
+    def vgg(line):
+        no_member_header()
+        checkouts = Checkouts(dex)
+        for email, name, overdue in checkouts.vgg():
+            print(name, '<' + email + '>')
+            for stamp, code, title in overdue:
+                print('', stamp, code, title)
+
+    no_member_header()
+    menu = [
+        ('?', 'Check for invalid logins', invalid_logins),
+        ('C', 'List committees', committee_list),
+        ('W', 'Who are keyholders', keylist),
+        ('V', 'Overdue Books', vgg),
+        ('Q', 'Back to Main Menu', None)
+        ]
+    rmenu(menu, title='Admin')
+    no_member_header()
+
+
+def list_clean(x):
+    '''
+    prints (list1, list2) unless it's empty
+
+    Parameters
+    ----------
+    x : list(str)
+        list of items to print
+
+    Returns
+    -------
+    str
+        a stringified list if there are elements
+
+    '''
+    if not x:
+        return ''
+    return '(%s)' % ', '.join(x)
 
 
 def membership(line):

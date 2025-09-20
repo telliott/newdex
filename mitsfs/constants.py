@@ -27,10 +27,3 @@ if os.path.exists('/mitsfs/dexcode'):
 else:
     CODEBASE = os.path.join(LOCKER, 'newdex')
 DATADEX_FILE = os.path.join(DEXBASE, 'datadex')
-
-# daily fine for an overdue book
-OVERDUE_DAY = 0.1
-
-# maximum fine for an overdue book
-MAX_OVERDUE = 4.0
-

@@ -64,13 +64,13 @@ class Membership(db.Entry):
     @property
     def expiry(self):
         if self.expires is None:
-            return ui.Color.good("Expires: Never")
+            return "Expires: " + ui.Color.good("Never")
 
         expires = str(self.expires.date())
         if self.expired:
-            return ui.Color.warning("Expired: " + expires)
+            return "Expired: " + ui.Color.warning(expires)
 
-        return ui.Color.good("Expires: " + expires)
+        return "Expires: " + ui.Color.good(expires)
 
     @property
     def cost(self):

@@ -1,11 +1,16 @@
 from mitsfs.core import db
 from mitsfs.ui import money_str
-from mitsfs.constants import OVERDUE_DAY, MAX_OVERDUE
 
 '''
 Classes to write and retrieve the various financial transactions a member can
 engage in.
 '''
+
+# daily fine for an overdue book
+OVERDUE_DAY = 0.1
+
+# maximum fine for an overdue book
+MAX_OVERDUE = 4.0
 
 
 def get_transactions(db, member_id, include_voided=True):

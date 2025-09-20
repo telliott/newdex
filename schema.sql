@@ -171,15 +171,14 @@ grant select, update on log_generation_seq to keyholders;
 
 create table title (
        title_id integer default nextval('id_seq') not null primary key,
-       title_comment text,
+       title_lost boolean not null default false,
        title_created timestamp with time zone default current_timestamp not null,
        title_created_by varchar(64) default current_user not null,
        title_created_with varchar(64) default 'SQL' not null,
        title_modified timestamp with time zone default current_timestamp not null,
        title_modified_by varchar(64) default current_user not null,
-       title_modified_with varchar(64) default 'SQL' not null,
-       title_lost boolean not null default false,
-       lang text);
+       title_modified_with varchar(64) default 'SQL' not null
+);
 
 create trigger title_insert
        before insert on title for each row execute procedure insert_row_created_with();
@@ -192,34 +191,17 @@ grant select on title to public;
 grant insert, update, delete on title to panthercomm;
 
 
-create table entity_type (
-       entity_type char(1) not null primary key,
-       description text);
-
-grant select on entity_type to public;
-grant insert, update, delete on entity_type to libcomm;
-
-insert into entity_type values ('C', 'Corporation');
-insert into entity_type values ('H', 'Human');
-insert into entity_type values ('S', 'Pseudonym');
-insert into entity_type values ('?', 'Unspecified');
-
-
 create table entity (
        entity_id integer default nextval('id_seq') not null primary key,
        -- aka integer references entity(entity_id),
-       entity_name text not null,
-       entity_type char(1) default 'H' not null references entity_type,
-       aka integer references entity(entity_id),
-       entity_note text,
-       entity_comment text,
+       entity_name text unique not null,
        entity_created timestamp with time zone default current_timestamp not null,
        entity_created_by varchar(64) default current_user not null,
        entity_created_with varchar(64) default 'SQL' not null,
        entity_modified timestamp with time zone default current_timestamp not null,
        entity_modified_by varchar(64) default current_user not null,
-       entity_modified_with varchar(64) default 'SQL' not null,
-       unique(entity_name, entity_note));
+       entity_modified_with varchar(64) default 'SQL' not null
+       );
 
 create index entity_name_idx on entity(entity_name);
 
@@ -279,7 +261,6 @@ grant insert, update, delete on title_title_type to libcomm;
 
 insert into title_title_type values ('=', 'Sort As');
 insert into title_title_type values ('T', 'Title');
-insert into title_title_type values ('N', 'Note');
 
 
 create table title_title (
@@ -344,21 +325,6 @@ grant select on title_series to public;
 grant insert, update, delete on title_series to panthercomm;
 
 create index title_series_series_idx on title_series(series_id);
-
-create table title_contains (
-       title_id integer not null references title,
-       containing integer not null references title(title_id));
-
-create trigger title_contains_update
-       before insert or update or delete on title_contains
-       for each row execute procedure collateral_update('title');
-create trigger title_contains_log
-       before insert or update or delete on title_contains
-       for each row execute procedure log_row('title_id');
-
-grant select on title_contains to public;
-grant insert, update, delete on title_contains to panthercomm;
-
 
 create table format (
        format_id integer default nextval('id_seq') not null primary key,
@@ -439,18 +405,18 @@ grant insert, update, delete on shelfcode_format to libcomm;
 create table book (
        book_id integer default nextval('id_seq') not null primary key,
        title_id integer not null references title,
-       book_series_visible boolean not null default false,
        shelfcode_id integer not null references shelfcode,
+       book_series_visible boolean not null default false,
        doublecrap text,
+       withdrawn boolean not null default false,
+       review boolean not null default false,
        book_comment text,
        book_created timestamp with time zone default current_timestamp not null,
        book_created_by varchar(64) default current_user not null,
        book_created_with varchar(64) default 'SQL' not null,
        book_modified timestamp with time zone default current_timestamp not null,
        book_modified_by varchar(64) default current_user not null,
-       book_modified_with varchar(64) default 'SQL' not null,
-       withdrawn boolean not null default false,
-       review boolean not null default false);
+       book_modified_with varchar(64) default 'SQL' not null);
 
 create index book_title_idx on book(title_id);
 create index book_doublecrap_idx on book (doublecrap);

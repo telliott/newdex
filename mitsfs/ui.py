@@ -473,44 +473,44 @@ def specify_book(
 
             book = possibles[n - 1]
 
-        books = [
-            (x, list(y))
-            for (x, y) in itertools.groupby(
-                (i for i in book.books if book_predicate(i)),
-                lambda x: (x.shelfcode, x.barcodes, x.outto))]
+            books = [
+                (x, list(y))
+                for (x, y) in itertools.groupby(
+                    (i for i in book.books if book_predicate(i)),
+                    lambda x: (x.shelfcode, x.barcodes, x.outto))]
+     
+            n = None
+            if len(books) == 0:
+                print("Nothing found, Try again")
+            else:
+                print(book)
+                for (i, ((shelfcode, barcodes, outto), booklist)) in \
+                        enumerate(books):
+                    count = len(booklist)
+                    if outto:
+                        outto = ' (out to ' + outto + ')'
+                    if count > 1:
+                        s = (
+                            Color.select(str(i + 1) + '.') +
+                            '%2dx %s %s%s' % (
+                                count, shelfcode, ', '.join(barcodes), outto))
+                    else:
+                        s = (
+                            Color.select(str(i + 1) + '.') +
+                            '    %s %s%s' % (
+                                shelfcode, ', '.join(barcodes), outto))
+                    print(s)
+                n = readnumber('? ', 0, len(books) + 1, 'select')
+            if n is None or n == 0:
+                continue
+            return books[n - 1][1][0]
 
-        n = None
-        if len(books) == 0:
-            print("Nothing found, Try again")
-        else:
-            print(book)
-            for (i, ((shelfcode, barcodes, outto), booklist)) in \
-                    enumerate(books):
-                count = len(booklist)
-                if outto:
-                    outto = ' (out to ' + outto + ')'
-                if count > 1:
-                    s = (
-                        Color.select(str(i + 1) + '.') +
-                        '%2dx %s %s%s' % (
-                            count, shelfcode, ', '.join(barcodes), outto))
-                else:
-                    s = (
-                        Color.select(str(i + 1) + '.') +
-                        '    %s %s%s' % (
-                            shelfcode, ', '.join(barcodes), outto))
-                print(s)
-            n = readnumber('? ', 0, len(books) + 1, 'select')
-        if n is None or n == 0:
-            return None
-        return books[n - 1][1][0]
 
-
-def specify_member(members, line=''):
+def specify_member(member_list, line=''):
     preload = ''
     while True:
         if line:
-            possibles = members.find(line)
+            possibles = member_list.find(line)
 
             n = None
             if len(possibles) == 0:
@@ -534,7 +534,7 @@ def specify_member(members, line=''):
             'Member: ',
             preload=preload,
             history='members',
-            complete=members.complete_name,
+            complete=lambda x: member_list.complete_name(x),
             ).strip().upper()
 
         if not line:

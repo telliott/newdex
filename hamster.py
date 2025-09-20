@@ -19,8 +19,6 @@ from mitsfs.dexfile import Dex, DexLine
 from mitsfs.dex.editions import InvalidShelfcode, Editions, Edition
 
 from mitsfs.circulation.checkouts import Checkouts
-from mitsfs.circulation.members import star_dissociated, role_members, \
-    star_cttes
 
 __release__ = '2'
 
@@ -53,22 +51,23 @@ def main(args):
 
     sys.stdout.write('Connecting to dex...')
     sys.stdout.flush()
+    print(f'DSN: {dsn or settings.DATABASE_DSN}')
     dex = DexDB(client='dexhamster', dsn=dsn or settings.DATABASE_DSN)
     library = Library(dex)
 
     print('done. (%s)' % dex.filename)
 
-    starmenu = [
-        ('B', 'Back to Other Menu', None),
-        ('?', 'Check for dissociated roles', checkdis),
-        ('K', 'Key a member', key),
-        ('D', 'De-key a member', dekey),
-        ('W', 'Who are keyholders', keylist),
-        ('C', 'List committees', cttelist),
-        ('A', 'Add a keyholder to a committee', ctteadd),
-        ('R', 'Remove a keyholder from a committee', ctteremove),
-        ('Q', 'Quit', quithamster),
-        ]
+    # starmenu = [
+    #     ('B', 'Back to Other Menu', None),
+    #     ('?', 'Check for dissociated roles', checkdis),
+    #     ('K', 'Key a member', key),
+    #     ('D', 'De-key a member', dekey),
+    #     ('W', 'Who are keyholders', keylist),
+    #     ('C', 'List committees', cttelist),
+    #     ('A', 'Add a keyholder to a committee', ctteadd),
+    #     ('R', 'Remove a keyholder from a committee', ctteremove),
+    #     ('Q', 'Quit', quithamster),
+    #     ]
 
     othermenu = [
         ('B', 'Back to Main Menu', None),
@@ -80,9 +79,8 @@ def main(args):
         ('W', 'Withdraw books', withdraw),
         ('M', 'Membership', membership),
         ('G', 'merGe user', merge),
-        ('V', 'VGG list', vgg),
-        ('*', '*-Chamber menu',
-         lambda line: menu(starmenu, line)),
+        # ('*', '*-Chamber menu',
+        #  lambda line: menu(starmenu, line)),
         ('Q', 'Quit', quithamster),
         ]
 
@@ -661,9 +659,9 @@ def membership(line):
 
         print()
         if member.new:
-            print('Editing new member', member.name or '')
+            print('Editing new member', member.full_name or '')
         else:
-            print('Editing member', member.name)
+            print('Editing member', member.full_name)
         print()
         print(tabulate(t))
         what = read(
@@ -750,7 +748,7 @@ def series(line):
         keys.append('X')
 
         print()
-        print('Editing series', series.name)
+        print('Editing series', series.full_name)
         print()
         print(tabulate(t))
         what = read(
@@ -916,113 +914,19 @@ def title(line):
 
 
 # Should really move all this stuff to icirc or some more privileged script
-def checkdis(line):
-    print('Dissociated roles (key them or get the speaker-to-postgres to ')
-    print('remove them)')
-    print(' '.join(star_dissociated(dex)))
-
-def key(line):
-    mem = specify_member(library.members, line)
-
-    if not mem:
-        return
-    print('Keying', mem.name)
-    role = None
-    if mem.role:
-        role = mem.role
-    elif mem.email.lower().endswith('@mit.edu'):
-        role = mem.email.split('@')[0].lower()
-    
-    role = read('Kerberos name? ', preload=role)
-    if not role:
-        return
-    while True: 
-        inits = readinitials("Keyholder initials? ").strip()
-        if mem.check_initials_ok(inits):
-            mem.key(role, inits)
-            return
-        else:
-            print("Those initials have already been taken. Please try again.")
  
 
-def specify_keyholder(dex, line):
-    m = specify_member(library.members, line)
-    key_ids = set(mem.id for mem in role_members(dex, 'keyholders'))
-    while True:
-        mem = specify_member(m, line)  # XXX constrain to keyholders
-        if mem is None:
-            return None
-        if mem.id in key_ids:
-            return mem
-        print(mem, 'does not appear to be a keyholder.')
+# def specify_keyholder(dex, line):
+#     m = specify_member(library.members, line)
+#     key_ids = set(mem.id for mem in role_members(dex, 'keyholders'))
+#     while True:
+#         mem = specify_member(m, line)  # XXX constrain to keyholders
+#         if mem is None:
+#             return None
+#         if mem.id in key_ids:
+#             return mem
+#         print(mem, 'does not appear to be a keyholder.')
 
-
-def dekey(line):
-    mem = specify_keyholder(dex, line)
-    if mem is None:
-        return
-    print('Dekeying', mem.name)
-    if not readyes('Are you sure? '):
-        return
-    cttes = mem.committees
-    mem.dekey()
-    if cttes:
-        print('Was on', ' '.join(cttes))
-
-
-def maybeprettylist(x):
-    if not x:
-        return ''
-    return '(%s)' % ', '.join(x)
-
-
-def keylist(line):
-    print()
-    for key in role_members(dex, 'keyholders'):
-        print(key.name, maybeprettylist(key.committees))
-    print()
-
-
-def cttelist(line):
-    print()
-    for ctte in star_cttes(dex):
-        print(ctte, maybeprettylist(
-            str(mem.name) for mem in role_members(dex, ctte)))
-    print()
-
-
-def ctteadd(line):
-    print('Adding...')
-    mem = specify_keyholder(dex, line)
-    if mem is None:
-        return
-    ctte = read(
-        'Committee? ',
-        callback=lambda: star_cttes(dex) + ['*chamber'],
-        ).lower().strip()
-    if not ctte:
-        return
-    mem.grant(ctte)
-    print(mem.name, maybeprettylist(mem.committees))
-    print(ctte, maybeprettylist(
-        str(m.name) for m in role_members(dex, ctte)))
-
-
-def ctteremove(line):
-    print('Removing...')
-    mem = specify_keyholder(dex, line)
-    if mem is None:
-        return
-    ctte = read(
-        'Committee? ',
-        callback=lambda: mem.committees,
-        ).lower().strip()
-    if not ctte:
-        return
-    mem.revoke(ctte)
-    print(mem.name, maybeprettylist(mem.committees))
-    print(ctte, maybeprettylist(
-        str(m.name) for m in role_members(dex, ctte)))
 
 
 def merge(line):
@@ -1041,15 +945,6 @@ def merge(line):
             break
         print('Merge target must differ from merge subject')
     mem.merge(other)
-
-
-def vgg(line):
-    checkouts = Checkouts(dex)
-    for email, name, overdue in checkouts.vgg():
-        print(name, '<' + email + '>')
-        for stamp, code, title in overdue:
-            print('', stamp, code, title)
-
 
 if __name__ == '__main__':
     main(sys.argv)

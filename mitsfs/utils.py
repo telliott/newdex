@@ -11,8 +11,33 @@ import logging
 
 
 __all__ = [
-    'PropDict', 'timestamp', 'sort_key', 'get_logfiles',
+    'PropDict', 'timestamp', 'get_logfiles',
     ]
+
+
+
+
+class FieldTuple(tuple):
+    '''
+    A pretty standard tuple class, but it splits the strings provided on 
+    | (the standard delimeter for most dex fields)
+    '''
+    
+    def __new__(cls, x=None):
+        if x is None:
+            return super().__new__(cls)
+        if isinstance(x, str):
+            x = [i.strip() for i in x.split('|') if i.strip()]
+        return super().__new__(cls, x)
+
+    def __str__(self):
+        return '|'.join(self)
+
+    logstr = __str__
+
+    def __repr__(self):
+        return 'FieldTuple(' + super(FieldTuple, self).__repr__() + ')'
+
 
 
 class PropDict(dict):

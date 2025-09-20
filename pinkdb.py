@@ -233,13 +233,12 @@ def mungeshelf(shelfcodes):
 
     return [i[1] for i in dl]
 
-def writetext(
-        outfile, books, shelfcode=None, suppl=None, hassle=None, reverse=False,
-        dexname='Pinkdex', letterfield='placeauthor', blob=None, kbx=None):
+
+def writetext(outfile, books):
     if outfile is None:
         outfile = 'pinkdex.txt'
     fp = open(outfile, 'w')
-    
+
     for line in books:
         try:
             fp.write(str(line) + "\n")
@@ -374,10 +373,7 @@ if (not inventory) or options.shelfcodes:
         print('done.')
 
     if options.textdex:
-        writetext(
-            options.outfile, books,
-            options.shelfcodes[0] if options.shelfcodes else None,
-            options.suppl, options.hassle, kbx=options.boxdex)
+        writetext(options.outfile, books)
     else:
         writedex(
             options.outfile, books,

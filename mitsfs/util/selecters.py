@@ -8,7 +8,7 @@ def select_checkout(checkouts, show_members=False):
     print()
 
     num = ui.readnumber(
-        "Select a checkin: ",
+        "Select a book to check in: ",
         1,
         len(checkouts) + 1,
         escape='Q')

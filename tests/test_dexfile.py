@@ -10,15 +10,16 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dexfile import Dex, FieldTuple, DexLine, deseries, deat
+from mitsfs.dexfile import Dex, DexLine, deseries, deat
 from mitsfs.dex.shelfcodes import Shelfcodes
+from mitsfs import utils
 
 
 class DexfileTest(unittest.TestCase):
 
     def testFieldtuple(self):
-        self.assertEqual((), FieldTuple())
-        t = FieldTuple('abc|def')
+        self.assertEqual((), utils.FieldTuple())
+        t = utils.FieldTuple('abc|def')
         self.assertEqual(('abc', 'def'), t)
         self.assertEqual('abc|def', str(t))
         self.assertEqual("FieldTuple(('abc', 'def'))", repr(t))

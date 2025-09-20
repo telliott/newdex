@@ -525,19 +525,10 @@ class AuthorIndex(object):
     def iterkeys(self):
         c = self.dex.getcursor()
 
-        def notify(name, note):
-            if note:
-                return name + ' ' + note  # XXX is this right?
-            else:
-                return name
-
-        return (
-            notify(name, note)
-            for (name, note)
-            in c.execute(
-                'select entity_name, entity_note'
+        return c.fetchlist(
+                'select entity_name'
                 ' from entity'
-                ' order by upper(entity_name), upper(entity_note)'))
+                ' order by upper(entity_name)')
 
     def __getitem__(self, key):
         c = self.dex.getcursor()
@@ -797,8 +788,8 @@ class DexDB(db.Database):
         count = 0
         for title_id in codes.keys():
             line = dexfile.DexLine(
-                authors=deeq(authors[title_id]),
-                titles=deeq(titles[title_id]),
+                authors=parse_dex_equals(authors[title_id]),
+                titles=parse_dex_equals(titles[title_id]),
                 series=[
                     ('@' if series_visible else '') +
                     series_name +
@@ -1122,9 +1113,9 @@ class DexDB(db.Database):
             " where upper(entity_name) = upper(%s)", (name,))
         if c.rowcount == 0:
             c.execute(
-                "insert into entity(entity_name, entity_type)"
-                " values (%s, %s)",
-                (name.upper(), '?'))
+                "insert into entity(entity_name)"
+                " values (%s)",
+                (name.upper(),))
             c.execute('select last_value from id_seq')
         (entity_id,) = c.fetchone()
         return entity_id
@@ -1467,7 +1458,6 @@ class DexDB(db.Database):
 
 SERIESINDEX_RE = re.compile(r'(?: (#)?([-.,\d]+B?))?$')
 
-
 def munge_series(name):
     'name -> name, index, series_visisble, number_visible'
     if not name:
@@ -1514,96 +1504,48 @@ class Title(dexfile.DexLine, db.Entry):
     def dex(self):
         return self.db
 
-    _queries = {
-        'authors':
-        "select"
-        "  responsibility_type, entity_name, entity_note"
-        " from"
-        "  title_responsibility"
-        "  natural join entity"
-        " where title_id = %s"
-        " order by order_responsibility_by",
-        'titles':
-        "select"
-        "  title_type, title_name"
-        " from title_title"
-        " where title_id = %s"
-        " order by order_title_by",
-        'series':
-        "select"
-        "  series_name, series_index, series_visible, number_visible"
-        " from"
-        "  title_series"
-        "  natural join series"
-        " where title_id = %s"
-        " order by order_series_by",
-        'codes':
-        "select"
-        "  book_series_visible, shelfcode, doublecrap, count(shelfcode)"
-        " from"
-        "  book"
-        "  natural join shelfcode"
-        " where"
-        "  title_id = %s and"
-        "  not withdrawn"
-        " group by book_series_visible, shelfcode, doublecrap"
-        " order by not book_series_visible, shelfcode, doublecrap",
-        }
-
-    def _cache_query(self, query):
-        name = 'Q_' + query
+    def _cache_query(self, key, sql):
+        name = 'Q_' + key
         if name in self.cache:
-            return self.cache[name]
+            return self.cache[key]
 
-        ret = list(self.cursor.execute(self._queries[query], (self.title_id,)))
-
-        self.cache[name] = ret
+        ret = list(self.cursor.execute(sql, (self.title_id,)))
+        self.cache[key] = ret
 
         return ret
 
     @property
     @db.cached
     def authors(self):
-        those = [
-            (rtype, name + (' (' + note + ')' if note else ''))
-            for (rtype, name, note) in self._cache_query('authors')]
-        rtype, entity = those[0]
-        if rtype == '=':
-            sortby = entity
-            rtype, entity = those[1]
-            those = [(rtype, entity + '=' + sortby)] + those[2:]
-        those = [_entity for (_rtype, _entity) in those]
-        return dexfile.FieldTuple(those)
+        sql = ("select"
+               "  responsibility_type, entity_name"
+               " from"
+               "  title_responsibility"
+               "  natural join entity"
+               " where title_id = %s"
+               " order by order_responsibility_by")
+
+        authors = self._cache_query('authors', sql)
+        return utils.FieldTuple(parse_dex_equals(authors))
 
     @property
     @db.cached
     def titles(self):
-        those = self._cache_query('titles')
-        these = []
-        sortby = ''
-        notes = []
-        # oh, the horrorifying
-        for i in range(1, len(those)):
-            if those[i][0] == 'N':
-                those[i], those[i - 1] = those[i - 1], those[i]
-        for (ttype, name) in those:
-            if ttype == '=':
-                sortby = name
-            elif ttype == 'N':
-                notes.append('(' + name + ')')
-            else:
-                these.append(
-                    name +
-                    (' ' + ' '.join(notes) if notes else '') +
-                    ('=' + sortby if sortby else ''))
-        return dexfile.FieldTuple(these)
+        sql = ("select"
+               "  title_type, title_name"
+               " from title_title"
+               " where title_id = %s"
+               " order by order_title_by")
+
+        titles = self._cache_query('titles', sql)
+        return utils.FieldTuple(parse_dex_equals(titles))
 
     @property
     @db.cached
     def books(self):
         cursor = self.cursor
-        # why is the following a subselect?
-        cursor.execute(
+        # This is a subselect so we can sort by shelcode_Id
+        books = cursor.fetchlist(
             "select distinct book_id"
             " from ("
             "  select book_id"
@@ -1616,23 +1558,42 @@ class Title(dexfile.DexLine, db.Entry):
             "  order by shelfcode_id, barcode)"
             " as q",
             (self.title_id, ))
-        return [Book(self, i) for i in cursor]
+        return [Book(self, i) for i in books]
 
     @property
     @db.cached
     def series(self):
+        sql = ("select"
+               "  series_name, series_index, series_visible, number_visible"
+               " from"
+               "  title_series"
+               "  natural join series"
+               " where title_id = %s"
+               " order by order_series_by")
+
         those = (
             ('@' if series_visible else '') +
             series_name +
             (' ' + ('#' if number_visible else '') + series_index
              if series_index else '')
             for series_name, series_index,
-            series_visible, number_visible in self._cache_query('series'))
-        return dexfile.FieldTuple(those)
+            series_visible, number_visible in self._cache_query('series', sql))
+        return utils.FieldTuple(those)
 
     @property
     @db.cached
     def codes(self):
+        sql = ("select"
+               "  book_series_visible, shelfcode, doublecrap, count(shelfcode)"
+               " from"
+               "  book"
+               "  natural join shelfcode"
+               " where"
+               "  title_id = %s and"
+               "  not withdrawn"
+               " group by book_series_visible, shelfcode, doublecrap"
+               " order by not book_series_visible, shelfcode, doublecrap")
+
         return Editions(
             ','.join(
                 ('@' if series_visible else '') +
@@ -1641,7 +1602,7 @@ class Title(dexfile.DexLine, db.Entry):
                 (':' + str(count)
                  if count > 1 else '')
                 for series_visible, shelfcode,
-                doublecrap, count in self._cache_query('codes')))
+                doublecrap, count in self._cache_query('codes', sql)))
 
     def __str__(self):
         result = dexfile.DexLine.__str__(self)
@@ -1661,13 +1622,13 @@ class Title(dexfile.DexLine, db.Entry):
 
     @db.cached
     def shelfkey(self, shelfcode):
-        author = self._cache_query('authors')[0][1]
-        title = self._cache_query('titles')[0][1]
+        author = self.authors[0][1]
+        title = self.titles[0][1]
 
         doublecrap, book_series_visible = [
             (doublecrap, book_series_visible)
             for (book_series_visible, qshelfcode, doublecrap, count)
-            in self._cache_query('codes')
+            in self.codes
             if qshelfcode == shelfcode][0]
 
         if doublecrap:
@@ -1675,15 +1636,15 @@ class Title(dexfile.DexLine, db.Entry):
         else:
             key = [author]
 
-        series_q = self._cache_query('series')
-        if series_q:
-            series, series_index, series_visible, index_visible = series_q[0]
+        if self.series:
+            series, series_index, series_visible, index_visible \
+                = self.series[0]
             if series_visible:
                 key += [series]
                 if index_visible:
                     key += [series_index]
         key += [title]
-        return tuple(dexfile.placefilter(i).strip() for i in key)
+        return tuple(dexfile.sanitize_sort_key(i).strip() for i in key)
 
     @db.cached
     def nicetitle(self):
@@ -1732,7 +1693,7 @@ class Title(dexfile.DexLine, db.Entry):
     def checkedout(self):
         # if any of this title are checked out
         c = self.cursor or self.dex.cursor
-        c.execute(
+        return c.selectvalue(
             'select count(title_id)'
             ' from'
             '  checkout'
@@ -1742,8 +1703,6 @@ class Title(dexfile.DexLine, db.Entry):
             '  title_id = %s',
             (self.id,))
 
-        return c.fetchone()[0] > 0
-
     created = db.ReadField('title_created')
     created_by = db.ReadField('title_created_by')
     created_with = db.ReadField('title_created_with')
@@ -1752,10 +1711,11 @@ class Title(dexfile.DexLine, db.Entry):
     modified_with = db.ReadField('title_modified_with')
 
     comment = db.Field('title_comment')
-    lang = db.Field('lang')
     lost = db.Field('title_lost')
 
 
+# Can't find anywhere this is used. Looks like it was a helper function
+# where you could give it a dex and a grep and it would print lines for you
 def dg(d, q):
     lines = [str(i) for i in d.grep(q)]
     for i in lines:
@@ -1763,12 +1723,39 @@ def dg(d, q):
     return len(lines)
 
 
-def deeq(e):
-    t0, s0 = e[0]
-    if t0 == '=':
-        t1, s1 = e[1]
-        e = [(t1, s1 + '=' + s0)] + e[2:]
-    return [s for (t, s) in e]
+def parse_dex_equals(elements):
+    '''
+    Take the list of type-string tuples pulled out of the db, merge the lines
+    with '=' as the type and return the resulting list of strings. Used to do
+    title and author equivalency.
+
+    Note that this is barely used for authors and probably not worth
+    maintaining
+
+    Parameters
+    ----------
+    elements : list[(type, string)]
+        a list of tuples containing a type (we only care about '=') and the
+        associated string (a title or an author)
+
+    Returns
+    -------
+    list(string)
+        A list of all the titles/authors with the = rows merged.
+
+    '''
+
+    element_type, element_string = elements[0]
+
+    # if it's the = type, that means that there's a second row to follow
+    # that should be merged in with the first as an equivalent
+    if element_type == '=':
+        second_element_type, second_element_string = elements[1]
+        elements = [(second_element_type, second_element_string +
+                     '=' + element_string)] + elements[2:]
+
+    # ditch the types and return a list of the titles/authors
+    return [s for (t, s) in elements]
 
 
 # class Shelfcode(db.Entry):
