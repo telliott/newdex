@@ -129,15 +129,31 @@ class Checkouts(list):
                 results.append(title)
                 continue
 
-            from mitsfs.circulation.members import Member, format_name
+            from mitsfs.circulation.members import Member
             member = Member(self.db, checkout.member_id)
-            memstr = format_name(member.first_name, member.last_name)
+            memstr = member.full_name
             memstr = '  ' + memstr
             title = title[:width - len(memstr)]
             results.append(f'{title}{memstr:>{width - len(title)}}')
 
         return '\n'.join(results)
 
+    def member_display(self, prefix=''):
+        from mitsfs.circulation.members import Member
+        for checkout in self:
+            member = Member(self.db, checkout.member_id)
+            if checkout.lost:
+                duestr = ui.Color.warning('LOST: ')
+                duedate = checkout.checkin_stamp.date()
+            elif checkout.checkin_stamp:
+                duestr = 'In: '
+                duedate = checkout.checkin_stamp.date()
+            else:
+                duestr = 'Due: '
+                duedate = ui.color_due_date(checkout.due_stamp)
+
+            return f'{prefix}{member.full_name}  ({duestr}{duedate})'
+        
     def vgg(self):
         '''
         Returns

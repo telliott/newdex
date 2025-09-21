@@ -558,7 +558,11 @@ def role_members(db, role):
 
 
 def star_committees(db):
-    """Returns a list of committee roles"""
+    """
+    Returns a list of committee roles
+    Pretty sure this isn't the correct way to do it, but the old version
+    didn't work at all
+    """
     omit = ['speaker-to-postgres', 'keyholders', 'wheel']
     committees = db.cursor.fetchlist(
         'select rolname'

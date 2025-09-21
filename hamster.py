@@ -57,18 +57,6 @@ def main(args):
 
     print('done. (%s)' % dex.filename)
 
-    # starmenu = [
-    #     ('B', 'Back to Other Menu', None),
-    #     ('?', 'Check for dissociated roles', checkdis),
-    #     ('K', 'Key a member', key),
-    #     ('D', 'De-key a member', dekey),
-    #     ('W', 'Who are keyholders', keylist),
-    #     ('C', 'List committees', cttelist),
-    #     ('A', 'Add a keyholder to a committee', ctteadd),
-    #     ('R', 'Remove a keyholder from a committee', ctteremove),
-    #     ('Q', 'Quit', quithamster),
-    #     ]
-
     othermenu = [
         ('B', 'Back to Main Menu', None),
         ('A', 'change codes in a shelfdex Arc', arc),
@@ -79,8 +67,6 @@ def main(args):
         ('W', 'Withdraw books', withdraw),
         ('M', 'Membership', membership),
         ('G', 'merGe user', merge),
-        # ('*', '*-Chamber menu',
-        #  lambda line: menu(starmenu, line)),
         ('Q', 'Quit', quithamster),
         ]
 
@@ -913,38 +899,6 @@ def title(line):
             print('Unknown option', what)
 
 
-# Should really move all this stuff to icirc or some more privileged script
- 
-
-# def specify_keyholder(dex, line):
-#     m = specify_member(library.members, line)
-#     key_ids = set(mem.id for mem in role_members(dex, 'keyholders'))
-#     while True:
-#         mem = specify_member(m, line)  # XXX constrain to keyholders
-#         if mem is None:
-#             return None
-#         if mem.id in key_ids:
-#             return mem
-#         print(mem, 'does not appear to be a keyholder.')
-
-
-
-def merge(line):
-    print('This can only be expected to work by a speaker-to-postgres')
-    print()
-    print('User entry that is going away')
-    other = specify_member(library.members, line)
-    if other is None:
-        return
-    print('User that is sticking around')
-    while True:
-        mem = specify_member(library.members, line)
-        if mem is None:
-            return
-        if mem.id != other.id:
-            break
-        print('Merge target must differ from merge subject')
-    mem.merge(other)
 
 if __name__ == '__main__':
     main(sys.argv)

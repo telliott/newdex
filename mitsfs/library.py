@@ -1,4 +1,6 @@
 import os
+import logging
+
 from mitsfs.core.db import Database
 from mitsfs.core import settings
 
@@ -7,7 +9,6 @@ from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.circulation.membership_types import MembershipTypes
 from mitsfs.circulation.timewarps import Timewarps
 from mitsfs.circulation.members import Members
-
 
 
 class Library():
@@ -43,3 +44,7 @@ class Library():
     @property
     def books(self):
         pass
+
+    @property
+    def log(self):
+        return logging.getLogger('mitsfs.error')

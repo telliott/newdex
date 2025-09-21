@@ -5,7 +5,7 @@ import optparse
 import datetime
 
 from mitsfs.dexdb import DexDB
-from mitsfs.ui import Color, banner, menu, tabulate, money_str, \
+from mitsfs.ui import Color, banner, tabulate, money_str, \
                 read, readmoney, readaddress, readdate, \
                 readvalidate, readnumber, readyes, reademail, readphone, \
                 readinitials, specify, specify_book, specify_member, \
@@ -26,10 +26,6 @@ __release__ = '1.1'
 
 program = 'greendex'
 
-
-if 'dex' in locals():
-    del dex
-dex = None
 member = None
 
 
@@ -37,8 +33,28 @@ parser = optparse.OptionParser(
     usage='usage: %prog [options]',
     version='%prog ' + __release__)
 
+'''
+icirc is the circulation system app. It handles everything involving people - 
+adding/deleting members, memberships, checkin/checkout, fines, transactions
+
+The circulation system is built around a set of menus, each of which contains
+its own functions. In general, when you return from one of those functions,
+it will print the menu again. So if you want to clear the screen, generate
+a header, and write some stuff before the menu prints, you need to do it 
+before you return from the function. Otherwise, something else would 
+clear the screen and the user never seens your very important message.
+
+This is the case with going back up the menu stack. If your menu's function
+pointer is None, the menu will return control back to your method, at which
+point you likely want to print the header for the menu that's being 
+reyirmed to.
+'''
 
 def no_member_header():
+    '''
+    Clears the screen and prints the header when there's no member selected'
+    '''
+    
     ui.clear_screen()
     width = min(termwidth(), 80) - 1
     print('-' * width)
@@ -47,11 +63,19 @@ def no_member_header():
 
 
 def member_header(member, title='Member Menu'):
+    '''
+    Clears the screen and prints the header for the member selected menus'
+    '''
     ui.clear_screen()
     width = min(termwidth(), 80) - 1
     title = f'  {title}  '
 
     print(f'{title:-^{width}}')
+    
+    # first row contains member name (including keyholder initials) and
+    # membership status. We get the left justification here by calculating
+    # length of the fields and padding the rest. Don't forget to strip
+    # out any ansi terminal colors!
     name_len = len_color_str(member)
     membership_head = 'Membership: ' + member.membership.description
     membership_head_len = len(membership_head)
@@ -69,6 +93,9 @@ def member_header(member, title='Member Menu'):
         case _:
             books_out = f'{books_out} books out'
 
+    # second row contains the financial balance, books out and member expiry
+    # We center the books out by calculating the length of the spacing in the
+    # middle, then putting the books in that
     balance = money_str(member.balance)
     balance_len = len('Balance: ') + len_color_str(balance)
     expiry_len = len_color_str(member.membership.expiry)
@@ -79,8 +106,16 @@ def member_header(member, title='Member Menu'):
 
 
 def main(args):
-    global dex, member, library
+    global library # all the information about the library. 
+    global dex # information about the books. Will eventually include this in
+                # library
+    global member #if a member is selected, they will be in here
 
+
+    # the dex will eventually live in library.catalog. But right now it's a 
+    # subclass of Database, and the unit tests break if there's multiple
+    # db connections. So for now we invert the relationship and library
+    # takes the db connection from dex.
     try:
         dex = DexDB(client=program)
     except Exception as e:
@@ -89,17 +124,10 @@ def main(args):
         print(str(e))
         exit(1)
 
-    # eventually Library will replace DexDB, but not there yet
     library = library.Library(dsn=dex.dsn)
-    options, args = parser.parse_args(args)
 
-    banner(program, __release__)
-    if len(args) != 1:
-        parser.print_usage()
-        sys.exit(1)
-
-    if dex.dsn != settings.DATABASE_DSN:
-        print('(' + dex.dsn + ')')
+    if library.db.dsn != settings.DATABASE_DSN:
+        library.log.warn(f'Using database: {dex.dsn}')
         exit()
 
     main_menu('')
@@ -108,21 +136,20 @@ def main(args):
 def main_menu(line):
 
     def select(line):
+        '''
+        Select a user to work with in the user menus
+        '''
         global member
-
-        line = line.strip()
-
-        if line:
-            possibles = library.members.find(line)
-            if len(possibles) == 1:
-                member = possibles[0]
-                return
         member = specify_member(library.members, line)
         if member:
             member_menu(line)
         no_member_header()
 
     def checkin(line, pick_date=False):
+        '''
+        Basic checkin of a book, today. Select a book, see the checkout
+        and check it back in as of now.
+        '''
         no_member_header()
 
         while True:
@@ -131,7 +158,7 @@ def main_menu(line):
                 authorcomplete=dex.indices.authors.complete_checkedout,
                 titlecomplete=dex.indices.titles.complete_checkedout,
                 # TODO: this isn't currently working for books that are
-                # withdrawn but checked out
+                # withdrawn and checked out
                 title_predicate=lambda title: title.checkedout,
                 book_predicate=lambda book: book.out
                 )
@@ -139,6 +166,8 @@ def main_menu(line):
             if not book:
                 break
 
+            # This is off by default, but turned on if you call it from the
+            # advanced checkin menu.
             checkin_date = None
             if pick_date:
                 print("Specify check in date:")
@@ -157,19 +186,25 @@ def main_menu(line):
         no_member_header()
 
     def checkin_advanced(line):
+        '''
+        Checkin that lets you specify a date. Useful for bookdrop processing
+        '''
         checkin(line, pick_date=True)
 
     def newmem(line):
+        '''
+        Add a member, and let them buy a membership
+        '''
         no_member_header()
-        print("Please transfer the memeber's information from the sheet.")
+        print("Adding a new member")
 
         first = readvalidate("First Name: ").strip()
         last = readvalidate("Last Name: ").strip()
 
-        # TODO: better search function here
-        names = library.members.find(first+last)
+        # Find will split the string on the space and search for both parts
+        names = library.members.find(f'{first} {last}')
         if len(names) > 0:
-            print("The following people are already in greendex:")
+            print("The following people are already library members:")
             for n in names:
                 print("    " + str(n))
             print('Are your sure you want to continue, instead of editing a')
@@ -178,54 +213,50 @@ def main_menu(line):
                 return
         email = reademail("Email (required): ")
         phone = readphone("Phone number: ")
-        print()
-        print("Postal address that will work long-term:")
-        print()
-
         address = readaddress()
 
         if not readyes('Add this member? [' + Color.yN + '] '):
             return
 
-        newmember = members.Member(dex, first_name=first, last_name=last,
-                                   email=email, phone=phone, address=address)
+        newmember = members.Member(library.db, first_name=first,
+                                   last_name=last, email=email,
+                                   phone=phone, address=address)
         newmember.create(commit=True)
 
+        # since we're creating a member, should set that to the global
+        # so that we can check out books for them, etc.
         global member
-        member = members.Member(dex, newmember.id)
+        member = members.Member(library.db, newmember.id)
 
         print()
         print('Member added.')
         print()
 
-        if readyes(
-                'Add a membership to new member? [' + Color.yN + '] '):
+        if readyes('Add a membership to new member? [' + Color.yN + '] '):
             membership(None)
+        member_menu(line)
         no_member_header()
-        print(Color.info(members.format_name() + ' added to the members'))
 
     def display(line):
+        '''
+        List all copies of the selected book, with who has it checked out
+        '''
         no_member_header()
         title = specify(dex)
         if not title:
             return
 
-        print(title)
-        print()
-        print('HOLDINGS - If book is checked out, the member'
-              ' it is checked out to')
-        print('will be on the next line.')
         for book in title.books:
             print(book)
             if book.out:
-                print('    ', book.outto)
+                print(book.checkouts.out.member_display('     Out to: '))
         print()
 
     no_member_header()
     print('Main Menu')
     print()
 
-    rmenu([
+    recursive_menu([
         ('S', 'Select Member', select),
         ('I', 'Check In Books', checkin),
         ('B', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
@@ -239,6 +270,14 @@ def main_menu(line):
 def member_menu(line):
 
     def checkout(line, advanced=False):
+        '''
+        Check out a book for the active member
+        
+        Handles both regular and advanced checkouts. By default,
+        can only check out circulating books today to members who are in good
+        standing. If you need to violate these rules, you'll be directed to
+        the nonstandard checkout.
+        '''
         member_header(member)
         while True:
 
@@ -251,10 +290,10 @@ def member_menu(line):
                 else:
                     print(Color.warning('\n'.join(msgs)))
                     print()
-                    print(correct + ' or use Fancy Check Out.')
+                    print(correct + ' or use nonstandard  checkout.')
                     return
 
-            # Only Circulating books on non fancy checkoout
+            # Only select from circulating books unless we're using nonstandard
             if advanced or member.pseudo:
                 def title_predicate(title):
                     return any(book for book in title.books if not book.out)
@@ -273,9 +312,7 @@ def member_menu(line):
             print("Check out books for member", str(member))
             print()
             book = specify_book(
-                dex,  # predicate for not in select book_id in checkout
-                      #  where checkin_stamp is not null
-                      # is too much cpu for not enough benefit
+                library.db,
                 title_predicate=title_predicate,
                 book_predicate=book_predicate,
             )
@@ -301,9 +338,16 @@ def member_menu(line):
         member_header(member)
 
     def checkout_member_advanced(line):
+        '''
+        Invokes checkout with the advanced setting
+        '''
         checkout(line, advanced=True)
 
     def checkin_member(line, pick_date=False):
+        '''
+        Select from the member's checked out books and check one back in.
+        Lets you choose a date if you are in advanced mode
+        '''
         member_header(member)
         while True:
             if not member.checkouts.out:
@@ -325,9 +369,15 @@ def member_menu(line):
             print()
 
     def checkin_member_advanced(line):
+        '''
+        Invokes checkin with the advanced setting
+        '''
         checkin_member(line, pick_date=True)
 
     def lost(line):
+        '''
+        Marks a book lost. Sad!
+        '''
         member_header(member)
         if not member.checkouts.out:
             print(Color.warning('No books are checked out.'))
@@ -352,19 +402,26 @@ def member_menu(line):
         member_header(member)
 
     def pay_fines(line):
+        '''
+        View balance and let them choose to pay some or all of it
+        '''
         member_header(member)
         check_balance(member, print_notices=True)
 
     def unselect(line):
+        '''
+        Stop working with this member
+        '''
         global member
         member = None
         no_member_header()
         print('Main Menu')
         print()
+        # returning an explicit False lets us go up a menu level
         return False
 
     member_header(member)
-    rmenu([
+    recursive_menu([
         ('O', 'Check Out Books', checkout),
         ('N', 'Check Out Books (nonstandard)', checkout_member_advanced),
         ('I', 'Check In Books', checkin_member),
@@ -384,7 +441,15 @@ def member_menu(line):
 
 
 def viewmem(line):
-    def fin(line):
+    '''
+    Menu for viewing various histories
+    '''
+
+    def checkout_history(line):
+        member_header(member, 'Checkout History')
+        print(member.checkouts.display())
+
+    def financial_history(line):
         member_header(member, 'Financial History')
         print(tabulate(
             [('Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
@@ -392,29 +457,21 @@ def viewmem(line):
                 t.type_description, t.description)
                 for t in member.transactions]))
 
-    def history(line):
-        member_header(member, 'Checkout History')
-        print(member.checkouts.display())
-
-    def mem(line):
+    def membership_history(line):
         member_header(member, 'Membership History')
         print(tabulate(
             [("Membership History", "Keyholder", "Bought")] +
             [(str(m), str(m.created_by), str(m.created.date()))
              for m in member.membership_history]))
 
-    def back(line):
-        member_header(member)
-        return False
-
     member_header(member)
     print(member.info())
 
-    rmenu([
-        ('C', 'Check Out History', history),
-        ('F', 'Financial History', fin),
-        ('M', 'Membership History', mem),
-        ('Q', 'User Menu', back),
+    recursive_menu([
+        ('C', 'Check Out History', checkout_history),
+        ('F', 'Financial History', financial_history),
+        ('M', 'Membership History', membership_history),
+        ('Q', 'Back to User Menu', None),
         ], title="View Member:")
 
     # need to print the header for the menu we are returning to
@@ -422,12 +479,10 @@ def viewmem(line):
 
 
 def editmem(line):
-    if member.pseudo:
-        print("WARNING editing pseudo account: %s is disallowed." % (member,))
-        print("Email libcomm@mit.edu if you need to modify information")
-        print("in a pseudo user account.")
-        return
-
+    '''
+    Menu for editing the attributes of a member, adding memberships, keying
+    and committee management
+    '''
     def edit_name(line):
         member_header(member, 'Edit Member')
         print(f'Current:\n\t First Name: {member.first_name}, '
@@ -477,18 +532,6 @@ def editmem(line):
         print()
         print(member.info())
 
-    # TODO: Move this to a protected area and expose as part of keying
-    def edit_initials(line):
-        member_header(member, 'Edit Member')
-        print(f'Current: {member.key_initials}')
-        inits = readinitials().strip()
-
-        if inits:
-            member.key_initials = inits
-        member_header(member, 'Edit Member')
-        print()
-        print(member.info())
-
     def renew_membership(line):
         membership(line)
         member_header(member)
@@ -497,7 +540,7 @@ def editmem(line):
         member_header(member)
         print()
         print(member.info())
-        rmenu([
+        recursive_menu([
             ('N', 'Change Name', edit_name),
             ('E', 'Change Email', edit_email),
             ('A', 'Change Address', edit_address),
@@ -506,11 +549,17 @@ def editmem(line):
             ], title='Change Member Information')
         member_header(member)
 
-    
     member_header(member)
+
+    if member.pseudo:
+        print("WARNING editing pseudo account: %s is disallowed." % (member,))
+        print("Email libcomm@mit.edu if you need to modify information")
+        print("in a pseudo user account.")
+        return
+
     print()
     print(member.info())
-    rmenu([
+    recursive_menu([
         ('M', 'New/Renew Membership', renew_membership),
         ('E', 'Edit Member', edit_member),
         ('*', 'Star Chamber', starchamber),
@@ -521,177 +570,11 @@ def editmem(line):
     member_header(member)
 
 
-def financial(line):
-
-    def financial_header():
-        member_header(member, 'Transactions')
-
-    def donation(line):
-        financial_header()
-        print('Enter amount of donation, this will increase'
-              'the member\'s balance.')
-        amount = readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        tx = Transaction(dex, member.id, amount=amount,
-                         transaction_type='D', description=desc)
-        tx.create()
-        financial_header()
-
-    def assess_fine(line, tx_type='F'):
-        financial_header()
-        print('Enter the fine amount, this will decrease '
-              'the member\'s balance.')
-        amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        tx = Transaction(dex, member.id, amount=amount,
-                         transaction_type=tx_type, description=desc)
-        tx.create()
-        financial_header()
-
-    def assess_keyfine(line):
-        assess_fine(line, type='K')
-
-    def payment(line):
-        financial_header()
-        print('Enter the amount being paid, this will increase'
-              ' the member\'s balance.')
-        amount = readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        print(f'Adding {money_str(amount)} to cash drawer')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        cash_tx = CashTransaction(dex, member.id, member.normal_str,
-                                  amount=amount, transaction_type='P',
-                                  description=desc)
-        cash_tx.create()
-        financial_header()
-
-    def lhe_transaction(line):
-        financial_header()
-        print('Enter amount (negative for fines, positive for credit).')
-        amount = readmoney()
-        desc = read('Enter description: ', history='description')
-
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        tx = Transaction(dex, member.id, amount=amount,
-                         transaction_type='L', description=desc)
-        tx.create()
-        financial_header()
-
-    def pay_membership(line):
-        financial_header()
-        print('Warning, this does not update the member\'s membership.'
-              ' It is only used when the member previously bought a'
-              ' membership and is now paying. Use the Edit Member menu'
-              ' to add a new membership; They can pay there.')
-        print('Enter an amount; this will decrease the member\'s balance.')
-        amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        tx = Transaction(dex, member.id, amount=amount,
-                         transaction_type='L', description=desc)
-        tx.create()
-        financial_header()
-
-    def reimbursement(line):
-        financial_header()
-        print('Enter the amount the member is being reimbursed, this'
-              ' will decrease the member\'s balance.')
-        amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        print(f'Adding {money_str(amount)} to cash drawer')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
-            return
-        cash_tx = CashTransaction(dex, member.id, member.normal_str,
-                                  amount=amount, transaction_type='R',
-                                  description=desc)
-        cash_tx.create()
-        financial_header()
-
-    def void_transaction(line):
-        financial_header()
-        txns = get_transactions(dex, member.id, include_voided=False)
-
-        if len(txns) == 0:
-            print("No transactions to void.")
-            return
-
-        quit_item = (Color.select('Q.'), 'Back to Main Menu')
-
-        print('Non-void Transactions of ', member)
-        print(tabulate(
-            [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-            [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
-                tx.created_by, tx.created.date(),
-                tx.type_description, tx.description)
-                for (i, tx) in enumerate(txns)] +
-            [quit_item]))
-
-        num = readnumber(
-            'Select transaction to void: ', 1, len(txns) + 1, escape='Q')
-
-        if num is not None:
-            print()
-            voided = txns[num - 1].void()
-            print("Voided transactions:")
-            print(tabulate(
-                [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
-                    'Description')] +
-                [(members.Member(dex, tx.member_id).full_name,
-                  money_str(tx.amount), tx.created_by, tx.created.date(),
-                  tx.type_description, tx.description)
-                 for tx in voided]))
-        financial_header()
-
-    def advanced_financial(line):
-        financial_header()
-        menu = [
-            ('L', 'LHE', lhe_transaction),
-            ('R', 'Reimbursement', reimbursement),
-            ('V', 'Void Previous', void_transaction),
-            ('Q', 'Back to Financial Transactions', None)
-            ]
-        rmenu(menu, title="Advanced Financial Transactions")
-        financial_header()
-
-    financial_header()
-    menu = [
-        ('D', 'Donation for Fine Credit', donation),
-        ('F', 'Assess Fine', assess_fine),
-        ('K', 'Assess Keyfine', assess_keyfine),
-        ('P', 'Payment', payment),
-        ('A', 'Advanced Transactions', advanced_financial),
-        ('Q', 'Back to Main Menu', None)
-        ]
-    rmenu(menu, title='Financial Transactions')
-
-    member_header(member)
-
-
 def starchamber(line):
-
+    '''
+    Key/dekey the active member, add and remove from committees, and merge
+    a duplicate member with this one.
+    '''
     def key(line):
         print('Keying', member.full_name)
         role = None
@@ -728,7 +611,7 @@ def starchamber(line):
     def add_to_committee(line):
         committee = read(
             'Committee? ',
-            callback=lambda: members.star_cttes(dex) + ['*chamber'],
+            callback=lambda: members.star_cttes(library.db) + ['*chamber'],
             ).lower().strip()
         if not committee:
             return
@@ -737,7 +620,8 @@ def starchamber(line):
         print(f'{member.full_name} is now in {list_clean(member.committees)}')
         committee_members = list_clean(str(m.full_name)
                                        for m in
-                                       members.role_members(dex, committee))
+                                       members.role_members(library.db,
+                                                            committee))
         print(f'{committee} members: {committee_members}')
 
     def remove_committee(line):
@@ -750,13 +634,27 @@ def starchamber(line):
         member.revoke(committee)
         member_header(member, 'Star Chamber')
         print(f'{member.full_name} is removed from {committee}')
-        committee_members = members.role_members(dex, committee)
+        committee_members = members.role_members(library.db, committee)
 
         if committee_members:
             memlist = list_clean(str(m.full_name) for m in committee_members)
             print(f'{committee} members: {memlist}')
         else:
             print(f'{committee} now has no members')
+
+    def merge(line):
+        print('User entry that is merging with this one')
+        other = specify_member(library.members, line)
+        if other is None:
+            return
+        if other.id == member.id:
+            print('Merge target must differ from merge subject')
+            return
+
+        other_name = other.full_name
+        member.merge(other)
+        member_header()
+        print(f'Merged {other_name} into {member.full_name}')
 
     def menu_options():
         if not member.key_initials:
@@ -771,16 +669,227 @@ def starchamber(line):
                 ('R', 'Remove this member from a committee', remove_committee),
                 ('Q', 'Back to Other Menu', None),
                 ]
-        
+
     member_header(member)
 
-    rmenu(menu_options, title='Star Chamber')
+    recursive_menu(menu_options, title='Star Chamber')
+    member_header(member)
+
+
+def financial(line):
+    '''
+    Perform various financial transactions.
+    '''
+    def financial_header():
+        '''
+        Normal member header with a different title
+        '''
+        member_header(member, 'Transactions')
+
+    def donation(line):
+        '''
+        Book donation for fine credit
+        '''
+        financial_header()
+        print('Enter amount of donation, this will increase'
+              'the member\'s balance.')
+        amount = readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(library.db, member.id, amount=amount,
+                         transaction_type='D', description=desc)
+        tx.create()
+        financial_header()
+
+    def assess_fine(line, tx_type='F'):
+        '''
+        Add a fine. 
+        '''
+        financial_header()
+        print('Enter the fine amount, this will decrease '
+              'the member\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(library.db, member.id, amount=amount,
+                         transaction_type=tx_type, description=desc)
+        tx.create()
+        financial_header()
+
+    def assess_keyfine(line):
+        '''
+        the same as assess_fine, but with a Keyholder fine type
+        Unclear why those are different.
+        '''
+        assess_fine(line, type='K')
+
+    def payment(line):
+        '''
+        Accept cash from a member to get their balance healthy
+        '''
+        financial_header()
+        print('Enter the amount being paid, this will increase'
+              ' the member\'s balance.')
+        amount = readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        print(f'Adding {money_str(amount)} to cash drawer')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        cash_tx = CashTransaction(library.db, member.id, member.normal_str,
+                                  amount=amount, transaction_type='P',
+                                  description=desc)
+        cash_tx.create()
+        financial_header()
+
+    def lhe_transaction(line):
+        '''
+        LHE gets to just do arbitrary transactions
+        '''
+        financial_header()
+        print('Enter amount (negative for fines, positive for credit).')
+        amount = readmoney()
+        desc = read('Enter description: ', history='description')
+
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(library.db, member.id, amount=amount,
+                         transaction_type='L', description=desc)
+        tx.create()
+        financial_header()
+
+    def pay_membership(line):
+        '''
+        Usually don't want to be here, as you get a chance tp pay while
+        creating a membership. But if you didn't pay at that time, you can
+        do it here.'
+        '''
+        financial_header()
+        print('Warning, this does not update the member\'s membership.'
+              ' It is only used when the member previously bought a'
+              ' membership and is now paying. Use the Edit Member menu'
+              ' to add a new membership; They can pay there.')
+        print('Enter an amount; this will decrease the member\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print('Adding %s to account of %s.' % (money_str(amount), member))
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        tx = Transaction(library.db, member.id, amount=amount,
+                         transaction_type='L', description=desc)
+        tx.create()
+        financial_header()
+
+    def reimbursement(line):
+        '''
+        A bit of a misnomer. Takes cash out of the mitsfs account and returns
+        it to the member. But also decreases that member's balance as a result.
+        '''
+        financial_header()
+        print('Enter the amount the member is being reimbursed, this'
+              ' will decrease the member\'s balance.')
+        amount = -readmoney().copy_abs()
+        desc = read('Enter description: ', history='description')
+
+        print(f'Adding {money_str(amount)} to account of {member}.')
+        print(f'Adding {money_str(amount)} to cash drawer')
+        if not readyes(
+                'Commit the transaction? [' + Color.yN + '] '):
+            return
+        cash_tx = CashTransaction(library.db, member.id, member.normal_str,
+                                  amount=amount, transaction_type='R',
+                                  description=desc)
+        cash_tx.create()
+        financial_header()
+
+    def void_transaction(line):
+        '''
+        Voids a previous transaction. This gets a little complicated, because 
+        it also needs to void any linked transactions
+        '''
+        financial_header()
+        txns = get_transactions(library.db, member.id, include_voided=False)
+
+        if len(txns) == 0:
+            print("No transactions to void.")
+            return
+
+        # generate a selectable list of previous transactions
+        quit_item = (Color.select('Q.'), 'Back to Main Menu')
+        print('Non-void Transactions of ', member)
+        print(tabulate(
+            [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
+            [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
+                tx.created_by, tx.created.date(),
+                tx.type_description, tx.description)
+                for (i, tx) in enumerate(txns)] +
+            [quit_item]))
+
+        num = readnumber(
+            'Select transaction to void: ', 1, len(txns) + 1, escape='Q')
+
+        if num is not None:
+            print()
+            voided = txns[num - 1].void()
+            print("Voided transactions:")
+            print(tabulate(
+                [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
+                    'Description')] +
+                [(members.Member(library.db, tx.member_id).full_name,
+                  money_str(tx.amount), tx.created_by, tx.created.date(),
+                  tx.type_description, tx.description)
+                 for tx in voided]))
+        financial_header()
+
+    def advanced_financial(line):
+        financial_header()
+        menu = [
+            ('L', 'LHE', lhe_transaction),
+            ('R', 'Reimbursement', reimbursement),
+            ('V', 'Void Previous', void_transaction),
+            ('Q', 'Back to Financial Transactions', None)
+            ]
+        recursive_menu(menu, title="Advanced Financial Transactions")
+        financial_header()
+
+    financial_header()
+    menu = [
+        ('D', 'Donation for Fine Credit', donation),
+        ('F', 'Assess Fine', assess_fine),
+        ('K', 'Assess Keyfine', assess_keyfine),
+        ('P', 'Payment', payment),
+        ('A', 'Advanced Transactions', advanced_financial),
+        ('Q', 'Back to Main Menu', None)
+        ]
+    recursive_menu(menu, title='Financial Transactions')
+
     member_header(member)
 
 
 def admin(line):
+    '''
+    Miscellaneous star chamber functions
+    '''
 
     def invalid_logins(line):
+        '''
+        We shouldn't have any database logins that don't correspond to
+        keyholders. This menu will tell you who they are.
+        '''
+
         no_member_header()
         logins = members.invalid_logins(library.db)
         if logins:
@@ -791,6 +900,10 @@ def admin(line):
             print("No logins are unassociated. Gold star.")
 
     def committee_list(line):
+        '''
+        Committees managed by this system (since they define access)
+        and who is in them.
+        '''
         no_member_header()
         for committee in members.star_committees(library.db):
             print(committee, list_clean(
@@ -798,14 +911,20 @@ def admin(line):
                 for member in members.role_members(library.db, committee)))
 
     def keylist(line):
+        '''
+        List of keyholders and what committees they are on
+        '''
         no_member_header()
         for key in members.role_members(library.db, 'keyholders'):
             print(key.full_name, list_clean(key.committees))
         print()
 
     def vgg(line):
+        '''
+        List all the overdue books
+        '''
         no_member_header()
-        checkouts = Checkouts(dex)
+        checkouts = Checkouts(library.db)
         for email, name, overdue in checkouts.vgg():
             print(name, '<' + email + '>')
             for stamp, code, title in overdue:
@@ -819,13 +938,13 @@ def admin(line):
         ('V', 'Overdue Books', vgg),
         ('Q', 'Back to Main Menu', None)
         ]
-    rmenu(menu, title='Admin')
+    recursive_menu(menu, title='Admin')
     no_member_header()
 
 
 def list_clean(x):
     '''
-    prints (list1, list2) unless it's empty
+    prints (list item 1, list item 2) unless it's empty
 
     Parameters
     ----------
@@ -896,9 +1015,9 @@ def check_balance(member, desc="Payment", print_notices=False):
                 prompt='Amount they are paying: ')
 
             desc = desc + ' by ' + member.normal_str
-            tx = CashTransaction(dex, member.member_id, member.normal_str,
-                                 amount=amount, transaction_type='P',
-                                 description=desc)
+            tx = CashTransaction(library.db, member.member_id,
+                                 member.normal_str, amount=amount,
+                                 transaction_type='P', description=desc)
             tx.create()
 
     elif print_notices:
@@ -907,8 +1026,8 @@ def check_balance(member, desc="Payment", print_notices=False):
     return member.balance >= 0
 
 
-def rmenu(*args, **kw):
-    return menu(*args, cleanup=dex.db.rollback, **kw)
+def recursive_menu(*args, **kw):
+    return ui.menu(*args, cleanup=library.db.rollback, **kw)
 
 
 if __name__ == '__main__':

@@ -301,7 +301,7 @@ def readphone(prompt):
 
 
 def readaddress():
-    new = readlines('New address (End with a dot on a line by itself):')
+    new = readlines('Address (End with a dot on a line by itself):')
     return new
 
 
@@ -478,7 +478,7 @@ def specify_book(
                 for (x, y) in itertools.groupby(
                     (i for i in book.books if book_predicate(i)),
                     lambda x: (x.shelfcode, x.barcodes, x.outto))]
-     
+
             n = None
             if len(books) == 0:
                 print("Nothing found, Try again")

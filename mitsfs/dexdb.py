@@ -701,7 +701,7 @@ class DexDB(db.Database):
             return []
 
         if len(pats) == 1 and pats[0][0] != '^':
-            # patterns anchored at the other end will produce weird results.
+            # patterns anchored at the other end will ce weird results.
             # I can't think of a reason to do that, and it won't do what
             # anyone will expect anyway, so....
             return self.xsearch(
