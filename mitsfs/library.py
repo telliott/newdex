@@ -5,6 +5,7 @@ from mitsfs.core.db import Database
 from mitsfs.core import settings
 
 from mitsfs.dex.shelfcodes import Shelfcodes
+from mitsfs.dex.catalog import Catalog
 
 from mitsfs.circulation.membership_types import MembershipTypes
 from mitsfs.circulation.timewarps import Timewarps
@@ -42,8 +43,8 @@ class Library():
         return Members(self.db)
 
     @property
-    def books(self):
-        pass
+    def catalog(self):
+        return Catalog(self.db)
 
     @property
     def log(self):

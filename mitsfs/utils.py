@@ -1,28 +1,14 @@
 #!/usr/bin/python
-'''
-assorted utility functions
-
-'''
-
-
-import re
 import time
 import logging
 
 
-__all__ = [
-    'PropDict', 'timestamp', 'get_logfiles',
-    ]
-
-
-
-
 class FieldTuple(tuple):
     '''
-    A pretty standard tuple class, but it splits the strings provided on 
+    A pretty standard tuple class, but it splits the strings provided on
     | (the standard delimeter for most dex fields)
     '''
-    
+
     def __new__(cls, x=None):
         if x is None:
             return super().__new__(cls)
@@ -39,9 +25,12 @@ class FieldTuple(tuple):
         return 'FieldTuple(' + super(FieldTuple, self).__repr__() + ')'
 
 
-
 class PropDict(dict):
-    "strongly inspired by web.py's Storage"
+    '''
+    A dictionary subclass that allows access through both keys and
+    properties.
+    '''
+
     def __getattr__(self, k):
         return self[k]
 

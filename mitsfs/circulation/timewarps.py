@@ -24,12 +24,12 @@ class Timewarp(db.Entry):
         None.
 
         '''
-        super(Timewarp, self).__init__(
+        super().__init__(
             'timewarp', 'timewarp_id', db, timewarp_id, **kw)
 
-    timewarp_id = db.ReadField('timewarp_id')
-    start = db.Field('timewarp_start', coerce_datetime_no_timezone)
-    end = db.Field('timewarp_end', coerce_datetime_no_timezone)
+    timewarp_id = db.InfoField('timewarp_id')
+    start = db.InfoField('timewarp_start', coerce_datetime_no_timezone)
+    end = db.InfoField('timewarp_end', coerce_datetime_no_timezone)
 
     def __str__(self):
         return f'Timewarp({self.start} - {self.end})'

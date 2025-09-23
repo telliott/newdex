@@ -266,7 +266,6 @@ class DexLine(object):
         return (self.authors, self.titles) < (other.authors, other.titles)
 
 
-
 class Dex(object):
     def __init__(self, source=None, zerok=False):
         self.indexdata = [('authors', {}, None),

@@ -155,10 +155,10 @@ def main_menu(line):
         while True:
             book = specify_book(
                 dex,
-                authorcomplete=dex.indices.authors.complete_checkedout,
-                titlecomplete=dex.indices.titles.complete_checkedout,
+                authorcomplete=library.catalog.authors.complete_checkedout,
+                titlecomplete=library.catalog.titles.complete_checkedout,
                 # TODO: this isn't currently working for books that are
-                # withdrawn and checked out
+                # withdrawn while checked out
                 title_predicate=lambda title: title.checkedout,
                 book_predicate=lambda book: book.out
                 )
@@ -312,7 +312,7 @@ def member_menu(line):
             print("Check out books for member", str(member))
             print()
             book = specify_book(
-                library.db,
+                dex,
                 title_predicate=title_predicate,
                 book_predicate=book_predicate,
             )

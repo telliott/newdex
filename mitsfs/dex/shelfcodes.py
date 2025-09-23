@@ -91,11 +91,24 @@ parse_shelfcodes = None
 class Shelfcodes(dict):
 
     def __init__(self, db):
+        super().__init__()
+
+        self.db = db
+        self.load_from_db()
+    '''
+    Making a separate db load method for easier mocking
+    '''
+
+    def load_from_db(self):
+        c = self.db.getcursor()
+        c.execute("select shelfcode_id, shelfcode, shelfcode_description,"
+                  " shelfcode_type, replacement_cost, shelfcode_class,"
+                  " shelfcode_doublecode"
+                  " from shelfcode where shelfcode_type != 'D'")
         # keep track of these two lists to build the matching regex
         double = []
         normal = []
-        super().__init__()
-        for row in self.load_from_db(db):
+        for row in c.fetchall():
             (s_id, shelfcode, description, ctype,
              cost, code_class, is_double) = row
             s = Shelfcode(db, s_id, code=shelfcode, description=description,
@@ -106,20 +119,7 @@ class Shelfcodes(dict):
                 double.append(shelfcode)
             else:
                 normal.append(shelfcode)
-        # This line really likes to indent wrongly. Lines up with the for
         Shelfcodes.generate_shelfcode_regex(normal, double, True)
-
-    '''
-    Making a separate db load method for easier mocking
-    '''
-
-    def load_from_db(self, db):
-        c = db.getcursor()
-        c.execute("select shelfcode_id, shelfcode, shelfcode_description,"
-                  " shelfcode_type, replacement_cost, shelfcode_class,"
-                  " shelfcode_doublecode"
-                  " from shelfcode where shelfcode_type != 'D'")
-        return c.fetchall()
 
     '''
     Generates the correct regex to evaluate shelfcodes. Static method so that

@@ -45,7 +45,7 @@ def dumpcode(code):
                 type_ + ':' + name
                 for (type_, name) in
                 d.getcursor().execute(
-                    '''select title_type, title_name
+                    '''select concat_ws('=',title_name, alternate_name)
                        from title_title
                        where title_id=%s
                        order by order_title_by''',

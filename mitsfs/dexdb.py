@@ -34,7 +34,7 @@ from io import open
 
 
 __all__ = [
-    'DexDB', 'Ambiguity', 'dg', 'Book', 'Title', 'CirculationException',
+    'DexDB', 'Ambiguity', 'Book', 'Title', 'CirculationException',
     'DataError',
     ]
 
@@ -47,7 +47,6 @@ def gensym():
     return ('G%04d' % next(gensym_seed))
 
 
-NOTERE = re.compile(r'(.*)\((.*)\)')
 
 
 class Ambiguity(Exception):
@@ -57,14 +56,15 @@ class Ambiguity(Exception):
 class CirculationException(Exception):
     pass
 
-
-def notesplit(s):
-    if s[-1] == ')':
-        m = NOTERE.match(s)
-        if m:
-            name, note = m.groups()
-            return name.strip(), note.strip()
-    return s, ''
+# appears to be entriely unused.
+# NOTERE = re.compile(r'(.*)\((.*)\)')
+# def notesplit(s):
+#     if s[-1] == ')':
+#         m = NOTERE.match(s)
+#         if m:
+#             name, note = m.groups()
+#             return name.strip(), note.strip()
+#     return s, ''
 
 
 class Series(db.Entry):
@@ -72,25 +72,24 @@ class Series(db.Entry):
         super(Series, self).__init__(
             'series', 'series_id', db, series_id, **kw)
 
-    created = db.ReadField('series_created')
-    created_by = db.ReadField('series_created_by')
-    created_with = db.ReadField('series_created_with')
-    modified = db.ReadField('series_modified')
-    modified_by = db.ReadField('series_modified_by')
-    modified_with = db.ReadField('series_modified_with')
     name = db.Field('series_name')
-    comment = db.Field('series_comment')
+
+    # created = db.ReadField('series_created')
+    # created_by = db.ReadField('series_created_by')
+    # created_with = db.ReadField('series_created_with')
+    # modified = db.ReadField('series_modified')
+    # modified_by = db.ReadField('series_modified_by')
+    # modified_with = db.ReadField('series_modified_with')
 
     def __len__(self):
         c = self.db.getcursor()
-        c.execute(
+        return c.selectvalue(
             'select count(title_id)' +
             ' from title' +
             '  natural join title_series' +
             '  natural join series' +
             ' where series_id=%s',
             (self.id,))
-        return c.fetchone()[0]
 
     def __iter__(self):
         # sort this properly 'cus it's convenient
@@ -218,397 +217,6 @@ class Book(db.Entry):
             self.title.title_id[0], self.book_id[0], str(self))
 
 
-class SeriesIndex(object):
-    def __init__(self, dex):
-        self.dex = dex
-
-    def iterkeys(self):
-        c = self.dex.getcursor()
-        return c.execute(
-            'select distinct upper(series_name)'
-            ' from series'
-            '  natural join title_series'
-            '  natural join title'
-            '  natural join book'
-            ' where not withdrawn order by upper(series_name)')
-
-    def complete(self, s):
-        c = self.dex.getcursor()
-        return c.execute(
-            'select series_name from series'
-            ' where position(%s in upper(series_name)) = 1'
-            ' order by series_name',
-            (s.strip().upper(),))
-
-    def __getitem__(self, key):
-        c = self.dex.getcursor()
-        # sort this properly 'cus it's convenient
-        return (
-            Title(self.dex, title_id)
-            for title_id
-            in c.execute(
-                'select title_id' +
-                ' from title' +
-                '  natural join title_responsibility natural join entity' +
-                '  natural join title_title' +
-                '  natural join title_series' +
-                '  natural join series' +
-                ' where order_responsibility_by = 0 and order_title_by = 0' +
-                '  and upper(series_name) = upper(%s)' +
-                ' order by upper(entity_name), upper(title_name)',
-                (key,)))
-
-
-class TitleIndex(object):
-    def __init__(self, dex):
-        self.dex = dex
-
-    def iterkeys(self):
-        c = self.dex.getcursor()
-        # XXX rewrite to be clearer about join conditions
-        return c.execute(
-            "select t2.title_name || '=' || t1.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1"
-            " union select t1.title_name"
-            "   from title_title t1"
-            "   left join title_title t2 on"
-            "    t1.title_id = t2.title_id and"
-            "    t2.order_title_by = 1"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='='"
-            " union select t2.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1"
-            " union select title_name"
-            "  from title_title"
-            "  where order_title_by > 1")
-
-    def search(self, author):
-        c = self.dex.getcursor()
-        l, a = len(author), author
-        # XXX rewrite to be clearer about join conditions
-        return c.execute(
-            "select t2.title_name || '=' || t1.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   length(entity_name)>=%s and"
-            "   upper(substring(entity_name from 1 for %s)) = upper(%s)"
-            " union select t1.title_name"
-            "  from"
-            "   title_title t1"
-            "   left join title_title t2 on"
-            "    t1.title_id = t2.title_id and"
-            "    t2.order_title_by = 1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = r.title_id and"
-            "   length(entity_name)>=%s and"
-            "   upper(substring(entity_name from 1 for %s)) = upper(%s)"
-            " union select t2.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   length(entity_name)>=%s and"
-            "   upper(substring(entity_name from 1 for %s)) = upper(%s)"
-            " union select title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   order_title_by > 1 and"
-            "   t1.title_id = r.title_id and"
-            "   length(entity_name)>=%s and"
-            "   upper(substring(entity_name from 1 for %s)) = upper(%s)",
-            (l, l, a, l, l, a, l, l, a, l, l, a))
-
-    def complete(self, title, author=''):
-        c = self.dex.getcursor()
-        # XXX rewrite to be clearer about join conditions
-        return (i for i in c.execute(
-            "select t2.title_name || '=' || t1.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s)"
-            "    in upper(t2.title_name || '=' || t1.title_name)) = 1"
-            " union select t1.title_name"
-            "  from"
-            "   title_title t1"
-            "   left join title_title t2 on"
-            "    t1.title_id = t2.title_id and"
-            "    t2.order_title_by = 1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in upper(t1.title_name)) = 1"
-            " union select t2.title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_title t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in upper(t2.title_name)) = 1"
-            " union select title_name"
-            "  from"
-            "   title_title t1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   order_title_by > 1 and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in upper(title_name)) = 1",
-            (author, title, author, title, author, title, author, title)))
-
-    def complete_checkedout(self, title, author=''):
-        c = self.dex.getcursor()
-        # XXX rewrite to be clearer about join conditions
-        return (i for i in c.execute(
-            "with tt as ("
-            " select *"
-            "   from title_title"
-            "  where"
-            "   title_id in ("
-            "    select title_id"
-            "     from"
-            "      title_title"
-            "      natural join book"
-            "      natural join checkout"
-            "     where"
-            "      checkin_stamp is null"
-            "     group by title_id))"
-            " select t2.title_name || '=' || t1.title_name"
-            "  from"
-            "   tt t1,"
-            "   tt t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in"
-            "    upper(t2.title_name || '=' || t1.title_name)) = 1"
-            " union select t1.title_name"
-            "  from"
-            "   tt t1"
-            "   left join tt t2 on"
-            "    t1.title_id = t2.title_id and"
-            "    t2.order_title_by = 1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in upper(t1.title_name)) = 1"
-            " union select t2.title_name"
-            "  from"
-            "   tt t1,"
-            "   tt t2,"
-            "   title_responsibility r"
-            "   natural join entity"
-            "  where"
-            "   t1.order_title_by = 0 and"
-            "   t1.title_type!='=' and"
-            "   t1.title_id = t2.title_id and"
-            "   t2.order_title_by = 1 and"
-            "   t1.title_id = r.title_id and"
-            "   position(upper(%s) in upper(entity_name)) = 1 and"
-            "   position(upper(%s) in upper(t2.title_name)) = 1"
-            " union select title_name"
-            "  from"
-            "   tt t1,"
-            "   title_responsibility r"
-            "   natural join entity"
-            " where"
-            "  order_title_by > 1 and"
-            "  t1.title_id = r.title_id and"
-            "  position(upper(%s) in upper(entity_name)) = 1 and"
-            "  position(upper(%s) in upper(title_name)) = 1",
-            (author, title, author, title, author, title, author, title)))
-
-    def __getitem__(self, key):
-        c = self.dex.getcursor()
-        if '=' in key:
-            name, sortby = key.split('=')
-            args = (sortby, name)
-            # XXX rewrite to be clearer about join conditions
-            q = (
-                "select distinct t1.title_id"
-                " from"
-                "  title_title t1,"
-                "  title_title t2"
-                " where"
-                "  t1.title_type='=' and"
-                "  t1.order_title_by=0 and"
-                "  t1.title_name=%s and"
-                "  t1.title_id = t2.title_id and"
-                "  t2.order_title_by=1 and"
-                "  t2.title_name=%s"
-                )
-        else:
-            q = (
-                'select distinct title_id'
-                ' from title_title'
-                ' where'
-                '  upper(title_name) = upper(%s)'
-                )
-            args = (key,)
-        return (
-            Title(self.dex, title_id)
-            for title_id
-            in c.execute(q, args))
-
-
-class AuthorIndex(object):
-    def __init__(self, dex):
-        self.dex = dex
-
-    def iterkeys(self):
-        c = self.dex.getcursor()
-
-        return c.fetchlist(
-                'select entity_name'
-                ' from entity'
-                ' order by upper(entity_name)')
-
-    def __getitem__(self, key):
-        c = self.dex.getcursor()
-        return (
-            Title(self.dex, title_id)
-            for title_id
-            in c.execute(
-                'select distinct title_id'
-                ' from title_responsibility'
-                '  natural join entity'
-                ' where'
-                '  upper(entity_name) = upper(%s)',
-                (key,)))
-
-    def complete(self, key):
-        c = self.dex.getcursor()
-        return (i for i in c.execute(
-            'select entity_name'
-            ' from entity'
-            ' where position(upper(%s) in upper(entity_name)) = 1',
-            (key,)))
-
-    def complete_checkedout(self, key):
-        c = self.dex.getcursor()
-        return (i for i in c.execute(
-            'select entity_name'
-            ' from'
-            '  entity'
-            '  natural join title_responsibility'
-            '  natural join book'
-            '  natural join checkout'
-            ' where'
-            '  checkin_stamp is null and'
-            '  position(upper(%s) in upper(entity_name)) = 1',
-            (key,)))
-
-
-class CodeIndex(object):
-    def __init__(self, dex):
-        self.dex = dex
-
-    def iterkeys(self):
-        c = self.dex.getcursor()
-        return (
-            code + (doublecrap or '')
-            for code, doublecrap
-            in c.execute(
-                'select distinct shelfcode, doublecrap'
-                ' from book natural join shelfcode'))
-
-    def __getitem__(self, key):
-        c = self.dex.getcursor()
-        try:
-            e = Edition(key)
-            code = e.code
-            doublecrap = e.double_info
-        except InvalidShelfcode:
-            code, doublecrap = key, None
-        # sort this properly 'cus we sort of need it
-        q = (
-            'select title_id'
-            ' from title'
-            '  natural join title_responsibility natural join entity'
-            '  natural join title_title'
-            '  natural join book'
-            '  natural join shelfcode'
-            ' where order_responsibility_by = 0 and order_title_by = 0'
-            '  and upper(shelfcode) = upper(%s)'
-            )
-        a = [code]
-        if doublecrap:
-            q += ' and upper(doublecrap) = upper(%s)'
-            a += [doublecrap]
-        q += ' order by upper(entity_name), upper(title_name)'
-        return (
-            Title(self.dex, title_id)
-            for title_id
-            in c.execute(q, a))
-
-
 class DexDB(db.Database):
     codere = None
 
@@ -618,11 +226,13 @@ class DexDB(db.Database):
             ):
         super(DexDB, self).__init__(client=client, dsn=dsn)
         self.filename = self.dsn
+
+        from mitsfs.dex import indexes
         self.indices = utils.PropDict(
-            series=SeriesIndex(self),
-            titles=TitleIndex(self),
-            authors=AuthorIndex(self),
-            codes=CodeIndex(self))
+            series=indexes.SeriesIndex(self),
+            titles=indexes.TitleIndex(self),
+            authors=indexes.AuthorIndex(self),
+            codes=indexes.ShelfcodeIndex(self))
         self.shelfcodes = Shelfcodes(self)
 
     def xsearch(self, ops, conjunction='and'):
@@ -739,21 +349,22 @@ class DexDB(db.Database):
 
     def exdex(self, c, callback=lambda: None):
         authors = {}
-        for (title_id, responsibility_type, entity_name) in c.execute(
-                'select title_id, responsibility_type, entity_name'
+        for (title_id, responsibility_type, entity_name, alt) in c.execute(
+                'select title_id, responsibility_type, '
+                "  concat_ws('=', entity_name, alternate_entity_name)"
                 ' from'
                 '  title_responsibility'
                 '  natural join entity'
                 '  order by title_id, order_responsibility_by'):
             authors.setdefault(title_id, []).append(
-                (responsibility_type, entity_name))
+                (responsibility_type, entity_name, alt))
 
         titles = {}
-        for (title_id, title_type, title_name) in c.execute(
-                'select title_id, title_type, title_name'
+        for (title_id, title_name) in c.execute(
+                "select title_id, concat_ws('=', title_name, alternate_name)"
                 ' from title_title'
                 ' order by title_id, order_title_by'):
-            titles.setdefault(title_id, []).append((title_type, title_name))
+            titles.setdefault(title_id, []).append(title_name)
 
         series = {}
         for (
@@ -788,8 +399,8 @@ class DexDB(db.Database):
         count = 0
         for title_id in codes.keys():
             line = dexfile.DexLine(
-                authors=parse_dex_equals(authors[title_id]),
-                titles=parse_dex_equals(titles[title_id]),
+                authors=authors[title_id],
+                titles=titles[title_id],
                 series=[
                     ('@' if series_visible else '') +
                     series_name +
@@ -807,7 +418,6 @@ class DexDB(db.Database):
         return d
 
     def save(self):
-        # XXX
         if os.uname()[1] != 'monolith':
             raise Exception('Not saving, wrong machine')
 
@@ -933,8 +543,7 @@ class DexDB(db.Database):
                     for subrow
                     in sorted(zip(
                         row[fields.order_title_bys],
-                        row[fields.titles],
-                        row[fields.title_types]),
+                        row[fields.titles]),
                         key=lambda x: x[0])],
                 series=(
                     [
@@ -976,36 +585,40 @@ class DexDB(db.Database):
         ps = []
         ts = ''
         args = []
-        for (sortby, name) in uneq(author.split('|')):
+        for name in author.split('|'):
+            if not name:
+                continue
             t_r = gensym()
             ent = gensym()
-            ts += (
-                (' join %s using (title_id)' if ts else '%s') % (
-                    'title_responsibility %s natural join entity %s' % (
-                        t_r, ent),))
+            if not ts:
+                ts += ('title_responsibility %s natural join entity %s'
+                       % (t_r, ent))
+            else:
+                ts += (' join title_responsibility %s natural join '
+                       'entity %s using (title_id)' % (t_r, ent))
+
             ps.append(
-                "%s.responsibility_type %s '=' and"
-                " position(upper(%%s) in upper(%s.entity_name)) " %
-                (t_r, ('=' if sortby else '!='), ent) +
-                ('!= 0' if name[0] == '-' else '= 1'))
-            args.append(name if name[0] != '-' else name[1:])
-        for (sortby, name) in uneq(titlename.split('|')):
+                f'({ent}.entity_name ilike %s'
+                f' or {ent}.alternate_entity_name ilike %s)')
+            args += [f'%{name}%', f'%{name}%']
+
+        for title in titlename.split('|'):
+            if not title:
+                continue
             ttl = gensym()
             ts += (
                 (' join %s using (title_id)' if ts else '%s') %
-                ('title_title %s' % ttl,))
+                ('title_title %s' % ttl))
             ps.append(
-                "%s.title_type %s '=' and"
-                " position(upper(%%s) in upper(%s.title_name)) " %
-                (ttl, ('=' if sortby else '!='), ttl) +
-                ('!= 0' if name[0] == '-' else '= 1'))
-            args.append(name if name[0] != '-' else name[1:])
+                f'({ttl}.title_name ilike %s'
+                f' or {ttl}.alternate_name ilike %s)')
+            args += [f'%{title}%', f'%{title}%']
+
         q = (
             'select distinct title_id from ' + ts +
             ' where ' + ' and '.join(ps))
-
         return sorted(
-            (Title(self, title_id) for title_id in c.execute(q, args)),
+            (Title(self, title_id) for title_id in c.fetchlist(q, args)),
             key=lambda x: x.sortkey())
 
     def titlesearch(self, frag):
@@ -1052,10 +665,7 @@ class DexDB(db.Database):
                 "  natural join entity"
                 " where"
                 "  upper(entity_name) = upper(%s) and"
-                "  order_responsibility_by = %s" +
-                (" and responsibility_type = '='"
-                 if asortby and index == 0
-                 else ''),
+                "  order_responsibility_by = %s",
                 (name, index)))
             if not subcands:
                 return None
@@ -1069,8 +679,7 @@ class DexDB(db.Database):
                 " from title_title"
                 " where"
                 "  title_name = %s and"
-                "  order_title_by = %s" +
-                (" and title_type = '='" if tsortby and index == 0 else ''),
+                "  order_title_by = %s",
                 (name, index)))
             if not subcands:
                 return None
@@ -1150,25 +759,27 @@ class DexDB(db.Database):
         ((val,),) = c.fetchall()  # will raise in case of constraint violation
         return Series(self, val)
 
-    def get_shelfcode(self, name, c=None):
-        if c is None:
-            c = self.cursor
-        try:
-            (code_id,) = list(c.execute(
-                'select shelfcode_id from shelfcode where shelfcode=upper(%s)',
-                (name,)))
-        except ValueError:
-            raise KeyError(name)
-        return code_id
+    # def get_shelfcode(self, name, c=None):
+    #     if c is None:
+    #         c = self.cursor
+    #     try:
+    #         (code_id,) = list(c.execute(
+    #             'select shelfcode_id from shelfcode where shelfcode=upper(%s)',
+    #             (name,)))
+    #     except ValueError:
+    #         raise KeyError(name)
+    #     return code_id
 
     def replace(self, line, replacement):
+        # TODO: This doesn't handle alternate title names? The whole things is
+        # going to need a lot of work
         victim = self[line]
         title_id = victim.title_id
         # now figure out what changed and fiddle it
         # we "know" that we don't have to worry about shelfcodes
 
-        vdata = uneq(victim.authors)
-        rdata = uneq(replacement.authors)
+        vdata = victim.authors
+        rdata = replacement.authors
 
         off = 0
         for (i1, i2, j1, j2) in diff(vdata, rdata):
@@ -1206,8 +817,8 @@ class DexDB(db.Database):
                      for (i, (sortby, name)) in enumerate(rdata[j1:j2])])
             off += delta
 
-        vdata = uneq(victim.titles)
-        rdata = uneq(replacement.titles)
+        vdata = victim.titles
+        rdata = replacement.titles
 
         off = 0
         for (i1, i2, j1, j2) in diff(vdata, rdata):
@@ -1230,9 +841,9 @@ class DexDB(db.Database):
             if (j2 - j1) > 0:
                 self.cursor.executemany(
                     "insert into title_title"
-                    "  (title_id, title_name, order_title_by, title_type)"
+                    "  (title_id, title_name, alternate_name, order_title_by)"
                     " values (%s, %s, %s, %s)",
-                    [(title_id, name, i1 + off + i, '=' if sortby else 'T')
+                    [(title_id, *equal_split(name), i1 + off + i)
                      for (i, (sortby, name)) in enumerate(rdata[j1:j2])])
             off += delta
 
@@ -1286,19 +897,19 @@ class DexDB(db.Database):
         title_id = c.selectvalue(
             'insert into title default values returning title_id',
             (self.client, self.client))
+        # TODO: We don't support responsibility types here (or in general)
         c.executemany(
             "insert into title_responsibility"
-            "  (title_id, entity_id,"
-            "   order_responsibility_by, responsibility_type)"
-            " values (%s, %s, %s, %s)",
-            [(title_id, self.get_entity(name, c), order, rtype)
-             for (order, (rtype, name)) in enumerate(authors)])
+            "  (title_id, entity_id, order_responsibility_by)"
+            " values (%s, %s, %s)",
+            [(title_id, self.get_entity(name, c), order)
+             for (order, name) in enumerate(authors)])
         c.executemany(
             "insert into title_title"
-            " (title_id, title_name, order_title_by, title_type)"
+            " (title_id, title_name, alternate_name, order_title_by)"
             " values (%s, %s, %s, %s)",
-            [(title_id, name.upper(), order, ttype)
-             for (order, (ttype, name)) in enumerate(titles)])
+            [(title_id, *equal_split(name.upper()), order)
+             for (order, name) in enumerate(titles)])
         c.executemany(
             "insert into title_series"
             " (title_id, series_id, series_index,"
@@ -1411,10 +1022,8 @@ class DexDB(db.Database):
                             comment=comment)
         else:
             victim = self.newtitle(
-                [('=' if eq else '?', name) for (eq, name)
-                 in uneq(line.authors)],
-                [('=' if eq else 'T', name) for (eq, name)
-                 in uneq(line.titles)],
+                line.authors,
+                line.titles,
                 [munge_series(i) for i in line.series])
             for edition in line.codes.values():
                 for i in range(0, edition.count):
@@ -1478,21 +1087,22 @@ def diff(a, b):
         if op != 'equal']
 
 
-def uneq(tup):
-    # this function has become a crawling horror of corner cases.  I
-    # hope to be able to stop using it someday.
-    if not tup:
-        return []
-    first = tup[0]
-    rest = list(zip([False] * (len(tup) - 1), tup[1:]))
-    if not first and not rest:
-        return []
-    if first[0] == '=':
-        return [(True, first[1:])] + rest
-    if '=' in first:
-        return list(zip([True, False], reversed(first.split('=')))) + rest
-    else:
-        return [(False, first)] + rest
+# def uneq(tup):
+#     # this function has become a crawling horror of corner cases.  I
+#     # hope to be able to stop using it someday.
+#     if not tup:
+#         return []
+    
+#     first = tup[0]
+#     rest = list(zip([False] * (len(tup) - 1), tup[1:]))
+#     if not first and not rest:
+#         return []
+#     if first[0] == '=':
+#         return [(True, first[1:])] + rest
+#     if '=' in first:
+#         return list(zip([True, False], reversed(first.split('=')))) + rest
+#     else:
+#         return [(False, first)] + rest
 
 
 class Title(dexfile.DexLine, db.Entry):
@@ -1517,8 +1127,9 @@ class Title(dexfile.DexLine, db.Entry):
     @property
     @db.cached
     def authors(self):
+        #TODO: Figure out what to do with responsibility_types
         sql = ("select"
-               "  responsibility_type, entity_name"
+               "  concat_ws('=', entity_name, alternate_entity_name)"
                " from"
                "  title_responsibility"
                "  natural join entity"
@@ -1526,19 +1137,19 @@ class Title(dexfile.DexLine, db.Entry):
                " order by order_responsibility_by")
 
         authors = self._cache_query('authors', sql)
-        return utils.FieldTuple(parse_dex_equals(authors))
+        return utils.FieldTuple([a[0] for a in authors])
 
     @property
     @db.cached
     def titles(self):
         sql = ("select"
-               "  title_type, title_name"
+               "  concat_ws('=', title_name, alternate_name)"
                " from title_title"
                " where title_id = %s"
                " order by order_title_by")
 
         titles = self._cache_query('titles', sql)
-        return utils.FieldTuple(parse_dex_equals(titles))
+        return utils.FieldTuple([t[0] for t in titles])
 
     @property
     @db.cached
@@ -1703,59 +1314,80 @@ class Title(dexfile.DexLine, db.Entry):
             '  title_id = %s',
             (self.id,))
 
-    created = db.ReadField('title_created')
-    created_by = db.ReadField('title_created_by')
-    created_with = db.ReadField('title_created_with')
-    modified = db.ReadField('title_modified')
-    modified_by = db.ReadField('title_modified_by')
-    modified_with = db.ReadField('title_modified_with')
+    # created = db.ReadField('title_created')
+    # created_by = db.ReadField('title_created_by')
+    # created_with = db.ReadField('title_created_with')
+    # modified = db.ReadField('title_modified')
+    # modified_by = db.ReadField('title_modified_by')
+    # modified_with = db.ReadField('title_modified_with')
 
     comment = db.Field('title_comment')
     lost = db.Field('title_lost')
 
 
-# Can't find anywhere this is used. Looks like it was a helper function
-# where you could give it a dex and a grep and it would print lines for you
-def dg(d, q):
-    lines = [str(i) for i in d.grep(q)]
-    for i in lines:
-        print(i)
-    return len(lines)
-
-
-def parse_dex_equals(elements):
+def equal_split(string):
     '''
-    Take the list of type-string tuples pulled out of the db, merge the lines
-    with '=' as the type and return the resulting list of strings. Used to do
-    title and author equivalency.
-
-    Note that this is barely used for authors and probably not worth
-    maintaining
+    splits a string into parts on either side of an = sign. But if there's
+    no = sign, forces an empty string
 
     Parameters
     ----------
-    elements : list[(type, string)]
-        a list of tuples containing a type (we only care about '=') and the
-        associated string (a title or an author)
+    string : str
+        title/author string to be splt.
 
     Returns
     -------
-    list(string)
-        A list of all the titles/authors with the = rows merged.
+    list (str):
+        a list with minimum two elements
 
     '''
+    result = string.split('=')
+    if len(result) == 1:
+        result.append(None)
+    return result
 
-    element_type, element_string = elements[0]
+# Can't find anywhere this is used. Looks like it was a helper function
+# where you could give it a dex and a grep and it would print lines for you
+# def dg(d, q):
+#     lines = [str(i) for i in d.grep(q)]
+#     for i in lines:
+#         print(i)
+#     return len(lines)
 
-    # if it's the = type, that means that there's a second row to follow
-    # that should be merged in with the first as an equivalent
-    if element_type == '=':
-        second_element_type, second_element_string = elements[1]
-        elements = [(second_element_type, second_element_string +
-                     '=' + element_string)] + elements[2:]
 
-    # ditch the types and return a list of the titles/authors
-    return [s for (t, s) in elements]
+# def parse_dex_equals(elements):
+#     '''
+#     Take the list of type-string tuples pulled out of the db, merge the lines
+#     with '=' as the type and return the resulting list of strings. Used to do
+#     title and author equivalency.
+
+#     Note that this is barely used for authors and probably not worth
+#     maintaining
+
+#     Parameters
+#     ----------
+#     elements : list[(type, string)]
+#         a list of tuples containing a type (we only care about '=') and the
+#         associated string (a title or an author)
+
+#     Returns
+#     -------
+#     list(string)
+#         A list of all the titles/authors with the = rows merged.
+
+#     '''
+
+#     element_type, element_string = elements[0]
+
+#     # if it's the = type, that means that there's a second row to follow
+#     # that should be merged in with the first as an equivalent
+#     if element_type == '=':
+#         second_element_type, second_element_string = elements[1]
+#         elements = [(second_element_type, second_element_string +
+#                      '=' + element_string)] + elements[2:]
+
+#     # ditch the types and return a list of the titles/authors
+#     return [s for (t, s) in elements]
 
 
 # class Shelfcode(db.Entry):
@@ -1805,7 +1437,6 @@ def parse_dex_equals(elements):
 #         return ShelfcodeTuple(
 #             desc, type, cost, class_, double,
 #             ((tuple(hwith), hcount) if type == 'C' else ()))
-#     # XXX this should really be a dict of Shelfcode objects?
 #     self.shelfcodes = {
 #         x[0]: process(x[1:])
 #         for x in self.getcursor().execute(

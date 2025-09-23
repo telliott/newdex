@@ -195,6 +195,7 @@ create table entity (
        entity_id integer default nextval('id_seq') not null primary key,
        -- aka integer references entity(entity_id),
        entity_name text unique not null,
+       alternate_entity_name text,
        entity_created timestamp with time zone default current_timestamp not null,
        entity_created_by varchar(64) default current_user not null,
        entity_created_with varchar(64) default 'SQL' not null,
@@ -224,7 +225,6 @@ grant select on title_responsibility_type to public;
 grant insert, update, delete on title_responsibility_type to libcomm;
 
 insert into title_responsibility_type values ('?', 'Unspecified');
-insert into title_responsibility_type values ('=', 'Sort As');
 insert into title_responsibility_type values ('A', 'Author');
 insert into title_responsibility_type values ('E', 'Editor');
 insert into title_responsibility_type values ('P', 'Publisher');
@@ -252,24 +252,12 @@ grant select on title_responsibility to public;
 grant insert, update, delete on title_responsibility to panthercomm;
 
 
-create table title_title_type (
-       title_type char(1) not null primary key,
-       tityle_type_description text);
-
-grant select on title_title_type to public;
-grant insert, update, delete on title_title_type to libcomm;
-
-insert into title_title_type values ('=', 'Sort As');
-insert into title_title_type values ('T', 'Title');
-
-
 create table title_title (
        title_id integer not null references title,
        title_name text not null,
+       alternate_name text,
        order_title_by integer not null default 0,
-       title_type char(1) default 'T' not null references title_title_type,
-       unique (title_id, order_title_by),
-       check (title_type != '=' or order_title_by = 0));
+       unique (title_id, order_title_by));
 
 create trigger title_title_update
        before insert or update or delete on title_title
@@ -285,7 +273,6 @@ grant insert, update, delete on title_title to panthercomm;
 create table series (
        series_id integer default nextval('id_seq') not null primary key,
        series_name text not null,
-       series_comment text,
        series_created timestamp with time zone default current_timestamp not null,
        series_created_by varchar(64) default current_user not null,
        series_created_with varchar(64) default 'SQL' not null,
@@ -505,8 +492,7 @@ create or replace view pinkdex as select * from
    group by title_id) as authors
   natural join
   (select title_id,
-   array_agg(title_name) as titles,
-   array_agg(title_type) as title_types,
+   array_agg(concat_ws('=', title_name, alternate_name)) as titles,
    array_agg(order_title_by) as order_title_bys
    from title_title
    group by title_id) as titles
@@ -900,6 +886,5 @@ create trigger timewarp_log
 
 grant select on timewarp to keyholders;
 grant insert, update, delete on timewarp to "*chamber";
-
 
 reset role;
