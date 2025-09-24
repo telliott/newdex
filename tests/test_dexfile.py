@@ -59,6 +59,8 @@ class DexfileTest(unittest.TestCase):
         self.assertEqual('FOO', deat('@FOO'))
         self.assertEqual('FOO', deat('FOO'))
 
+    # rall stats calls in here are eplaced by
+    # library.catalog.shelfcodes.stats()
     def testDex(self):
         Shelfcodes.generate_shelfcode_regex(['P', 'H', 'C/P'], [], force=True)
         d = Dex()

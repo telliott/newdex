@@ -3,10 +3,11 @@
 import sys
 
 from mitsfs.ui import read
-from mitsfs.dexdb import DexDB, Title
+from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.dex.Shelfcodes import Shelfcodes
+from mitsfs.dex.title import Title
 
 
 

@@ -41,6 +41,7 @@ class DexDBTest(Case):
 
             self.assertEqual(
                 ['BOOK<THOR: THE THORENING<<P'],
+                # replace this with library.catalog.title.search
                 [str(x) for x in d.titlesearch('thor')])
         finally:
             d.db.close()

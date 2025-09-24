@@ -1,5 +1,5 @@
-from mitsfs.dexdb import Title
 from mitsfs.dex.editions import Edition, InvalidShelfcode
+from mitsfs.dex.title import Title
 
 
 class SeriesIndex(object):
@@ -16,19 +16,20 @@ class SeriesIndex(object):
             '  natural join book'
             ' where not withdrawn order by upper(series_name)')
 
-    def complete(self, s):
+    def search(self, series):
         c = self.db.getcursor()
         return c.fetchlist(
-            'select series_name from series'
-            ' where position(%s in upper(series_name)) = 1'
-            ' order by series_name',
-            (s.strip().upper(),))
+            "select distinct series_id"
+            " from series"
+            " where"
+            "  series_name ilike %s",
+            (f'{series}%',))
 
     def __getitem__(self, key):
         c = self.db.getcursor()
         # sort this properly 'cus it's convenient
         return (
-            Title(self.db, title_id)
+            Title(self.db, title_id[0])
             for title_id
             in c.execute(
                 'select title_id' +
@@ -42,6 +43,14 @@ class SeriesIndex(object):
                 ' order by upper(entity_name), upper(title_name)',
                 (key,)))
 
+    def complete(self, s):
+        c = self.db.getcursor()
+        return c.fetchlist(
+            'select series_name from series'
+            ' where position(%s in upper(series_name)) = 1'
+            ' order by series_name',
+            (s.strip().upper(),))
+
 
 class TitleIndex(object):
     def __init__(self, db):
@@ -52,18 +61,27 @@ class TitleIndex(object):
         return c.fetchlist("select CONCAT_WS('=', title_name, alternate_name)"
                            " from title_title")
 
-    # search by author only used in specify
-    def search(self, author):
+    def search(self, title):
         c = self.db.getcursor()
-        return c.execute(
-            "select distinct(CONCAT_WS('=', title_name, alternate_name))"
+        return c.fetchlist(
+            "select distinct title_id"
             " from title_title"
-            " natural join title_responsibility"
-            " natural join entity"
             " where"
-            "  entity_name ilike %s"
-            "  or alternate_entity_name ilike %s",
-            (f'{author}%', f'{author}%'))
+            "  title_name ilike %s",
+            (f'{title}%',))
+
+    def __getitem__(self, key):
+        c = self.db.getcursor()
+        # if they've passed in full title, including the alternate, strip it
+        if '=' in key:
+            key, _ = key.split('=')
+        return (
+            Title(self.db, title_id[0])
+            for title_id
+            in c.execute('select distinct title_id'
+                         ' from title_title'
+                         ' where upper(title_name) = upper(%s)',
+                         (key,)))
 
     def complete(self, title, author=''):
         c = self.db.getcursor()
@@ -95,18 +113,18 @@ class TitleIndex(object):
             "   position(upper(%s) in alternate_name) = 1)",
             (author, title, title))
 
-    def __getitem__(self, key):
+    # search by author only used in specify
+    def search_by_author(self, author):
         c = self.db.getcursor()
-        # if they've passed in full title, including the alternate, strip it
-        if '=' in key:
-            key, _ = key.split('=')
-        return (
-            Title(self.db, title_id)
-            for title_id
-            in c.fetchlist('select distinct title_id'
-                           ' from title_title'
-                           ' where upper(title_name) = upper(%s)',
-                           (key,)))
+        return c.fetchlist(
+            "select distinct(CONCAT_WS('=', title_name, alternate_name))"
+            " from title_title"
+            " natural join title_responsibility"
+            " natural join entity"
+            " where"
+            "  entity_name ilike %s"
+            "  or alternate_entity_name ilike %s",
+            (f'{author}%', f'{author}%'))
 
 
 class AuthorIndex(object):
@@ -120,10 +138,19 @@ class AuthorIndex(object):
                 ' from entity'
                 ' order by upper(entity_name)')
 
+    def search(self, author):
+        c = self.db.getcursor()
+        return c.fetchlist(
+            "select distinct entity_id"
+            " from entity"
+            " where"
+            "  entity_name ilike %s",
+            (f'{author}%',))
+
     def __getitem__(self, key):
         c = self.db.getcursor()
         return (
-            Title(self.db, title_id)
+            Title(self.db, title_id[0])
             for title_id
             in c.execute(
                 'select distinct title_id'
@@ -196,6 +223,16 @@ class ShelfcodeIndex(object):
             a += [doublecrap]
         q += ' order by upper(entity_name), upper(title_name)'
         return (
-            Title(self.db, title_id)
+            Title(self.db, title_id[0])
             for title_id
             in c.execute(q, a))
+
+    def stats(self):
+        c = self.db.getcursor()
+        return dict(c.execute(
+            "select distinct shelfcode, count(shelfcode)"
+            " from"
+            "  book"
+            "  natural join shelfcode"
+            " where not withdrawn"
+            " group by shelfcode"))

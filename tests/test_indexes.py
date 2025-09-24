@@ -100,24 +100,22 @@ class IndexesTest(Case):
                 (titleids[5], loki, 1))
 
             # test the shelfcode index
-            self.assertEqual(10, len([i for i in
-                                      library.catalog.editions['S']]))
+            self.assertEqual(10, len(list(library.catalog.editions['S'])))
 
             self.assertEqual(1, len(library.catalog.editions.keys()))
 
+            stats = library.catalog.editions.stats()
+            self.assertEqual(1, len(stats.keys()))
+            self.assertEqual(10, stats['S'])
+
             # test the author index
-            self.assertEqual(6, len([i for i in
-                                     library.catalog.authors['ODINSON, LOKI']]
-                                    ))
-
-            self.assertEqual(5, len([i for i in
-                                     library.catalog.authors[thor_name]]
-                                    ))
-
-            self.assertEqual(6,
-                             len([i for i in
-                                  library.catalog.authors['PRINCE OF MISCHIEF']
-                                  ]))
+            self.assertEqual(5, len(list(library.catalog.authors[thor_name])))
+            self.assertEqual(6, len(list(library.catalog.authors[loki_name])))
+            self.assertEqual(6, len(list(library.catalog.authors[loki_alt])))
+            self.assertEqual(titleids[0],
+                             list(library.catalog.authors[loki_name])[0].id)
+            self.assertEqual(titleids[1],
+                             list(library.catalog.authors[thor_name])[0].id)
 
             self.assertEqual(
                 loki_name,
@@ -144,73 +142,71 @@ class IndexesTest(Case):
 
             self.assertEqual(10, len(library.catalog.titles.keys()))
 
-            self.assertEqual(10, len([i for i in
-                                      library.catalog.titles.search('ODINSON')
-                                      ]))
+            self.assertEqual(10,
+                             len(library.catalog.titles.search('BOOK')))
 
-            self.assertEqual(5,
-                             len([i for i in
-                                  library.catalog.titles.search(
-                                      thor_name)
-                                  ]))
+            self.assertEqual(
+                10,
+                len(library.catalog.titles.search_by_author('ODINSON')))
 
-            self.assertEqual(6,
-                             len([i for i in
-                                  library.catalog.titles.search(loki_name)]))
+            self.assertEqual(
+                5,
+                len(library.catalog.titles.search_by_author(thor_name)))
 
-            self.assertEqual(0,
-                             len([i for i in
-                                  library.catalog.titles.search(
-                                      'HEIMDALL')
-                                  ]))
+            self.assertEqual(
+                6,
+                len(library.catalog.titles.search_by_author(loki_name)))
 
-            self.assertEqual(6,
-                             len([i for i in
-                                  library.catalog.titles.search(
-                                      loki_alt)
-                                  ]))
+            self.assertEqual(
+                0,
+                len(library.catalog.titles.search_by_author('HEIMDALL')))
 
-            self.assertEqual(1,
-                             len(list(
-                                 library.catalog.titles['BOOK8'
-                                                        '=BOOK EIGHT']
-                                                        )))
+            self.assertEqual(
+                6,
+                len(library.catalog.titles.search_by_author(loki_alt)))
+
+            self.assertEqual(
+                1,
+                len(list(library.catalog.titles['BOOK8=BOOK EIGHT'])))
+
             # the alternate title should be ignored
-            self.assertEqual(1,
-                             len(list(
-                                 library.catalog.titles['BOOK8'
-                                                        '=NOT BOOK EIGHT']
-                                                        )))
-            self.assertEqual(1,
-                             len(
-                                 list(library.catalog.titles.complete('BOOK8')
-                                      )))
+            self.assertEqual(
+                1,
+                len(list(library.catalog.titles['BOOK8=NOT BOOK EIGHT'])))
+
+            self.assertEqual(
+                1,
+                len(library.catalog.titles.complete('BOOK8')))
+
             self.assertEqual('BOOK8=BOOK EIGHT',
                              library.catalog.titles.complete('BOOK8')[0])
             self.assertEqual('BOOK8=BOOK EIGHT',
                              library.catalog.titles.complete('BOOK EIGHT')[0])
-            self.assertEqual(10,
-                             len(
-                                 list(library.catalog.titles.complete('BOOK')
-                                      )))
-            self.assertEqual(5,
-                             len(
-                                 list(
-                                     library.catalog.titles.complete('BOOK',
-                                                                     thor_name)
-                                      )))
-            self.assertEqual(1,
-                             len(library.catalog.titles.complete_checkedout(
-                                'BOOK')))
-            self.assertEqual('BOOK3',
-                             library.catalog.titles.complete_checkedout(
-                                'BOOK')[0])
-            self.assertEqual(1,
-                             len(library.catalog.titles.complete_checkedout(
-                                'BOOK', 'ODINSON, T')))
-            self.assertEqual(0,
-                             len(library.catalog.titles.complete_checkedout(
-                                'BOOK', loki_name)))
+            self.assertEqual(
+                10,
+                len(library.catalog.titles.complete('BOOK')))
+
+            self.assertEqual(
+                5,
+                len(library.catalog.titles.complete('BOOK', thor_name)))
+
+            self.assertEqual(
+                1,
+                len(library.catalog.titles.complete_checkedout('BOOK')))
+
+            self.assertEqual(
+                'BOOK3',
+                library.catalog.titles.complete_checkedout('BOOK')[0])
+
+            self.assertEqual(
+                1,
+                len(library.catalog.titles.complete_checkedout('BOOK',
+                                                               'ODINSON, T')))
+
+            self.assertEqual(
+                0,
+                len(library.catalog.titles.complete_checkedout('BOOK',
+                                                               loki_name)))
 
             title = next(library.catalog.titles['BOOK8=BOOK EIGHT'])
             self.assertEqual(f'{loki_name}={loki_alt}', title.authors[0])
@@ -220,12 +216,13 @@ class IndexesTest(Case):
 
             self.assertEqual(1, len(list(library.catalog.series.keys())))
             self.assertEqual(series_name, library.catalog.series.keys()[0])
+            self.assertEqual(series_id,
+                             library.catalog.series.search('MIDGAR')[0])
             self.assertEqual(series_name,
                              library.catalog.series.complete('MIDGAR')[0])
 
             self.assertEqual(10,
-                             len(list(
-                                 library.catalog.series[series_name])))
+                             len(list(library.catalog.series[series_name])))
 
         finally:
             library.db.db.close()

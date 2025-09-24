@@ -3,9 +3,11 @@
 import sys
 import time
 
-from mitsfs.dexdb import DexDB, Title
+from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.tex import TEXBASE, texquote
+from mitsfs.dex.title import Title
+
 from io import open
 
 

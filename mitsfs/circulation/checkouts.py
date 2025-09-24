@@ -13,7 +13,7 @@ MAXDAYSOUT = 21
 
 class Checkouts(list):
     def __init__(self, db, member_id=None,
-                 book_id=None, checkouts=[]):
+                 book_id=None, out=False, checkouts=[]):
         '''
         Get a history of checkouts given the provided parameters. It is
         theoretically possible to use more than one of the inputs, but it's
@@ -39,16 +39,18 @@ class Checkouts(list):
         self.db = db
 
         if book_id:
-            c_ids = c.fetchlist('select checkout_id'
-                                ' from checkout'
-                                ' where book_id = %s', (book_id,))
+            sql = 'select checkout_id from checkout where book_id = %s'
+            if out:
+                sql += ' and checkin_stamp is null'
+            c_ids = c.fetchlist(sql, (book_id,))
             for c_id in c_ids:
                 self.append(Checkout(self.db, checkout_id=c_id))
 
         if member_id:
-            c_ids = c.fetchlist('select checkout_id'
-                                ' from checkout'
-                                ' where member_id = %s', (member_id,))
+            sql = 'select checkout_id from checkout where member_id = %s'
+            if out:
+                sql += ' and checkin_stamp is null'
+            c_ids = c.fetchlist(sql, (member_id,))
             for c_id in c_ids:
                 self.append(Checkout(self.db, checkout_id=c_id))
 
@@ -153,7 +155,7 @@ class Checkouts(list):
                 duedate = ui.color_due_date(checkout.due_stamp)
 
             return f'{prefix}{member.full_name}  ({duestr}{duedate})'
-        
+
     def vgg(self):
         '''
         Returns
@@ -181,7 +183,7 @@ class Checkouts(list):
             '  and checkout_stamp <'
             "   (current_timestamp - interval '3 weeks 1 day')"
             ' group by email, first_name, last_name order by last_name'))
-        from mitsfs.dexdb import Title
+        from mitsfs.dex.title import Title
         return [
             (
                 email,
@@ -263,7 +265,7 @@ class Checkout(db.Entry):
             Information about the book edition
 
         '''
-        from mitsfs.dexdb import Book
+        from mitsfs.dex.book import Book
         return Book(self.title, self.book_id)
 
     @property
@@ -385,11 +387,6 @@ class Checkout(db.Entry):
         ----------
         when : datetime, optional
             When to check in the book as of. The default is now.
-
-        Raises
-        ------
-        CirculationException
-            If you try to check in a book that has already been checked in
 
         Returns
         -------

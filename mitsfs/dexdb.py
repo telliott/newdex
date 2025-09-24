@@ -24,18 +24,18 @@ from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
+from mitsfs.util import exceptions
 from mitsfs.circulation.checkouts import Checkouts, Checkout
 from mitsfs.circulation.members import Member
+from mitsfs.dex.title import Title
+from mitsfs.dex.book import Book
+from mitsfs.dex.series import Series
 
-# if we ever switch away from postgres, we may need to export a different
-# exception type as DataError
-from psycopg2 import DataError
 from io import open
 
 
 __all__ = [
-    'DexDB', 'Ambiguity', 'Book', 'Title', 'CirculationException',
-    'DataError',
+    'DexDB',
     ]
 
 
@@ -46,16 +46,6 @@ gensym_seed = itertools.count()
 def gensym():
     return ('G%04d' % next(gensym_seed))
 
-
-
-
-class Ambiguity(Exception):
-    pass
-
-
-class CirculationException(Exception):
-    pass
-
 # appears to be entriely unused.
 # NOTERE = re.compile(r'(.*)\((.*)\)')
 # def notesplit(s):
@@ -65,156 +55,6 @@ class CirculationException(Exception):
 #             name, note = m.groups()
 #             return name.strip(), note.strip()
 #     return s, ''
-
-
-class Series(db.Entry):
-    def __init__(self, db, series_id=None, **kw):
-        super(Series, self).__init__(
-            'series', 'series_id', db, series_id, **kw)
-
-    name = db.Field('series_name')
-
-    # created = db.ReadField('series_created')
-    # created_by = db.ReadField('series_created_by')
-    # created_with = db.ReadField('series_created_with')
-    # modified = db.ReadField('series_modified')
-    # modified_by = db.ReadField('series_modified_by')
-    # modified_with = db.ReadField('series_modified_with')
-
-    def __len__(self):
-        c = self.db.getcursor()
-        return c.selectvalue(
-            'select count(title_id)' +
-            ' from title' +
-            '  natural join title_series' +
-            '  natural join series' +
-            ' where series_id=%s',
-            (self.id,))
-
-    def __iter__(self):
-        # sort this properly 'cus it's convenient
-        c = self.db.getcursor()
-        c.execute(
-            'select title_id' +
-            ' from title' +
-            '  natural join title_responsibility natural join entity' +
-            '  natural join title_title' +
-            '  natural join title_series' +
-            '  natural join series' +
-            ' where order_responsibility_by = 0 and order_title_by = 0' +
-            '  and series_id = %s' +
-            ' order by upper(entity_name), upper(title_name)',
-            (self.id,))
-        if c.rowcount == 0:
-            return []
-
-        return [Title(self.db, x[0]) for x in c.fetchall()]
-
-
-class Book(db.Entry):
-    def __init__(self, title, book_id):
-        super(Book, self).__init__('book', 'book_id', title.dex, book_id)
-        self.__title = title
-        self.book_id = book_id
-
-    def __get_title(self):
-        return self.__title
-
-    def __set_title(self, title):
-        assert hasattr(title, 'title_id')
-        self.cursor.execute('update book set title_id=%s where book_id=%s',
-                            (title.title_id, self.book_id))
-        self.db.db.commit()
-        self.__title = title
-
-    title = property(__get_title, __set_title)
-
-    created = db.ReadField('book_created')
-    created_by = db.ReadField('book_created_by')
-    created_with = db.ReadField('book_created_with')
-    modified = db.ReadField('book_modified')
-    modified_by = db.ReadField('book_modified_by')
-    modified_with = db.ReadField('book_modified_with')
-
-    visible = db.Field('book_series_visible')
-    doublecrap = db.Field('doublecrap')
-    review = db.Field('review')
-    withdrawn = db.Field('withdrawn')
-
-    comment = db.Field('book_comment')
-
-    # Doing a little bit of hacking here to get a shelfcode object into place
-    shelfcode = db.Field(
-        'shelfcode_id', coercer=coerce_shelfcode,
-        prep_for_write=uncoerce_shelfcode)
-
-    @property
-    def barcodes(self):
-        return self.cursor.fetchlist(
-            'select barcode from barcode'
-            ' where book_id=%s order by barcode_created',
-            (self.book_id,))
-
-    def addbarcode(self, in_barcode):
-        in_barcode = barcode.valifrob(in_barcode)
-        if in_barcode:
-            try:
-                self.cursor.execute(
-                    'insert into barcode(book_id, barcode) values (%s,%s)',
-                    (self.book_id, in_barcode))
-                self.db.commit()
-                return True
-            except psycopg2.IntegrityError:
-                self.db.rollback()
-                return False
-        else:
-            return False
-
-    @property
-    def checkouts(self):
-        return Checkouts(self.db, book_id=self.id)
-
-    @property
-    def outto(self):
-        return ' '.join(str(Member(self.db, x.member_id))
-                        for x in self.checkouts.out)
-
-    @property
-    def out(self):
-        return len(self.checkouts.out) > 0
-
-    @property
-    def circulating(self):
-        return self.shelfcode.code_type == 'C'
-
-    def checkout(self, member, date=None):
-        if date is None:
-            date = datetime.datetime.now()
-        with self.getcursor() as c:
-            if self.out:
-                raise CirculationException(
-                    'Book already checked out to ' + str(self.outto))
-            c = Checkout(self.db, None, member_id=member.id,
-                         checkout_stamp=date, book_id=self.book_id)
-            c.create()
-            return c
-
-    def __str__(self):
-        return '%s<%s<%s<%s<%s' % (
-            self.title.authortxt, self.title.titletxt, self.title.seriestxt,
-            self.shelfcode, '|'.join(self.barcodes))
-
-    def str_pretty(self):
-        return [
-            self.title.authortxt[:20],
-            self.title.titletxt[:12],
-            str(self.shelfcode).ljust(5),
-            '|'.join(self.barcodes)[:10],
-            ]
-
-    def __repr__(self):
-        return '#%d:%d %s' % (
-            self.title.title_id[0], self.book_id[0], str(self))
 
 
 class DexDB(db.Database):
@@ -621,6 +461,7 @@ class DexDB(db.Database):
             (Title(self, title_id) for title_id in c.fetchlist(q, args)),
             key=lambda x: x.sortkey())
 
+    # replaced by library.catalog.title.search
     def titlesearch(self, frag):
         c = self.getcursor()
         return (
@@ -964,7 +805,8 @@ class DexDB(db.Database):
 
             if removed:
                 if added and (len(added) > 1 or int(added) != int(removed)):
-                    raise Ambiguity('Please try a simpler operation for now.')
+                    raise exceptions.Ambiguity('Please try a simpler '
+                                               'operation for now.')
                 count = len(removed)
 
                 q = 'update book set'
@@ -1036,6 +878,7 @@ class DexDB(db.Database):
         for i in d:
             self.add(i)
 
+    # replaced by library.catalog.shelfcodes.stats()
     def stats(self):
         return dict(self.cursor.execute(
             "select distinct shelfcode, count(shelfcode)"
@@ -1047,6 +890,7 @@ class DexDB(db.Database):
 
     _codes = None
 
+    # replaced by library.shelfcodes
     @property
     def codes(self):
         if self._codes is None:
@@ -1104,225 +948,6 @@ def diff(a, b):
 #     else:
 #         return [(False, first)] + rest
 
-
-class Title(dexfile.DexLine, db.Entry):
-    def __init__(self, dex, title_id):
-        db.Entry.__init__(self, 'title', 'title_id', dex, title_id)
-        self.title_id = title_id
-
-    @property
-    def dex(self):
-        return self.db
-
-    def _cache_query(self, key, sql):
-        name = 'Q_' + key
-        if name in self.cache:
-            return self.cache[key]
-
-        ret = list(self.cursor.execute(sql, (self.title_id,)))
-        self.cache[key] = ret
-
-        return ret
-
-    @property
-    @db.cached
-    def authors(self):
-        #TODO: Figure out what to do with responsibility_types
-        sql = ("select"
-               "  concat_ws('=', entity_name, alternate_entity_name)"
-               " from"
-               "  title_responsibility"
-               "  natural join entity"
-               " where title_id = %s"
-               " order by order_responsibility_by")
-
-        authors = self._cache_query('authors', sql)
-        return utils.FieldTuple([a[0] for a in authors])
-
-    @property
-    @db.cached
-    def titles(self):
-        sql = ("select"
-               "  concat_ws('=', title_name, alternate_name)"
-               " from title_title"
-               " where title_id = %s"
-               " order by order_title_by")
-
-        titles = self._cache_query('titles', sql)
-        return utils.FieldTuple([t[0] for t in titles])
-
-    @property
-    @db.cached
-    def books(self):
-        cursor = self.cursor
-        # This is a subselect so we can sort by shelcode_Id
-        books = cursor.fetchlist(
-            "select distinct book_id"
-            " from ("
-            "  select book_id"
-            "  from"
-            "   book"
-            "   natural left join barcode"
-            "  where"
-            "   title_id=%s and"
-            "   not withdrawn"
-            "  order by shelfcode_id, barcode)"
-            " as q",
-            (self.title_id, ))
-        return [Book(self, i) for i in books]
-
-    @property
-    @db.cached
-    def series(self):
-        sql = ("select"
-               "  series_name, series_index, series_visible, number_visible"
-               " from"
-               "  title_series"
-               "  natural join series"
-               " where title_id = %s"
-               " order by order_series_by")
-
-        those = (
-            ('@' if series_visible else '') +
-            series_name +
-            (' ' + ('#' if number_visible else '') + series_index
-             if series_index else '')
-            for series_name, series_index,
-            series_visible, number_visible in self._cache_query('series', sql))
-        return utils.FieldTuple(those)
-
-    @property
-    @db.cached
-    def codes(self):
-        sql = ("select"
-               "  book_series_visible, shelfcode, doublecrap, count(shelfcode)"
-               " from"
-               "  book"
-               "  natural join shelfcode"
-               " where"
-               "  title_id = %s and"
-               "  not withdrawn"
-               " group by book_series_visible, shelfcode, doublecrap"
-               " order by not book_series_visible, shelfcode, doublecrap")
-
-        return Editions(
-            ','.join(
-                ('@' if series_visible else '') +
-                shelfcode +
-                (doublecrap if doublecrap else '') +
-                (':' + str(count)
-                 if count > 1 else '')
-                for series_visible, shelfcode,
-                doublecrap, count in self._cache_query('codes', sql)))
-
-    def __str__(self):
-        result = dexfile.DexLine.__str__(self)
-        return result
-
-    def __repr__(self):
-        return '#' + str(self.title_id) + ' ' + repr(str(self))
-
-    def __eq__(self, other):
-        if hasattr(other, 'title_id') and other.title_id == self.title_id:
-            return True
-        else:
-            return False
-
-    def __hash__(self):
-        return self.title_id
-
-    @db.cached
-    def shelfkey(self, shelfcode):
-        author = self.authors[0][1]
-        title = self.titles[0][1]
-
-        doublecrap, book_series_visible = [
-            (doublecrap, book_series_visible)
-            for (book_series_visible, qshelfcode, doublecrap, count)
-            in self.codes
-            if qshelfcode == shelfcode][0]
-
-        if doublecrap:
-            key = [doublecrap, author]
-        else:
-            key = [author]
-
-        if self.series:
-            series, series_index, series_visible, index_visible \
-                = self.series[0]
-            if series_visible:
-                key += [series]
-                if index_visible:
-                    key += [series_index]
-        key += [title]
-        return tuple(dexfile.sanitize_sort_key(i).strip() for i in key)
-
-    @db.cached
-    def nicetitle(self):
-        def titlecase(s):
-            return re.sub(
-                '\'([SDT]|Ll|Re)([^A-Z]|$)',
-                lambda m: m.group(0).lower(),
-                s.title())
-        series = [
-            titlecase(i.replace(',', r'\,'))
-            for i in self.series if i]
-        titles = [
-            titlecase('=' in i and i[:i.find('=')] or i)
-            for i in self.titles]  # strip the sortbys
-        if series:
-            if len(series) == len(titles):
-                titles = ['%s [%s]' % i for i in zip(titles, series)]
-            elif len(titles) == 1:
-                titles = ['%s [%s]' % (titles[0], '|'.join(series))]
-            elif len(series) == 1:
-                titles = ['%s [%s]' % (i, series[0]) for i in titles]
-            else:  # this is apparently Officially Weird
-                ntitles = ['%s [%s]' % i for i in zip(titles, series)]
-                if len(self.series) < len(titles):
-                    ntitles += titles[len(series):]
-                titles = ntitles
-        return '|'.join(titles)
-
-    def delete(self):
-        c = self.cursor or self.dex.cursor
-        c.execute(
-            'delete from book where title_id=%s and withdrawn',
-            (self.id,))
-        c.execute(
-            'delete from title_title where title_id=%s',
-            (self.id,))
-        c.execute(
-            'delete from title_responsibility where title_id=%s',
-            (self.id,))
-        c.execute(
-            'delete from title where title_id=%s',
-            (self.id,))
-        self.db.commit()
-
-    @property
-    def checkedout(self):
-        # if any of this title are checked out
-        c = self.cursor or self.dex.cursor
-        return c.selectvalue(
-            'select count(title_id)'
-            ' from'
-            '  checkout'
-            '  natural join book'
-            ' where'
-            '  checkin_stamp is null and'
-            '  title_id = %s',
-            (self.id,))
-
-    # created = db.ReadField('title_created')
-    # created_by = db.ReadField('title_created_by')
-    # created_with = db.ReadField('title_created_with')
-    # modified = db.ReadField('title_modified')
-    # modified_by = db.ReadField('title_modified_by')
-    # modified_with = db.ReadField('title_modified_with')
-
-    comment = db.Field('title_comment')
-    lost = db.Field('title_lost')
 
 
 def equal_split(string):

@@ -8,6 +8,7 @@ Code for keeping track of inventories and inventory-like behavior
 
 from mitsfs import dexdb
 from mitsfs import dexfile
+from mitsfs.dex.title import Title
 
 
 __all__ = [
@@ -162,7 +163,7 @@ class Inventory(object):
                 '  natural join shelfcode'
                 ' where inventory_id=%s and shelfcode=%s',
                 (self.id, shelfcode)):
-            t = dexdb.Title(self.dex, title_id)
+            t = Title(self.dex, title_id)
             line = dexfile.DexLine(
                 authors=t.authors,
                 titles=t.titles,

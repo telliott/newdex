@@ -8,7 +8,7 @@ srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
 from tests.test_setup import Case
-from mitsfs.dexdb import DexDB, CirculationException
+from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 
 from mitsfs.dex.shelfcodes import Shelfcodes
@@ -43,7 +43,7 @@ class DexDBTest(Case):
                 " values('P', 'Paperbacks', 'C')")
             db.commit()
             db.shelfcodes = Shelfcodes(db)
-            
+
             books = {}
 
             for i in range(1, 9):

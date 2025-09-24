@@ -430,6 +430,8 @@ class Dex(object):
                     d[edition.shelfcode] += edition.count
         return d
 
+    # dexdb version replaced with library.catalog.title.search. I don't
+    # think this one is used
     def titlesearch(self, frag):
         for bucket in (
                 self.indices['titles'][i]

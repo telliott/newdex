@@ -13,11 +13,12 @@ from functools import reduce
 
 from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.constants import DEXBASE
-from mitsfs.dexdb import DexDB, Title
+from mitsfs.dexdb import DexDB
 from mitsfs.inventory import Inventory, InventoryUnknown
 from mitsfs.tex import TEXBASE, texquote
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.dex.editions import Edition, InvalidShelfcode
+from mitsfs.dex.title import Title
 
 __version__ = '0'
 

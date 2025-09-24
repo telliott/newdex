@@ -4,10 +4,11 @@ import sys
 import itertools
 from io import open
 
-from mitsfs.dexdb import DexDB, Title
+from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.ui import read, readnumber, specify
 from mitsfs.tex import TEXBASE, texquote
+from mitsfs.dex.title import Title
 
 shelfcode_hint = {}
 for shelfcodes, possible in \

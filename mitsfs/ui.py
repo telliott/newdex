@@ -341,6 +341,7 @@ def specify(dex, preload=None, predicate=None):
         if author:
             if hasattr(dex.indices.titles, 'search'):
                 def itf():
+                    # will replace with library.catalog.titles.search_by_author
                     return dex.indices.titles.search(author)
             else:
                 def itf():
@@ -373,6 +374,7 @@ def specify(dex, preload=None, predicate=None):
         else:
             possibles = [
                 ((i.authortxt, i.titletxt), i)
+                # replace this with library.catalog.title.search
                 for i in dex.titlesearch(title)
                 if author in i.authortxt]
             possibles.sort()

@@ -27,7 +27,6 @@ class Shelfcode(db.Entry):
     def __init__(self, db, shelfcode_id=None, **kw):
         super().__init__('shelfcode', 'shelfcode_id',
                          db, shelfcode_id, **kw)
-
     shelfcode_id = db.InfoField('shelfcode_id')
 
     code = db.InfoField('shelfcode')
@@ -111,7 +110,8 @@ class Shelfcodes(dict):
         for row in c.fetchall():
             (s_id, shelfcode, description, ctype,
              cost, code_class, is_double) = row
-            s = Shelfcode(db, s_id, code=shelfcode, description=description,
+            s = Shelfcode(self.db, s_id, code=shelfcode, 
+                          description=description,
                           code_type=ctype, replacement_cost=cost,
                           code_class=code_class, is_double=is_double)
             super().__setitem__(s.code, s)
