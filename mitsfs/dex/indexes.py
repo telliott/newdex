@@ -6,9 +6,9 @@ class SeriesIndex(object):
     def __init__(self, db):
         self.db = db
 
-    def iterkeys(self):
+    def keys(self):
         c = self.db.getcursor()
-        return c.execute(
+        return c.fetchlist(
             'select distinct upper(series_name)'
             ' from series'
             '  natural join title_series'
@@ -18,7 +18,7 @@ class SeriesIndex(object):
 
     def complete(self, s):
         c = self.db.getcursor()
-        return c.execute(
+        return c.fetchlist(
             'select series_name from series'
             ' where position(%s in upper(series_name)) = 1'
             ' order by series_name',
@@ -47,27 +47,28 @@ class TitleIndex(object):
     def __init__(self, db):
         self.db = db
 
-    def iterkeys(self):
+    def keys(self):
         c = self.db.getcursor()
-        return c.execute("select CONCAT_WS('=', title_name, alternate_name)"
-                         " from title_title")
+        return c.fetchlist("select CONCAT_WS('=', title_name, alternate_name)"
+                           " from title_title")
 
+    # search by author only used in specify
     def search(self, author):
         c = self.db.getcursor()
         return c.execute(
-            "select CONCAT_WS('=', title_name, alternate_name)"
-            " from title_title,"
+            "select distinct(CONCAT_WS('=', title_name, alternate_name))"
+            " from title_title"
             " natural join title_responsibility"
             " natural join entity"
             " where"
-            "  length(entity_name) >= %s and"
-            "  upper(substring(entity_name from 1 for %s)) = upper(%s)",
-            (len(author), len(author), author))
+            "  entity_name ilike %s"
+            "  or alternate_entity_name ilike %s",
+            (f'{author}%', f'{author}%'))
 
     def complete(self, title, author=''):
         c = self.db.getcursor()
         return c.fetchlist(
-            " select CONCAT_WS('=', title_name, alternate_name)"
+            " select distinct(CONCAT_WS('=', title_name, alternate_name))"
             "  from"
             "   title_title "
             "   natural join title_responsibility "
@@ -76,28 +77,29 @@ class TitleIndex(object):
             "   position(upper(%s) in entity_name) = 1 and"
             "   (position(upper(%s) in title_name) = 1"
             "    or position(upper(%s) in alternate_name) = 1)",
-            (author, title))
+            (author, title, title))
 
     def complete_checkedout(self, title, author=''):
         c = self.db.getcursor()
-        return c.fecthlist(
-            "select CONCAT_WS('=', title_name, alternate_name) "
+        return c.fetchlist(
+            "select distinct(CONCAT_WS('=', title_name, alternate_name))"
             " from checkout "
             "  natural join book "
             "  natural join title_title"
+            "  natural join title_responsibility"
+            "  natural join entity"
             " where "
             "  checkin_stamp is null and"
             "  position(upper(%s) in entity_name) = 1 and"
             "  (position(upper(%s) in title_name) = 1 or"
             "   position(upper(%s) in alternate_name) = 1)",
-            (author, title))
+            (author, title, title))
 
     def __getitem__(self, key):
         c = self.db.getcursor()
         # if they've passed in full title, including the alternate, strip it
         if '=' in key:
             key, _ = key.split('=')
-
         return (
             Title(self.db, title_id)
             for title_id
@@ -111,11 +113,10 @@ class AuthorIndex(object):
     def __init__(self, db):
         self.db = db
 
-    def iterkeys(self):
+    def keys(self):
         c = self.db.getcursor()
-
         return c.fetchlist(
-                'select entity_name'
+                "select CONCAT_WS('=', entity_name, alternate_entity_name)"
                 ' from entity'
                 ' order by upper(entity_name)')
 
@@ -129,9 +130,9 @@ class AuthorIndex(object):
                 ' from title_responsibility'
                 '  natural join entity'
                 ' where'
-                '  upper(entity_name) = upper(%s)'
-                '  or upper(alternate_entity_name) = upper(%s)',
-                (key, key)))
+                ' entity_name ilike %s'
+                ' or alternate_entity_name ilike %s',
+                (f'{key}%', f'{key}%')))
 
     def complete(self, key):
         c = self.db.getcursor()
@@ -139,9 +140,9 @@ class AuthorIndex(object):
             'select entity_name'
             ' from entity'
             ' where'
-            ' position(upper(%s) in upper(entity_name)) = 1'
-            ' or position(upper(%s) in upper(alternate_entity_name)) = 1',
-            (key, key))
+            ' entity_name ilike %s'
+            ' or alternate_entity_name ilike %s',
+            (f'{key}%', f'{key}%'))
 
     def complete_checkedout(self, key):
         c = self.db.getcursor()
@@ -154,23 +155,20 @@ class AuthorIndex(object):
             '  natural join checkout'
             ' where'
             '  checkin_stamp is null and'
-            '  (position(upper(%s) in upper(entity_name)) = 1'
-            '  or position(upper(%s) in upper(alternate_entity_name)) = 1)',
-            (key, key))
+            ' (entity_name ilike %s'
+            ' or alternate_entity_name ilike %s)',
+            (f'{key}%', f'{key}%'))
 
 
 class ShelfcodeIndex(object):
     def __init__(self, db):
         self.db = db
 
-    def iterkeys(self):
+    def keys(self):
         c = self.db.getcursor()
-        return (
-            code + (doublecrap or '')
-            for code, doublecrap
-            in c.execute(
+        return c.fetchlist(
                 'select distinct shelfcode, doublecrap'
-                ' from book natural join shelfcode'))
+                ' from book natural join shelfcode')
 
     def __getitem__(self, key):
         c = self.db.getcursor()
@@ -184,7 +182,8 @@ class ShelfcodeIndex(object):
         q = (
             'select title_id'
             ' from title'
-            '  natural join title_responsibility natural join entity'
+            '  natural join title_responsibility'
+            '  natural join entity'
             '  natural join title_title'
             '  natural join book'
             '  natural join shelfcode'
