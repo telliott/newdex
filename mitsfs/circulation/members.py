@@ -343,7 +343,7 @@ class Member(db.Entry):
         return get_transactions(self.db, self.member_id, include_voided)
 
     @property
-    def checkouts(self):
+    def checkout_history(self):
         self.checkouts_ = Checkouts(self.db, member_id=self.member_id)
         return self.checkouts_
 
@@ -365,7 +365,7 @@ class Member(db.Entry):
             msgs.append(self.first_name + ' has an expired membership.')
             correct.append('get new membership')
 
-        books_due = self.checkouts.overdue
+        books_due = self.checkout_history.overdue
 
         if books_due:
             msg = self.first_name + ' has overdue books.'
@@ -374,7 +374,7 @@ class Member(db.Entry):
             msgs.append(msg)
             correct.append('return books')
 
-        count = len([x for x in self.checkouts.out if not x.lost])
+        count = len([x for x in self.checkout_history.out if not x.lost])
         if count >= MAX_BOOKS:
             msgs.append(('%s has %d books out.' % (self.first_name, count)))
             if 'return books' not in correct:

@@ -87,9 +87,9 @@ class MitsfsTest(Case):
             self.assertEqual(book.out, False)
             book.checkout(member)
             self.assertEqual(book.out, True)
-            member.checkouts.reload()
+            member.checkout_history.reload()
 
-            checkouts = member.checkouts.out
+            checkouts = member.checkout_history.out
             self.assertEqual(len(checkouts), 1)
 
             # we only have one book out, so
@@ -104,7 +104,7 @@ class MitsfsTest(Case):
             book.checkout(
                 member,
                 datetime.datetime.today() - datetime.timedelta(weeks=4))
-            member.checkouts.reload()
+            member.checkout_history.reload()
 
             # because the book was due a week ago
             self.assertEqual(member.can_checkout()[0], False)
@@ -117,9 +117,9 @@ class MitsfsTest(Case):
             # because the book was due a week ago, *still*
             self.assertEqual(member.can_checkout()[0], False)
             # but we wouldn't charge them
-            losing_book = member.checkouts.out[0]
-            self.assertEqual(member.checkouts.out[0].overdue_days(), 0)
-            member.checkouts.out[0].lose()
+            losing_book = member.checkout_history.out[0]
+            self.assertEqual(member.checkout_history.out[0].overdue_days(), 0)
+            member.checkout_history.out[0].lose()
 
             # now owes a fine
             self.assertEqual(member.can_checkout()[0], False)
@@ -183,9 +183,9 @@ class MitsfsTest(Case):
             self.assertEqual(book.out, False)
             book.checkout(member)
             self.assertEqual(book.out, True)
-            member.checkouts.reload()
+            member.checkout_history.reload()
 
-            checkouts = member.checkouts.out
+            checkouts = member.checkout_history.out
             self.assertEqual(len(checkouts), 1)
 
             # we only have one book out, so
@@ -200,7 +200,7 @@ class MitsfsTest(Case):
             book.checkout(
                 member,
                 datetime.datetime.today() - datetime.timedelta(weeks=4))
-            member.checkouts.reload()
+            member.checkout_history.reload()
 
             # because the book was due a week ago
             self.assertEqual(member.can_checkout()[0], False)
@@ -209,8 +209,9 @@ class MitsfsTest(Case):
             d.cursor.execute('delete from timewarp')
             d.commit()
 
-            self.assertNotEqual(member.checkouts.out[0].overdue_days(), 0)
-            losing_book = member.checkouts.out[0]
+            self.assertNotEqual(member.checkout_history.out[0].overdue_days(), 
+                                0)
+            losing_book = member.checkout_history.out[0]
             losing_book.lose()
 
             # owes a fine
@@ -272,8 +273,9 @@ class MitsfsTest(Case):
             book = title.books[0]
 
             book.checkout(member, datetime.datetime(2014, 1, 1))
-            member.checkouts.reload()
-            member.checkouts.out[0].checkin(datetime.datetime(2014, 9, 6, 12))
+            member.checkout_history.reload()
+            member.checkout_history.out[0].checkin(
+                datetime.datetime(2014, 9, 6, 12))
 
             self.assertEqual(member.balance, -4)
             tx = CashTransaction(d, new_id, member.normal_str,

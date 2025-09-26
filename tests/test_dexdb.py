@@ -13,7 +13,6 @@ from mitsfs.dexdb import DexDB
 from mitsfs.dex.shelfcodes import Shelfcodes
 
 
-
 class DexDBTest(Case):
     def test_search(self):
         try:

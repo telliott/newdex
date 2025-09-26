@@ -8,7 +8,7 @@ from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.ui import read, readnumber, specify
 from mitsfs.tex import TEXBASE, texquote
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 shelfcode_hint = {}
 for shelfcodes, possible in \

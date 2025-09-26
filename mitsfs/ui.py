@@ -316,7 +316,7 @@ def color_due_date(stamp):
         else Color.warning)(stamp.date())
 
 
-def specify(dex, preload=None, predicate=None):
+def specify(library, preload=None, predicate=None):
     if preload is None:
         author_preload, title_preload = '', ''
     else:
@@ -324,34 +324,24 @@ def specify(dex, preload=None, predicate=None):
         title_preload = preload.titletxt
     while True:
         if predicate is None:
-            itf = dex.indices.authors.iterkeys
+            itf = library.catalog.authors.keys
         else:
             def itf():
                 return (
-                    i for i in dex.indices['authors'].keys()
+                    i for i in library.catalog.authors.keys()
                     if any((
                         predicate(j)
-                        for j in dex.indices['authors'][i])))
-        author = read(
-            'Author: ',
-            itf,
-            author_preload, 'authors').upper().strip()
-        if len(author.split('<')) == 4 and author in dex:
-            return dex[author]
+                        for j in library.catalog.authors[i])))
+        author = read('Author: ', itf, author_preload,
+                      'authors').upper().strip()
+        # if (len(author.split('<')) == 4
+        #     and author in library.catalog.authors.keys()):
+        #     return dex[author]
         if author:
-            if hasattr(dex.indices.titles, 'search'):
-                def itf():
-                    # will replace with library.catalog.titles.search_by_author
-                    return dex.indices.titles.search(author)
-            else:
-                def itf():
-                    return (
-                        i for i in dex.indices.titles.keys()
-                        if any(
-                            (author in j.authortxt)
-                            for j in dex.indices.titles[i]))
+            def itf():
+                return library.catalog.titles.search_by_author(author)
         else:
-            itf = list(dex.indices.titles.iterkeys())
+            itf = library.catalog.titles.keys
         if predicate is not None:
             xitf = itf
 
@@ -360,7 +350,7 @@ def specify(dex, preload=None, predicate=None):
                     i for i in xitf()
                     if any((
                         predicate(j)
-                        for j in dex.indices['titles'][i])))
+                        for j in library.catalog.titles[i])))
 
         title = read('Title: ', itf, title_preload, 'titles').upper()
         title = re.sub(r'^(?:A|AN|THE) ', '', title)
@@ -369,16 +359,7 @@ def specify(dex, preload=None, predicate=None):
         if not author and not title:
             return None
 
-        if hasattr(dex, 'search'):
-            possibles = list(dex.search(author, title))
-        else:
-            possibles = [
-                ((i.authortxt, i.titletxt), i)
-                # replace this with library.catalog.title.search
-                for i in dex.titlesearch(title)
-                if author in i.authortxt]
-            possibles.sort()
-            possibles = [v for (k, v) in possibles]
+        possibles = library.grep(f'{author}<{title}')
         if predicate is not None:
             possibles = [book for book in possibles if predicate(book)]
 

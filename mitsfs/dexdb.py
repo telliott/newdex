@@ -27,9 +27,10 @@ from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
 from mitsfs.util import exceptions
 from mitsfs.circulation.checkouts import Checkouts, Checkout
 from mitsfs.circulation.members import Member
-from mitsfs.dex.title import Title
-from mitsfs.dex.book import Book
-from mitsfs.dex.series import Series
+from mitsfs.dex.titles import Titles, Title
+from mitsfs.dex.books import Book
+from mitsfs.dex.series import SeriesIndex, Series
+from mitsfs.dex.authors import Authors
 
 from io import open
 
@@ -67,12 +68,11 @@ class DexDB(db.Database):
         super(DexDB, self).__init__(client=client, dsn=dsn)
         self.filename = self.dsn
 
-        from mitsfs.dex import indexes
         self.indices = utils.PropDict(
-            series=indexes.SeriesIndex(self),
-            titles=indexes.TitleIndex(self),
-            authors=indexes.AuthorIndex(self),
-            codes=indexes.ShelfcodeIndex(self))
+            series=SeriesIndex(self),
+            titles=Titles(self),
+            authors=Authors(self),
+            codes=Shelfcodes(self))
         self.shelfcodes = Shelfcodes(self)
 
     def xsearch(self, ops, conjunction='and'):
@@ -185,7 +185,7 @@ class DexDB(db.Database):
                 return None
         else:
             return None
-        return Book(Title(self, title_id), book_id)
+        return Book(self, book_id, title=title_id)
 
     def exdex(self, c, callback=lambda: None):
         authors = {}
@@ -461,7 +461,7 @@ class DexDB(db.Database):
             (Title(self, title_id) for title_id in c.fetchlist(q, args)),
             key=lambda x: x.sortkey())
 
-    # replaced by library.catalog.title.search
+    # replaced by library.catalog.titles.search
     def titlesearch(self, frag):
         c = self.getcursor()
         return (
@@ -782,7 +782,7 @@ class DexDB(db.Database):
             " values (%s, %s, %s, %s, %s, %s) returning book_id",
             (
                 title_id, 't' if e.series_visible else 'f',
-                self.shelfcodes[e.shelfcode].shelfcode_id, e.double_info,
+                self.shelfcodes[e.shelfcode].id, e.double_info,
                 review, comment),
             )
 
@@ -817,7 +817,7 @@ class DexDB(db.Database):
                     q += (' shelfcode_id=%s, doublecrap=%s,'
                           ' book_series_visible=%s')
                     a += [
-                        self.shelfcodes[edition.code].shelfcode_id,
+                        self.shelfcodes[edition.code].id,
                         edition.double_info or None,
                         't' if edition.series_visible else 'f']
                 else:

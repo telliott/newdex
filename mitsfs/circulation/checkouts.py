@@ -183,7 +183,7 @@ class Checkouts(list):
             '  and checkout_stamp <'
             "   (current_timestamp - interval '3 weeks 1 day')"
             ' group by email, first_name, last_name order by last_name'))
-        from mitsfs.dex.title import Title
+        from mitsfs.dex.titles import Title
         return [
             (
                 email,
@@ -238,24 +238,16 @@ class Checkout(db.Entry):
     @property
     def title(self):
         '''
-        We have a book_id, but that means we have to get the title by db query
-
-        Pretty sure one day we'll be able to get it from the book object
+        Get the title of the book
 
         Returns
         -------
         title: Title
-            Information about the book.
+            Information about the title.
 
         '''
-        from mitsfs.dexdb import Title
-        return Title(self.db,
-                     self.cursor.selectvalue('select title_id'
-                                             ' from book'
-                                             ' where book_id = %s',
-                                             (self.book_id,)))
+        return self.book.title
 
-    # Do we need both book and title?
     @property
     def book(self):
         '''
@@ -265,8 +257,8 @@ class Checkout(db.Entry):
             Information about the book edition
 
         '''
-        from mitsfs.dex.book import Book
-        return Book(self.title, self.book_id)
+        from mitsfs.dex.books import Book
+        return Book(self.db, self.book_id)
 
     @property
     def due_stamp(self):

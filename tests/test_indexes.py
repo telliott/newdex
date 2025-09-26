@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 from tests.test_setup import Case
 
 from mitsfs.library import Library
-from mitsfs.dex import indexes
 
 
 class IndexesTest(Case):
@@ -24,7 +23,7 @@ class IndexesTest(Case):
             library.db.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
-                " values('S', 'Small Books', 'C')")
+                " values('S', 'Small Books', 'C'), ('L', 'Large Books', 'C')")
             library.shelfcodes.load_from_db()
 
             thor = library.db.getcursor().selectvalue(
@@ -100,13 +99,33 @@ class IndexesTest(Case):
                 (titleids[5], loki, 1))
 
             # test the shelfcode index
-            self.assertEqual(10, len(list(library.catalog.editions['S'])))
+            self.assertEqual(
+                10,
+                len(list(library.catalog.editions.get_titles('S'))))
 
-            self.assertEqual(1, len(library.catalog.editions.keys()))
+            self.assertEqual(
+               0,
+               len(list(library.catalog.editions.get_titles('L'))))
+
+            # add an L copy of one of the books
+            library.db.getcursor().selectvalue(
+                "insert into"
+                " book"
+                " (title_id, shelfcode_id)"
+                " values(%s, %s)"
+                " returning book_id",
+                (titleids[3], library.shelfcodes['L'].id))
+
+            self.assertEqual(
+               1,
+               len(list(library.catalog.editions.get_titles('L'))))
+
+            self.assertEqual(2, len(library.catalog.editions.keys()))
 
             stats = library.catalog.editions.stats()
-            self.assertEqual(1, len(stats.keys()))
+            self.assertEqual(2, len(stats.keys()))
             self.assertEqual(10, stats['S'])
+            self.assertEqual(1, stats['L'])
 
             # test the author index
             self.assertEqual(5, len(list(library.catalog.authors[thor_name])))
@@ -116,6 +135,10 @@ class IndexesTest(Case):
                              list(library.catalog.authors[loki_name])[0].id)
             self.assertEqual(titleids[1],
                              list(library.catalog.authors[thor_name])[0].id)
+
+            self.assertEqual(
+                loki,
+                library.catalog.authors.search('PRINCE OF MISC')[0])
 
             self.assertEqual(
                 loki_name,
@@ -174,13 +197,18 @@ class IndexesTest(Case):
                 1,
                 len(list(library.catalog.titles['BOOK8=NOT BOOK EIGHT'])))
 
+            # but we can use the alternate title
+            self.assertEqual(
+                1,
+                len(list(library.catalog.titles['BOOK EIGHT'])))
+
             self.assertEqual(
                 1,
                 len(library.catalog.titles.complete('BOOK8')))
 
-            self.assertEqual('BOOK8=BOOK EIGHT',
+            self.assertEqual('BOOK8',
                              library.catalog.titles.complete('BOOK8')[0])
-            self.assertEqual('BOOK8=BOOK EIGHT',
+            self.assertEqual('BOOK8',
                              library.catalog.titles.complete('BOOK EIGHT')[0])
             self.assertEqual(
                 10,
@@ -221,9 +249,40 @@ class IndexesTest(Case):
             self.assertEqual(series_name,
                              library.catalog.series.complete('MIDGAR')[0])
 
-            self.assertEqual(10,
-                             len(list(library.catalog.series[series_name])))
+            series_list = list(library.catalog.series[series_name])
+            self.assertEqual(10, len(series_list))
+            i = 0
+            for title in series_list:
+                self.assertEqual(f'{series_name} {i}', title.series[0])
+                i += 1
 
+            # simple grepping
+            self.assertEqual(10,
+                             len(library.catalog.grep('ODINSON')))
+            self.assertEqual(10,
+                             len(library.catalog.grep('OD.+S[IO]N')))
+            self.assertEqual(1,
+                             len(library.catalog.grep('BOOK3')))
+            self.assertEqual(1,
+                             len(library.catalog.grep('BOOK EIGHT')))
+            self.assertEqual(6,
+                             len(library.catalog.grep('OF MIS')))
+
+            # section grepping
+            self.assertEqual(1,
+                             len(library.catalog.grep('ODIN<8<MID')))
+            self.assertEqual(1,
+                             len(library.catalog.grep('ODIN<8<MID<S')))
+            self.assertEqual(0,
+                             len(library.catalog.grep('ODIN<8<MID<L')))
+            self.assertEqual(1,
+                             len(library.catalog.grep('ODIN<3<MID<L')))
+            self.assertEqual(1,
+                             len(library.catalog.grep('LOKI<5<')))
+            self.assertEqual(0,
+                             len(library.catalog.grep('<<<')))
+            self.assertEqual(10,
+                             len(library.catalog.grep('<<<S')))
         finally:
             library.db.db.close()
 

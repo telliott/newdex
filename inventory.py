@@ -8,7 +8,7 @@ from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.ui import tabulate
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 CLOSING_GLOSS = """
 If you still need to check in the new shelf:

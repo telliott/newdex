@@ -7,7 +7,7 @@ from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.core.settings import DATABASE_DSN
 from mitsfs.dex.Shelfcodes import Shelfcodes
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 
 

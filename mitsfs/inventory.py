@@ -8,7 +8,7 @@ Code for keeping track of inventories and inventory-like behavior
 
 from mitsfs import dexdb
 from mitsfs import dexfile
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 
 __all__ = [

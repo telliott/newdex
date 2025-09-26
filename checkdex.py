@@ -6,7 +6,7 @@ import time
 from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
 from mitsfs.tex import TEXBASE, texquote
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 from io import open
 

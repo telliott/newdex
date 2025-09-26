@@ -95,7 +95,7 @@ class DexDBTest(Case):
             # check in book 1
 
             # the book_ids are all tuples. I will make that go away someday
-            book_checkouts = Checkouts(db, book_id=books[1].book_id)
+            book_checkouts = Checkouts(db, book_id=books[1].id)
             self.assertEqual(1, len(book_checkouts.out))
             b1 = book_checkouts.out[0]
             b1.checkin(today)

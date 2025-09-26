@@ -20,7 +20,7 @@ from mitsfs.circulation.checkouts import Checkouts
 
 from mitsfs import library
 from mitsfs.core import settings
-from mitsfs.util import selecters
+from mitsfs.utils import selecters
 
 __release__ = '1.1'
 
@@ -174,7 +174,7 @@ def main_menu(line):
                 checkin_date = readdate(datetime.datetime.today(), False)
 
             no_member_header()
-            checkouts = book.checkouts
+            checkouts = book.checkout_history.out
             if len(checkouts) == 0:
                 print("No editions of this book are checked out right now.")
                 continue
@@ -242,14 +242,15 @@ def main_menu(line):
         List all copies of the selected book, with who has it checked out
         '''
         no_member_header()
-        title = specify(dex)
+        title = specify(library)
         if not title:
             return
 
         for book in title.books:
             print(book)
             if book.out:
-                print(book.checkouts.out.member_display('     Out to: '))
+                print(
+                    book.checkout_history.out.member_display('     Out to: '))
         print()
 
     no_member_header()
@@ -350,11 +351,11 @@ def member_menu(line):
         '''
         member_header(member)
         while True:
-            if not member.checkouts.out:
+            if not member.checkout_history.out:
                 print(Color.warning('No books are checked out.'))
                 return
 
-            checkout = selecters.select_checkout(member.checkouts.out)
+            checkout = selecters.select_checkout(member.checkout_history.out)
             if checkout is None:
                 member_header(member)
                 return
@@ -379,12 +380,12 @@ def member_menu(line):
         Marks a book lost. Sad!
         '''
         member_header(member)
-        if not member.checkouts.out:
+        if not member.checkout_history.out:
             print(Color.warning('No books are checked out.'))
             return
 
         while True:
-            if not member.checkouts.out:
+            if not member.checkout_history.out:
                 break
 
             checkout = selecters.select_checkout('Select book to '
@@ -447,7 +448,7 @@ def viewmem(line):
 
     def checkout_history(line):
         member_header(member, 'Checkout History')
-        print(member.checkouts.display())
+        print(member.checkout_history.display())
 
     def financial_history(line):
         member_header(member, 'Financial History')

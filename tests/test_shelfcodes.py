@@ -8,7 +8,7 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dexdb import DexDB
+from mitsfs.library import Library
 from tests.test_setup import Case
 from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
 from mitsfs.dex.shelfcodes import Shelfcodes, Shelfcode
@@ -22,7 +22,8 @@ shelfcode_re = r'L => Large Fiction \([0-9]*\)\nS => Small Fiction \([0-9]*\)'
 class TestShelfcodes(Case):
     def test_shelfcodes(self):
         try:
-            db = DexDB(dsn=self.dsn)
+            library = Library(dsn=self.dsn)
+            db = library.db
             l_id = db.getcursor().selectvalue(
                 'insert into'
                 ' shelfcode(shelfcode, shelfcode_description, shelfcode_type,'

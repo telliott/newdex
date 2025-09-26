@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import time
 import logging
+import re
 
 
 class FieldTuple(tuple):
@@ -66,3 +67,63 @@ def get_logfiles():
         filename = getattr(handler, 'baseFilename', None)
         if filename is not None:
             yield filename
+
+
+NUMBER = re.compile(r'(\d+)')
+TRAILING_ARTICLE = re.compile(', (?:A|AN|THE)$')
+PUNCTUATION_WHITESPACE = re.compile('[-/,: ]+')
+REMOVE_OTHER = re.compile(r'[^A-Z0-9\(\) ]')
+START_PAREN = re.compile(r'^\(')
+START_NUMBER = re.compile(r'^(\d\S+) ?(.*)')
+
+
+def sanitize_sort_key(s):
+    '''
+    Sortkeys are used to order books on the shelf, so we do a little bit
+    of title/author/series munging to get them ordered appropriately. This
+    function strips down the strings for easier sorting.
+
+    Parameters
+    ----------
+    s : string
+        A string (usually author, title or series)
+
+    Returns
+    -------
+    string
+        the string with a bunch of stuff removed so that it can be sorted
+
+    '''
+    # uppercase the string
+    s = s.upper()
+
+    # remove any training articles (a, an, the)
+    s = TRAILING_ARTICLE.sub('', s)
+
+    # replace punctuation and multiple witespaces with a single one
+    s = PUNCTUATION_WHITESPACE.sub(' ', s)
+
+    # remove everything that isn't a letter, number, space or parens
+    s = REMOVE_OTHER.sub('', s)
+
+    # remove an paren at the start. I don't think this is a thing
+    s = START_PAREN.sub('', s)
+
+    # Swap any opening number to the end
+    s = START_NUMBER.sub(r'\2 \1', s)
+
+    def pad_numbers(s):
+        try:
+            n = int(s)
+        except ValueError:
+            return s
+        return '%06d' % n
+
+    # expand any number to 6 digits by prepending zeroes
+    s = ''.join([pad_numbers(i) for i in NUMBER.split(s)])
+
+    # swap parens for <>. I suspect this is just to make regexes on it easier
+    s = s.replace('(', '<')
+    s = s.replace(')', '>')
+
+    return s

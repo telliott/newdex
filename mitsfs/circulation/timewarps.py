@@ -56,7 +56,9 @@ class Timewarps(list):
         super().__init__()
         for row in self.load_from_db(db):
             (t_id, start, end) = row
-            self.append(Timewarp(db, t_id, start=start, end=end))
+            self.append(Timewarp(db, t_id,
+                                 start=coerce_datetime_no_timezone(start),
+                                 end=coerce_datetime_no_timezone(end)))
         self.sort(key=lambda x: x.end)
         self.db = db
 

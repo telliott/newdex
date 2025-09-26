@@ -1,38 +1,163 @@
 from mitsfs.core import db
-from mitsfs.dex import title
+from mitsfs.dex.titles import Title
+
+
+# tested in test_indexes.py
+# It is very annoying that the plural of series is series
+class SeriesIndex(object):
+    def __init__(self, db):
+        self.db = db
+
+    def keys(self):
+        '''
+        Returns
+        -------
+        list(str)
+            A list of all the series in the dex.
+
+        '''
+        c = self.db.getcursor()
+        return c.fetchlist('select series_name from series'
+                           ' order by series_name')
+
+    def search(self, series):
+        '''
+        Search series name for a given substring and return all the IDs that
+        match
+
+        Parameters
+        ----------
+        series : str
+            a string to search for. Will be matched
+            against the start of the name
+
+        Returns
+        -------
+        list(int)
+            a list of series_ids.
+
+        '''
+        c = self.db.getcursor()
+        return c.fetchlist(
+            "select distinct series_id"
+            " from series"
+            " where"
+            "  series_name ilike %s",
+            (f'{series}%',))
+
+    def __getitem__(self, key):
+        '''
+        Allows for series retrieval by name. Requires exact match
+        and returns the titles of the series sorted by the series number
+
+        Parameters
+        ----------
+        key : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        '''
+        c = self.db.getcursor()
+        return (
+            Title(self.db, title_id[0])
+            for title_id
+            in c.execute(
+                'select title_id'
+                ' from title_series'
+                '  natural join series'
+                ' where upper(series_name) = upper(%s)'
+                ' order by'
+                r" NULLIF(regexp_replace(series_index, '\D', '', 'g'),"
+                " '')::int",
+                (key,)))
+
+    def complete(self, s):
+        '''
+        Autocomplete for a series name
+
+        Parameters
+        ----------
+        s : string
+            String to check against the start of series names.
+
+        Returns
+        -------
+        list(str)
+            a list of series names.
+
+        '''
+        c = self.db.getcursor()
+        return c.fetchlist(
+            'select series_name from series'
+            ' where position(%s in upper(series_name)) = 1'
+            ' order by series_name',
+            (s.strip().upper(),))
+
+    def grep(self, s):
+        '''
+        Parameters
+        ----------
+        s : string
+            A streng to match against the series name. Can be a
+            regular expression.
+
+        Returns
+        -------
+        list(title_ids)
+            A list of title_ids where the series name patial-matches
+            the submitted string.
+        '''
+        c = self.db.getcursor()
+        return c.fetchlist(
+            'select title_id'
+            ' from series natural join title_series'
+            ' where series_name ~ %s',
+            (s.upper(),))
 
 
 class Series(db.Entry):
     def __init__(self, db, series_id=None, **kw):
         super().__init__('series', 'series_id', db, series_id, **kw)
 
-    name = db.Field('series_name')
+    series_name = db.Field('series_name')
 
     def __len__(self):
+        '''
+        Returns
+        -------
+        int
+            The number of titles in this series.
+
+        '''
         c = self.db.getcursor()
         return c.selectvalue(
-            'select count(title_id)' +
-            ' from title' +
-            '  natural join title_series' +
-            '  natural join series' +
-            ' where series_id=%s',
+            'select count(title_id) from title_series where series_id=%s',
             (self.id,))
 
     def __iter__(self):
-        # sort this properly 'cus it's convenient
-        c = self.db.getcursor()
-        c.execute(
-            'select title_id' +
-            ' from title' +
-            '  natural join title_responsibility natural join entity' +
-            '  natural join title_title' +
-            '  natural join title_series' +
-            '  natural join series' +
-            ' where order_responsibility_by = 0 and order_title_by = 0' +
-            '  and series_id = %s' +
-            ' order by upper(entity_name), upper(title_name)',
-            (self.id,))
-        if c.rowcount == 0:
-            return []
+        '''
+        Returns
+        -------
+        iterator
+            An iterator of Title objects representing titles in this series.
+            They are ordered by series index, but that'll produce some odd
+            results if there's multiple (e.g. 1,2,3)
 
-        return [title.Title(self.db, x[0]) for x in c.fetchall()]
+        '''
+        c = self.db.getcursor()
+        return (
+            Title(self.db, title_id[0])
+            for title_id
+            in c.execute(
+                'select title_id'
+                ' from title_series'
+                '  natural join series'
+                ' where series_id = %s'
+                ' order by '
+                r" NULLIF(regexp_replace(series_index, '\D', '', 'g'),"
+                " '')::int",
+                (self.id,)))

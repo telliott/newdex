@@ -2,122 +2,7 @@
 import re
 import copy
 from mitsfs.dex import shelfcodes
-
-
-'''
-Useful exception for when a shelfcode doesn't parse
-'''
-
-
-class InvalidShelfcode(Exception):
-    def __init__(self, message, specific):
-        Exception.__init__(self, message + ' ' + repr(specific))
-
-
-'''
-An edition is the association of a shelfcode with a book. It represents
-a concrete volume that the library owns, and may encompass multiple copies
-of that particular book.
-
-If there is metainformation beyond the shelfcode (such as for a box or a
-double) it keeps that information as well.
-
-It also contains information about series visibility, though I have a
-suspicion that this may be vestigial.
-
-Editions contain the following fields:
-    * series_visible
-    * shelfcode - the shelfcode that belongs to this edition
-    * double_info - any extra information for the code (for doubles, etc)
-    * count - the number of copies of this edition
-'''
-
-
-class Edition(object):
-
-    def __init__(self, code):
-        self.count = 1
-        # We can support single k/v pairs of code and count
-        # Just turn the key into the string to parse and pre-set the count
-        if isinstance(code, dict):
-            code_string = next(iter(code))
-            self.count = code[code_string]
-        else:
-            code_string = code
-
-        # splitting on semicolon is not something I've seen anywhere, but
-        # was in the code
-        split = re.split('[;:]', code_string)
-
-        # if we didn't split, that means we only had one copy in the library
-        # which is represented by 'L' rather than 'L:1'. If we have more than
-        # one, it'll split into 2 parts here. Anything else is weird.
-        match len(split):
-            case 1:
-                self.series_visible, self.shelfcode, self.double_info = \
-                    Edition.splitcode(split[0])
-            case 2:
-                self.series_visible, self.shelfcode, self.double_info = \
-                    Edition.splitcode(split[0])
-                self.count = int(split[1])
-            case _:
-                raise InvalidShelfcode('Invalid code string', code_string)
-
-    '''
-    int context means we want to know how many of this particular type
-
-    @return: the count value
-    '''
-
-    def __int__(self):
-        return self.count
-
-    '''
-    @return: the Dex string representing an edition, as it is on the textdex
-    '''
-
-    def __str__(self):
-        if self.count == 1:
-            return "%s%s%s" % ('@' if self.series_visible else '',
-                               self.shelfcode, self.double_info or '')
-        else:
-            return "%s%s%s:%i" % ('@' if self.series_visible else '',
-                                  self.shelfcode, self.double_info or '',
-                                  self.count)
-
-    '''
-    @return: all the fields for debugging
-    '''
-
-    def __repr__(self):
-        s = ', '.join(["%s: %s" % (x, str(getattr(self, x))) for x in
-                       ['series_visible', 'shelfcode',
-                        'double_info', 'count']])
-        return "Edition(" + s + ")"
-
-    '''
-    Splits up a shelfcode into its component parts (everything but the count).
-
-    Note that we use a global variable for the splitting regex. This is
-    because we want to generate it from the list of shelfcodes. Those are
-    stored in the db, and we will have loaded that separately (or possibly not
-    at all yet). It also makes it possible to mock this up for testing of
-    code sections that don't go down to the DB layer.
-
-    @return an array in the order the Edition initializer takes them
-    '''
-    @staticmethod
-    def splitcode(code_string):
-        if shelfcodes.parse_shelfcodes is None:
-            # TODO: Something better here. We haven't initialized DexDB (or
-            # preset the field directly) yet
-            raise Exception
-        m = shelfcodes.parse_shelfcodes.match(code_string)
-        if not m:
-            raise InvalidShelfcode('Unknown shelfcode', code_string)
-        at, shelfcode, doublecode, double_info = m.groups()
-        return at == '@', shelfcode or doublecode, \
-            double_info if double_info else None
+from mitsfs.util.exceptions import InvalidShelfcode
 
 
 '''
@@ -303,3 +188,110 @@ class Editions(dict):
     #     s = self.INVENRE.sub('', s)
     # else:
     #     self.inven_type = None
+
+
+'''
+An edition is the association of a shelfcode with a book. It represents
+a concrete volume that the library owns, and may encompass multiple copies
+of that particular book.
+
+If there is metainformation beyond the shelfcode (such as for a box or a
+double) it keeps that information as well.
+
+It also contains information about series visibility, though I have a
+suspicion that this may be vestigial.
+
+Editions contain the following fields:
+    * series_visible
+    * shelfcode - the shelfcode that belongs to this edition
+    * double_info - any extra information for the code (for doubles, etc)
+    * count - the number of copies of this edition
+'''
+
+
+class Edition(object):
+
+    def __init__(self, code):
+        self.count = 1
+        # We can support single k/v pairs of code and count
+        # Just turn the key into the string to parse and pre-set the count
+        if isinstance(code, dict):
+            code_string = next(iter(code))
+            self.count = code[code_string]
+        else:
+            code_string = code
+
+        # splitting on semicolon is not something I've seen anywhere, but
+        # was in the code
+        split = re.split('[;:]', code_string)
+
+        # if we didn't split, that means we only had one copy in the library
+        # which is represented by 'L' rather than 'L:1'. If we have more than
+        # one, it'll split into 2 parts here. Anything else is weird.
+        match len(split):
+            case 1:
+                self.series_visible, self.shelfcode, self.double_info = \
+                    Edition.splitcode(split[0])
+            case 2:
+                self.series_visible, self.shelfcode, self.double_info = \
+                    Edition.splitcode(split[0])
+                self.count = int(split[1])
+            case _:
+                raise InvalidShelfcode('Invalid code string', code_string)
+
+    '''
+    int context means we want to know how many of this particular type
+
+    @return: the count value
+    '''
+
+    def __int__(self):
+        return self.count
+
+    '''
+    @return: the Dex string representing an edition, as it is on the textdex
+    '''
+
+    def __str__(self):
+        if self.count == 1:
+            return "%s%s%s" % ('@' if self.series_visible else '',
+                               self.shelfcode, self.double_info or '')
+        else:
+            return "%s%s%s:%i" % ('@' if self.series_visible else '',
+                                  self.shelfcode, self.double_info or '',
+                                  self.count)
+
+    '''
+    @return: all the fields for debugging
+    '''
+
+    def __repr__(self):
+        s = ', '.join(["%s: %s" % (x, str(getattr(self, x))) for x in
+                       ['series_visible', 'shelfcode',
+                        'double_info', 'count']])
+        return "Edition(" + s + ")"
+
+    '''
+    Splits up a shelfcode into its component parts (everything but the count).
+
+    Note that we use a global variable for the splitting regex. This is
+    because we want to generate it from the list of shelfcodes. Those are
+    stored in the db, and we will have loaded that separately (or possibly not
+    at all yet). It also makes it possible to mock this up for testing of
+    code sections that don't go down to the DB layer.
+
+    @return an array in the order the Edition initializer takes them
+    '''
+    @staticmethod
+    def splitcode(code_string):
+        if shelfcodes.parse_shelfcodes is None:
+            # TODO: Something better here. We haven't initialized DexDB (or
+            # preset the field directly) yet
+            raise Exception
+        m = shelfcodes.parse_shelfcodes.match(code_string)
+        if not m:
+            raise InvalidShelfcode('Unknown shelfcode', code_string)
+        at, shelfcode, doublecode, double_info = m.groups()
+        return at == '@', shelfcode or doublecode, \
+            double_info if double_info else None
+

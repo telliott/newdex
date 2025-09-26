@@ -18,7 +18,7 @@ from mitsfs.inventory import Inventory, InventoryUnknown
 from mitsfs.tex import TEXBASE, texquote
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.dex.editions import Edition, InvalidShelfcode
-from mitsfs.dex.title import Title
+from mitsfs.dex.titles import Title
 
 __version__ = '0'
 
