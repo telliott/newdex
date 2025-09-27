@@ -29,6 +29,12 @@ class Book(db.Entry):
     # probably vestigial
     comment = db.Field('book_comment')
 
+    def create(self, commit=True):
+        if self.title is None or self.shelfcode is None:
+            raise exceptions.Ambiguity('Title and Shelfcode must be'
+                                       ' defined to create a book')
+        super().create(commit)
+
     @property
     def barcodes(self):
         return self.cursor.fetchlist(
@@ -86,14 +92,13 @@ class Book(db.Entry):
         '''
         if date is None:
             date = datetime.datetime.now()
-        with self.getcursor() as c:
-            if self.out:
-                raise exceptions.CirculationException(
-                    'Book already checked out to ' + str(self.outto))
-            c = checkouts.Checkout(self.db, None, member_id=member.id,
-                                   checkout_stamp=date, book_id=self.id)
-            c.create()
-
+        if self.out:
+            raise exceptions.CirculationException(
+                'Book already checked out to ' + str(self.outto))
+        c = checkouts.Checkout(self.db, None, member_id=member.id,
+                               checkout_stamp=date, book_id=self.id)
+        c.create()
+        return c
 
     def __str__(self):
         return '%s<%s<%s<%s<%s' % (
@@ -102,7 +107,7 @@ class Book(db.Entry):
 
     def str_pretty(self):
         '''
-        returns the first few characters of each section for a fixed width 
+        returns the first few characters of each section for a fixed width
         display
         '''
         return [

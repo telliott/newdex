@@ -522,6 +522,7 @@ def grep(pattern):
             while pattern[-1] == '\\':
                 print('Removing presumably spurious trailing \\.')
                 pattern = pattern[:-1]
+            # library.catalog.grep
             lessiter(dex.grep(pattern))
     except InvalidShelfcode as e:
         print('In shelfcode query:', e)

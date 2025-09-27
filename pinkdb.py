@@ -220,7 +220,7 @@ def mungeshelf(shelfcodes):
         es = ('@' if bsv else '') + shelfcodes[0] + (dc if dc else '')
         t = Title(d, id)
         dl = DexLine(
-            authors=t.authors, titles=t.titles, series=t.series, codes={es: c})
+            authors=t.authors_tuple, titles=t.titles, series=t.series_tuple, codes={es: c})
         dl.othercount = sum(t.codes[i] for i in shelfcodes[1:])
         return dl.shelfkey(es), dl
 

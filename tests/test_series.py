@@ -53,9 +53,9 @@ class SeriesTest(Case):
                 library.db.getcursor().execute(
                      "insert into"
                      " title_series"
-                     " (title_id, series_id, series_index)"
-                     " values(%s, %s, %s)",
-                     (title_id, series.id, i))
+                     " (title_id, series_id, series_index, order_series_by)"
+                     " values(%s, %s, %s, %s)",
+                     (title_id, series.id, i, i))
 
             # Create a new series object with the created series id
             testcase = Series(library.db, series.id)
@@ -67,7 +67,7 @@ class SeriesTest(Case):
 
             i = 1
             for title in series_list:
-                self.assertEqual(f'{series_name} {i}', title.series[0])
+                self.assertEqual(f'{series_name} {i}', str(title.series))
                 i += 1
 
         finally:

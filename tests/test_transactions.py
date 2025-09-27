@@ -113,7 +113,7 @@ class DexDBTest(Case):
             tx4 = FineTransaction(db, thor.id, checkout.id, amount=.30,
                                   description='Transaction 4 (fine)')
             tx4.create()
-   
+
             self.assertEqual(6, len(get_transactions(db, thor.id)))
 
             self.assertEqual('F', tx4.transaction_type)

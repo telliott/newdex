@@ -166,13 +166,14 @@ class DexLine(object):
     titletxt = property(lambda self: str(self.titles))
     seriestxt = property(lambda self: str(self.series))
 
-    placeauthor = property(lambda self: sanitize_sort_key(self.authors[0]))
+    placeauthor = property(lambda self:
+                           sanitize_sort_key(str(self.authors[0])))
     placetitle = property(
-        lambda self: sanitize_sort_key(self.titles[0].split('=')[-1]))
+        lambda self: sanitize_sort_key(str(self.titles[0])))
     TRAILING_NUMBER = re.compile(r' [0-9,]+$')
     placeseries = property(
         lambda self: len(self.series) and sanitize_sort_key(
-            self.TRAILING_NUMBER.sub('', self.series[0])) or '')
+            self.TRAILING_NUMBER.sub('', str(self.series))) or '')
 
     def sortkey(self):
         return (

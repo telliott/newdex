@@ -1,5 +1,4 @@
 from mitsfs.core import db
-from mitsfs.dex.titles import Title
 
 
 # tested in test_indexes.py
@@ -61,19 +60,19 @@ class SeriesIndex(object):
             DESCRIPTION.
 
         '''
+        from mitsfs.dex.titles import Title
         c = self.db.getcursor()
-        return (
+        titles = (
             Title(self.db, title_id[0])
             for title_id
             in c.execute(
                 'select title_id'
                 ' from title_series'
                 '  natural join series'
-                ' where upper(series_name) = upper(%s)'
-                ' order by'
-                r" NULLIF(regexp_replace(series_index, '\D', '', 'g'),"
-                " '')::int",
+                ' where upper(series_name) = upper(%s)',
                 (key,)))
+        # titles.sort()
+        return titles
 
     def complete(self, s):
         '''
@@ -125,6 +124,9 @@ class Series(db.Entry):
 
     series_name = db.Field('series_name')
 
+    def __str__(self):
+        return self.series_name
+
     def __len__(self):
         '''
         Returns
@@ -148,6 +150,7 @@ class Series(db.Entry):
             results if there's multiple (e.g. 1,2,3)
 
         '''
+        from mitsfs.dex.titles import Title
         c = self.db.getcursor()
         return (
             Title(self.db, title_id[0])
@@ -157,7 +160,5 @@ class Series(db.Entry):
                 ' from title_series'
                 '  natural join series'
                 ' where series_id = %s'
-                ' order by '
-                r" NULLIF(regexp_replace(series_index, '\D', '', 'g'),"
-                " '')::int",
+                ' order by order_series_by',
                 (self.id,)))

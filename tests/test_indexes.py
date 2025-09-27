@@ -237,7 +237,7 @@ class IndexesTest(Case):
                                                                loki_name)))
 
             title = next(library.catalog.titles['BOOK8=BOOK EIGHT'])
-            self.assertEqual(f'{loki_name}={loki_alt}', title.authors[0])
+            self.assertEqual(f'{loki_name}={loki_alt}', str(title.authors[0]))
             self.assertEqual(titleids[8], title.id)
 
             # test the series index
@@ -253,7 +253,8 @@ class IndexesTest(Case):
             self.assertEqual(10, len(series_list))
             i = 0
             for title in series_list:
-                self.assertEqual(f'{series_name} {i}', title.series[0])
+                self.assertEqual(f'{series_name} {i}',
+                                 title.series[0])
                 i += 1
 
             # simple grepping

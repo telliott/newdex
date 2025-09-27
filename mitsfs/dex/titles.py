@@ -3,9 +3,11 @@ import re
 from mitsfs import dexfile
 from mitsfs.core import db
 from mitsfs import utils
+from mitsfs.util import exceptions
 from mitsfs.dex.editions import Editions
 from mitsfs.dex.books import Book
-
+from mitsfs.dex.authors import Author
+from mitsfs.dex.series import Series
 
 # this class is tested in test_indexes.py
 class Titles(object):
@@ -212,7 +214,7 @@ class Titles(object):
 
 
 class Title(dexfile.DexLine, db.Entry):
-    def __init__(self, database, title_id):
+    def __init__(self, database, title_id=None):
         db.Entry.__init__(self, 'title', 'title_id', database, title_id)
         self.title_id = title_id
 
@@ -226,7 +228,7 @@ class Title(dexfile.DexLine, db.Entry):
         if name in self.cache:
             return self.cache[key]
 
-        ret = list(self.cursor.execute(sql, (self.title_id,)))
+        ret = list(self.cursor.execute(sql, (self.id,)))
         self.cache[key] = ret
 
         return ret
@@ -241,16 +243,37 @@ class Title(dexfile.DexLine, db.Entry):
             Tuple of the authors attached to this title, in order.
         '''
         # TODO: Figure out what to do with responsibility_types
-        sql = ("select"
-               "  concat_ws('=', entity_name, alternate_entity_name)"
-               " from"
-               "  title_responsibility"
-               "  natural join entity"
-               " where title_id = %s"
-               " order by order_responsibility_by")
+        authors = self.cursor.fetchlist(
+            "select"
+            "  concat_ws('=', entity_name, alternate_entity_name)"
+            " from"
+            "  title_responsibility"
+            "  natural join entity"
+            " where title_id = %s"
+            " order by order_responsibility_by", (self.id,))
 
-        authors = self._cache_query('authors', sql)
-        return utils.FieldTuple([a[0] for a in authors])
+        return utils.FieldTuple(authors)
+
+    def add_author(self, author, responsibility_type='?'):
+        for a in self.authors:
+            if str(author) == a:
+                raise exceptions.DuplicateEntry(
+                    f'{a} is already attached to this title')
+
+        order = self.cursor.selectvalue(
+            'select max(order_responsibility_by) + 1'
+            ' from title_responsibility'
+            ' where title_id = %s', (self.id,))
+        if order is None:
+            order = 0
+
+        self.cursor.execute(
+            'insert into title_responsibility'
+            ' (title_id, entity_id, order_responsibility_by,'
+            ' responsibility_type)'
+            ' values (%s, %s, %s, %s)',
+            (self.id, author.id, order, responsibility_type))
+        self.cache_reset()
 
     @property
     @db.cached
@@ -269,6 +292,27 @@ class Title(dexfile.DexLine, db.Entry):
 
         titles = self._cache_query('titles', sql)
         return utils.FieldTuple([t[0] for t in titles])
+
+    def add_title(self, title_name, alt_name=None):
+        for title in self.titles:
+            if title == title_name or (title.startswith(title_name + '=')
+                                       or title.endswith('=' + title_name)):
+                raise exceptions.DuplicateEntry(
+                    f'{title} is already attached to this title')
+
+        order = self.cursor.selectvalue(
+            'select max(order_title_by) + 1'
+            ' from title_title'
+            ' where title_id = %s', (self.id,))
+        if order is None:
+            order = 0
+
+        self.cursor.execute(
+            'insert into title_title'
+            ' (title_id, title_name, alternate_name, order_title_by)'
+            ' values (%s, %s, %s, %s)',
+            (self.id, title_name, alt_name, order))
+        self.cache_reset()
 
     @property
     @db.cached
@@ -292,11 +336,36 @@ class Title(dexfile.DexLine, db.Entry):
             (' ' + ('#' if number_visible else '') + series_index
              if series_index else '')
             for series_name, series_index, series_visible, number_visible
-            in self._cache_query('series', sql))
+            in self._cache_query('series_tuple', sql))
         return utils.FieldTuple(series_list)
 
+    def add_series(self, series, series_index=None,
+                   series_visible=False, number_visible=False):
+
+        for s in self.series:
+            s = dexfile.SERIES_VISIBLE.sub('', s)
+            s = dexfile.SERIES_NUMBERED.sub('', s)
+            if s == str(series):
+                raise exceptions.DuplicateEntry(
+                    f'{s} is already attached to this title')
+
+        order = self.cursor.selectvalue(
+            'select max(order_series_by) + 1'
+            ' from title_series'
+            ' where title_id = %s', (self.id,))
+        if order is None:
+            order = 0
+
+        self.cursor.execute(
+            'insert into title_series'
+            ' (title_id, series_id, series_index, order_series_by, '
+            ' series_visible, number_visible)'
+            ' values (%s, %s, %s, %s, %s, %s)',
+            (self.id, series.id, series_index, order,
+             series_visible, number_visible))
+        self.cache_reset()
+
     @property
-    @db.cached
     def books(self):
         '''
         Returns
@@ -318,11 +387,10 @@ class Title(dexfile.DexLine, db.Entry):
             "   not withdrawn"
             "  order by shelfcode_id, barcode)"
             " as q",
-            (self.title_id, ))
+            (self.id, ))
         return [Book(self.db, book_id) for book_id in book_list]
 
     @property
-    @db.cached
     def codes(self):
         '''
         Returns
@@ -338,7 +406,6 @@ class Title(dexfile.DexLine, db.Entry):
                          (book.doublecrap if book.doublecrap else ''))
             count.setdefault(shelfcode, 0)
             count[shelfcode] += 1
-
         return Editions(','.join(f'{k}:{v}' for k, v in count.items()))
 
     def __str__(self):
@@ -404,7 +471,7 @@ class Title(dexfile.DexLine, db.Entry):
     @db.cached
     def nicetitle(self):
         '''
-        prints out a pretty looking title/series string (I think). 
+        prints out a pretty looking title/series string (I think).
         Does not seem to be used anywhere, though the code is repeated in a
         few places
         '''
@@ -445,7 +512,7 @@ class Title(dexfile.DexLine, db.Entry):
         None.
 
         '''
-        c = self.cursor or self.dex.cursor
+        c = self.cursor
         c.execute(
             'delete from book where title_id=%s and withdrawn',
             (self.id,))

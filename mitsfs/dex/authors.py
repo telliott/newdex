@@ -1,4 +1,3 @@
-from mitsfs.dex.titles import Title
 from mitsfs.core import db
 
 
@@ -61,6 +60,7 @@ class Authors(object):
             DESCRIPTION.
 
         '''
+        from mitsfs.dex.titles import Title
         c = self.db.getcursor()
         return (
             Title(self.db, title_id[0])
@@ -166,5 +166,5 @@ class Author(db.Entry):
 
     def __str__(self):
         if self.alt_name:
-            return f'{self.name}={self.alte_name}'
+            return f'{self.name}={self.alt_name}'
         return self.name
