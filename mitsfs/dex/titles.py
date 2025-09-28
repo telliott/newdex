@@ -6,8 +6,7 @@ from mitsfs import utils
 from mitsfs.util import exceptions
 from mitsfs.dex.editions import Editions
 from mitsfs.dex.books import Book
-from mitsfs.dex.authors import Author
-from mitsfs.dex.series import Series
+
 
 # this class is tested in test_indexes.py
 class Titles(object):
@@ -391,6 +390,20 @@ class Title(dexfile.DexLine, db.Entry):
         return [Book(self.db, book_id) for book_id in book_list]
 
     @property
+    def withdrawn_books(self):
+        '''
+        Returns
+        -------
+        list(Book)
+            List of the books we used to own in the library
+            associated with this title
+        '''
+        return [Book(self.db, book_id) for book_id in
+                self.cursor.fetchlist(
+                    "select book_id from book where title_id=%s and withdrawn",
+                    (self.id, ))]
+
+    @property
     def codes(self):
         '''
         Returns
@@ -425,50 +438,6 @@ class Title(dexfile.DexLine, db.Entry):
         return self.title_id
 
     @db.cached
-    def shelfkey(self, shelfcode):
-        '''
-        The key for sorting this book. Usually just title and author,
-        bit there are some exceptions for doubles and series.
-
-        Parameters
-        ----------
-        shelfcode : str
-            The shelfcode to use for this calculation (may differ between
-                                                       editions).
-
-        Returns
-        -------
-        tuple
-            elements to sort on for a shelfkey.
-
-        '''
-        author = self.authors[0]
-        title = self.titles[0]
-
-        edition = self.codes[shelfcode]
-
-        # if the edition has double information (usually doubles!) then we sort
-        # primarily by that. Followed by author.
-        if edition.double_info:
-            key = [edition.double_info, author]
-        else:
-            key = [author]
-
-        # If there's a series, we sort on it if the series is on the spine
-        # and if there's a visible series number, sort by those, too
-        if self.series:
-            series, series_index, series_visible, index_visible \
-                = self.series[0]
-            if series_visible:
-                key += [series]
-                if index_visible:
-                    key += [series_index]
-
-        # after all that, sort by the title.
-        key += [title]
-        return tuple(utils.sanitize_sort_key(i).strip() for i in key)
-
-    @db.cached
     def nicetitle(self):
         '''
         prints out a pretty looking title/series string (I think).
@@ -499,33 +468,6 @@ class Title(dexfile.DexLine, db.Entry):
                     ntitles += titles[len(series):]
                 titles = ntitles
         return '|'.join(titles)
-
-    def delete(self):
-        '''
-        Deletes a title. That has cascading effects, because we have to
-        wipe all the associations and any withdrawn books (unclear what
-        should happen if there are unwithdrawn books. Probably should
-        raise an error.)
-
-        Returns
-        -------
-        None.
-
-        '''
-        c = self.cursor
-        c.execute(
-            'delete from book where title_id=%s and withdrawn',
-            (self.id,))
-        c.execute(
-            'delete from title_title where title_id=%s',
-            (self.id,))
-        c.execute(
-            'delete from title_responsibility where title_id=%s',
-            (self.id,))
-        c.execute(
-            'delete from title where title_id=%s',
-            (self.id,))
-        self.db.commit()
 
     @property
     def checkedout(self):

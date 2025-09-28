@@ -14,5 +14,6 @@ class InvalidShelfcode(Exception):
         '''
         Exception.__init__(self, message + ' ' + repr(specific))
 
+
 class DuplicateEntry(Exception):
     pass

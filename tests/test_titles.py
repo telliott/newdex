@@ -116,7 +116,14 @@ class TitleTest(Case):
             self.assertTrue(title.checkedout)
             checkout.checkin()
             self.assertFalse(title.checkedout)
-            
+
+            self.assertEqual(0, len(title.withdrawn_books))
+            for book in title.books:
+                if book.out:
+                    book.checkin()
+                book.withdraw()
+            self.assertEqual(3, len(title.withdrawn_books))
+
         finally:
             library.db.db.close()
 

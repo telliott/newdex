@@ -190,6 +190,7 @@ class DexLine(object):
             key = [edition.double_info, self.placeauthor]
         else:
             key = [self.placeauthor]
+
         if self.series:
             series_visible = (edition.series_visible
                               or self.series[0][0] == '@')

@@ -94,6 +94,9 @@ def sanitize_sort_key(s):
         the string with a bunch of stuff removed so that it can be sorted
 
     '''
+    # remove any extraneous newlines and spaces
+    s = s.strip()
+
     # uppercase the string
     s = s.upper()
 

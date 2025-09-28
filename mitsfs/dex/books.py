@@ -100,6 +100,9 @@ class Book(db.Entry):
         c.create()
         return c
 
+    def withdraw(self):
+        self.withdrawn = True
+        
     def __str__(self):
         return '%s<%s<%s<%s<%s' % (
             self.title.authortxt, self.title.titletxt, self.title.seriestxt,

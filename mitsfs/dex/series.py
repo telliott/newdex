@@ -1,3 +1,5 @@
+import re
+
 from mitsfs.core import db
 
 
@@ -117,6 +119,35 @@ class SeriesIndex(object):
             ' where series_name ~ %s',
             (s.upper(),))
 
+
+SERIESINDEX_RE = re.compile(r'(?: (#)?([-.,\d]+B?))?$')
+def munge_series(name):
+    '''
+    Given a series string, return the component information
+        name: name of the series
+        index: book number in the series
+        series_visible: the series name is visible on the book spine
+        index_visivle: the series number is visible on the book spine
+
+    Parameters
+    ----------
+    name : str
+        String representation of a series.
+
+    Returns
+    -------
+    tuple(name, index, series_visible, number_visible)
+        The broken-down elements of this series.
+
+    '''
+    if not name:
+        return None
+    series_visible = name[0] == '@'
+    if series_visible:
+        name = name[1:]
+    number_visible, index = SERIESINDEX_RE.search(name).groups()
+    name = SERIESINDEX_RE.sub('', name)
+    return (name, index, series_visible, bool(number_visible))
 
 class Series(db.Entry):
     def __init__(self, db, series_id=None, **kw):

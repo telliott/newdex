@@ -29,7 +29,7 @@ from mitsfs.circulation.checkouts import Checkouts, Checkout
 from mitsfs.circulation.members import Member
 from mitsfs.dex.titles import Titles, Title
 from mitsfs.dex.books import Book
-from mitsfs.dex.series import SeriesIndex, Series
+from mitsfs.dex.series import SeriesIndex, Series, munge_series
 from mitsfs.dex.authors import Authors
 
 from io import open
@@ -908,19 +908,6 @@ class DexDB(db.Database):
                     "  shelfcode_type"
                     " from shelfcode"))
         return self._codes
-
-SERIESINDEX_RE = re.compile(r'(?: (#)?([-.,\d]+B?))?$')
-
-def munge_series(name):
-    'name -> name, index, series_visisble, number_visible'
-    if not name:
-        return None
-    series_visible = name[0] == '@'
-    if series_visible:
-        name = name[1:]
-    number_visible, index = SERIESINDEX_RE.search(name).groups()
-    name = SERIESINDEX_RE.sub('', name)
-    return name, index, series_visible, bool(number_visible)
 
 
 def diff(a, b):
