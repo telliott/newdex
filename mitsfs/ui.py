@@ -15,7 +15,10 @@ import itertools
 import logging
 import os
 import re
-import readline
+try:
+    import gnureadline as readline
+except ImportError:
+    import readline
 import sys
 import termios
 import traceback
@@ -69,8 +72,8 @@ class CompleteAdapter(object):
 
 # This is the way to do tab completion on a mac. If we lose it on Athena,
 # revert to the other line.
-readline.parse_and_bind('bind ^I rl_complete')
-# readline.parse_and_bind("tab: complete")
+#readline.parse_and_bind('bind ^I rl_complete')
+readline.parse_and_bind("tab: complete")
 readline.set_completer_delims('@|')
 
 
@@ -163,9 +166,9 @@ def read(prompt, callback=None, preload=None, history=None, complete=None):
         readline.set_completer(None)
         if completer and completer.errlog:
             print(completer.errlog)
-        return result
-    #finally:
-        #unstash_and_unswitch_history()
+        return result.strip()
+    # finally:
+        # unstash_and_unswitch_history()
 
 
 def reqarg(s):
@@ -305,6 +308,15 @@ def readaddress():
     return new
 
 
+def readshelfcode(prompt, shelfcodes=None):
+    while True:
+        shelfcode = read(prompt).strip().upper()
+        if shelfcodes and shelfcode not in shelfcodes:
+            print(f'{shelfcode} is not a valid shelfcode')
+            continue
+        return shelfcode
+
+
 def maxresults():
     return termheight() - 1
 
@@ -359,7 +371,7 @@ def specify(library, preload=None, predicate=None):
         if not author and not title:
             return None
 
-        possibles = library.grep(f'{author}<{title}')
+        possibles = library.catalog.grep(f'{author}<{title}')
         if predicate is not None:
             possibles = [book for book in possibles if predicate(book)]
 
@@ -385,7 +397,7 @@ def specify(library, preload=None, predicate=None):
 
 
 def specify_book(
-        dex, preload=None, authorcomplete=None, titlecomplete=None,
+        library, preload=None, authorcomplete=None, titlecomplete=None,
         title_predicate=None, book_predicate=lambda book: True
         ):
     if preload is None:
@@ -396,7 +408,7 @@ def specify_book(
 
     while True:
         if authorcomplete is None:
-            complete = dex.indices.authors.complete
+            complete = library.catalog.authors.complete
         else:
             complete = authorcomplete
         print('To return, type Control-C or leave author and title blank')
@@ -406,89 +418,85 @@ def specify_book(
             history='authors',
             complete=complete,
             ).upper().strip()
-        maybe = dex.barcode(author)
-        if maybe:
-            return maybe
+        # maybe = dex.barcode(author)
+        # if maybe:
+        #     return maybe
         book = None
-        if (len(author.split('<')) in (4, 5) and
-                '<'.join(author.split('<')[:4]) in dex):
-            book = dex[author]
+        if titlecomplete:
+            def complete(text):
+                return titlecomplete(text, author=author)
         else:
-            if titlecomplete:
-                def complete(text):
-                    return titlecomplete(text, author=author)
-            else:
-                def complete(text):
-                    return dex.indices.titles.complete(text, author=author)
-            title = read(
-                'Title: ',
-                preload=title_preload,
-                history='titles',
-                complete=complete,
-                ).upper().strip()
-            title = re.sub(r'^(?:A|AN|THE) ', '', title)
-            author_preload, title_preload = '', ''
+            def complete(text):
+                return library.catalog.titles.complete(text, author=author)
+        title = read(
+            'Title: ',
+            preload=title_preload,
+            history='titles',
+            complete=complete,
+            ).upper().strip()
+        title = re.sub(r'^(?:A|AN|THE) ', '', title)
+        author_preload, title_preload = '', ''
 
-            if not author and not title:
-                return None
+        if not author and not title:
+            return None
 
-            possibles = list(dex.search(author, title))
-            if title_predicate is not None:
-                possibles = [
-                    book for book in possibles if title_predicate(book)]
+        possibles = list(library.catalog.grep('<'.join([author, title])))
+        if title_predicate is not None:
+            possibles = [
+                book for book in possibles if title_predicate(book)]
 
-            n = None
-            if len(possibles) == 0:
-                print("Nothing found, try again")
-            elif len(possibles) == 1:
-                n = 1
-            elif len(possibles) < maxresults():
-                for i, name in enumerate(possibles):
-                    print(Color.select(str(i + 1) + '.'), name)
-                n = readnumber('? ', 0, len(possibles) + 1, 'select')
-            else:
-                print("Too many options (%d), try again" % len(possibles))
-            if n == 0:
-                return None
-            if n is None:
-                author_preload, title_preload = author, title
-                continue
+        n = None
+        if len(possibles) == 0:
+            print("Nothing found, try again")
+        elif len(possibles) == 1:
+            n = 1
+        elif len(possibles) < maxresults():
+            for i, name in enumerate(possibles):
+                print(Color.select(str(i + 1) + '.'), name)
+            n = readnumber('? ', 0, len(possibles) + 1, 'select')
+        else:
+            print("Too many options (%d), try again" % len(possibles))
+        if n == 0:
+            return None
+        if n is None:
+            author_preload, title_preload = author, title
+            continue
 
-            book = possibles[n - 1]
+        book = possibles[n - 1]
 
-            books = [
-                (x, list(y))
-                for (x, y) in itertools.groupby(
-                    (i for i in book.books if book_predicate(i)),
-                    lambda x: (x.shelfcode, x.barcodes, x.outto))]
+        books = [
+            (x, list(y))
+            for (x, y) in itertools.groupby(
+                (i for i in book.books if book_predicate(i)),
+                lambda x: (x.shelfcode, x.barcodes, x.outto))]
 
-            n = None
-            if len(books) == 0:
-                print("Nothing found, Try again")
-            else:
-                print(book)
-                for (i, ((shelfcode, barcodes, outto), booklist)) in \
-                        enumerate(books):
-                    count = len(booklist)
-                    if outto:
-                        outto = ' (out to ' + outto + ')'
-                    if count > 1:
-                        s = (
-                            Color.select(str(i + 1) + '.') +
-                            '%2dx %s %s%s' % (
-                                count, shelfcode, ', '.join(barcodes), outto))
-                    else:
-                        s = (
-                            Color.select(str(i + 1) + '.') +
-                            '    %s %s%s' % (
-                                shelfcode, ', '.join(barcodes), outto))
-                    print(s)
-                n = readnumber('? ', 0, len(books) + 1, 'select')
-            if n is None or n == 0:
-                continue
-            return books[n - 1][1][0]
-
-
+        n = None
+        if len(books) == 0:
+            print("Nothing found, Try again")
+        else:
+            print(book)
+            for (i, ((shelfcode, barcodes, outto), booklist)) in \
+                    enumerate(books):
+                count = len(booklist)
+                if outto:
+                    outto = ' (out to ' + outto + ')'
+                if count > 1:
+                    s = (
+                        Color.select(str(i + 1) + '.') +
+                        '%2dx %s %s%s' % (
+                            count, shelfcode, ', '.join(barcodes), outto))
+                else:
+                    s = (
+                        Color.select(str(i + 1) + '.') +
+                        '    %s %s%s' % (
+                            shelfcode, ', '.join(barcodes), outto))
+                print(s)
+            n = readnumber('? ', 0, len(books) + 1, 'select')
+        if n is None or n == 0:
+            continue
+        return books[n - 1][1][0]
+    
+    
 def specify_member(member_list, line=''):
     preload = ''
     while True:
@@ -623,7 +631,9 @@ def menu(menu_in, line='', once=False, cleanup=None, title=None):
 
 def readyes(prompt, history=None):
     line = read(prompt, history=history).lower().strip()
-    return line and line[0] == 'y'
+    if line and line[0] == 'y':
+        return True
+    return False
 
 
 def banner(program, release):

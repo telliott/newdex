@@ -20,6 +20,28 @@ class Authors(object):
                 ' from entity'
                 ' order by entity_name')
 
+    def __contains__(self, author):
+        '''
+        Do we have this author in the dex? Requires an exact match
+
+        Parameters
+        ----------
+        author : str
+            a string to search for.
+
+        Returns
+        -------
+        bool - if the author exists
+
+        '''
+        val = self.db.getcursor().select_value(
+            "select entity_id"
+            " from entity"
+            " where"
+            "  entity_name = %s or alternate_entity_name = %s",
+            (author, author))
+        return val is not None
+
     def search(self, author):
         '''
         Search author name for a given substring and return all the IDs that

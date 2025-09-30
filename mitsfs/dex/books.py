@@ -63,7 +63,7 @@ class Book(db.Entry):
         Thm member this book is out to, if any. If there are multiple
         members... probably not great
         '''
-        return ' '.join(str(members.Member(self.db, x.member_id))
+        return ' '.join(members.Member(self.db, x.member_id).full_name
                         for x in self.checkout_history.out)
 
     @property

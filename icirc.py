@@ -20,7 +20,7 @@ from mitsfs.circulation.checkouts import Checkouts
 
 from mitsfs import library
 from mitsfs.core import settings
-from mitsfs.utils import selecters
+from mitsfs.util import selecters
 
 __release__ = '1.1'
 
@@ -47,7 +47,7 @@ clear the screen and the user never seens your very important message.
 This is the case with going back up the menu stack. If your menu's function
 pointer is None, the menu will return control back to your method, at which
 point you likely want to print the header for the menu that's being 
-reyirmed to.
+returned to.
 '''
 
 def no_member_header():
@@ -84,7 +84,7 @@ def member_header(member, title='Member Menu'):
                        membership_head_len - len(keyholder))
     print(f'{member}{keyholder}{spaces}{membership_head}')
 
-    books_out = len(member.checkouts.out)
+    books_out = len(member.checkout_history.out)
     match books_out:
         case 0:
             books_out = "No books out"
@@ -154,7 +154,7 @@ def main_menu(line):
 
         while True:
             book = specify_book(
-                dex,
+                library,
                 authorcomplete=library.catalog.authors.complete_checkedout,
                 titlecomplete=library.catalog.titles.complete_checkedout,
                 # TODO: this isn't currently working for books that are
@@ -313,7 +313,7 @@ def member_menu(line):
             print("Check out books for member", str(member))
             print()
             book = specify_book(
-                dex,
+                library,
                 title_predicate=title_predicate,
                 book_predicate=book_predicate,
             )

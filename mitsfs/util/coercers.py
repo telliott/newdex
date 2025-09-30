@@ -1,4 +1,4 @@
-
+from mitsfs.core import settings
 '''
 Coercers are helper functions that take a value from the database (which
 is usually a string) and turn it into the correct format that the model needs.
@@ -44,7 +44,10 @@ def coerce_shelfcode(field, db):
     Turn a shelfcode ID into a shelfcode object
     '''
     from mitsfs.dex.shelfcodes import Shelfcodes
-    shelfcodes = Shelfcodes(db)
+    if settings.shelfcodes_global:
+        shelfcodes = settings.shelfcodes_global
+    else:
+        shelfcodes = Shelfcodes(db)
     for code in shelfcodes.values():
         if code.id == field:
             return code

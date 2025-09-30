@@ -313,6 +313,14 @@ class Title(dexfile.DexLine, db.Entry):
             (self.id, title_name, alt_name, order))
         self.cache_reset()
 
+    def update_title(self, old_title, new_title, new_alt):
+        self.cursor.execute(
+            'update title_title'
+            ' set title_name = %s, alternate_name = %s'
+            ' where title_id = %s and title_name = %s',
+            (new_title, new_alt, self.id, old_title))
+        self.cache_reset()
+
     @property
     @db.cached
     def series(self):
