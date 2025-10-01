@@ -6,7 +6,7 @@ from mitsfs import utils
 from mitsfs.util import exceptions
 from mitsfs.dex.editions import Editions
 from mitsfs.dex.books import Book
-
+from mitsfs.dex.series import sanitize_series
 
 # this class is tested in test_indexes.py
 class Titles(object):
@@ -212,6 +212,32 @@ class Titles(object):
             (s.upper(), s.upper()))
 
 
+TITLE_FORBIDDEN = re.compile(r'[\|=<]')
+def sanitize_title(field, db=None):
+    '''
+    Clean out characters that would cause a Dexline problem. Also uppercases
+    everything
+
+    Parameters
+    ----------
+    field : string
+        the field to be sanitized.
+    db : Database
+        Unnexessary here, but this is used as a coercer, which
+        sends it. The default is None.
+
+    Returns
+    -------
+    string
+        the sanitized string.
+
+    '''
+    if field is None:
+        return None
+    field = re.sub(TITLE_FORBIDDEN, '', field)
+    return field.upper()
+
+
 class Title(dexfile.DexLine, db.Entry):
     def __init__(self, database, title_id=None):
         db.Entry.__init__(self, 'title', 'title_id', database, title_id)
@@ -236,6 +262,9 @@ class Title(dexfile.DexLine, db.Entry):
     @db.cached
     def authors(self):
         '''
+        Author strings. This is for backwards compatibility with the dex, so
+        long term we should migrate to the right objects
+
         Returns
         -------
         FieldTuple (string)
@@ -253,7 +282,49 @@ class Title(dexfile.DexLine, db.Entry):
 
         return utils.FieldTuple(authors)
 
+    @property
+    @db.cached
+    def author_objects(self):
+        '''
+        Returns
+        -------
+        List (Author)
+            List of the authors attached to this title, in order.
+        '''
+        from mitsfs.dex.authors import Author
+        # TODO: Figure out what to do with responsibility_types
+        authors = self.cursor.fetchlist(
+            "select"
+            "  entity_id"
+            " from"
+            "  title_responsibility"
+            "  natural join entity"
+            " where title_id = %s"
+            " order by order_responsibility_by", (self.id,))
+
+        return [Author(self.db, i) for i in authors]
+
     def add_author(self, author, responsibility_type='?'):
+        '''
+        Adds an author to this title
+
+        Parameters
+        ----------
+        author : Author
+            The author object to add.
+        responsibility_type : str, optional
+            Need to work on this. The default is '?'.
+
+        Raises
+        ------
+        DuplicateEntry
+            The author is already attached to this title.
+
+        Returns
+        -------
+        None.
+
+        '''
         for a in self.authors:
             if str(author) == a:
                 raise exceptions.DuplicateEntry(
@@ -272,6 +343,42 @@ class Title(dexfile.DexLine, db.Entry):
             ' responsibility_type)'
             ' values (%s, %s, %s, %s)',
             (self.id, author.id, order, responsibility_type))
+        self.cache_reset()
+
+    def remove_author(self, author):
+        '''
+        Remove the author association from the title. If there are
+        subsequent authors, bump them up a notch in the order
+
+        Parameters
+        ----------
+        author : Author
+            Author object describing the author to be removed.
+
+        Returns
+        -------
+        None.
+
+        '''
+        order = self.cursor.selectvalue(
+            'select order_responsibility_by from title_responsibility'
+            ' where title_id = %s and entity_id = %s',
+            (self.id, author.id))
+
+        if order is None:
+            raise exceptions.NotFoundException("No author with this id")
+
+        self.cursor.execute(
+            'delete from title_responsibility'
+            ' where title_id = %s and entity_id = %s',
+            (self.id, author.id))
+
+        self.cursor.execute(
+            'update title_responsibility'
+            ' set order_responsibility_by = order_responsibility_by - 1'
+            ' where title_id = %s and order_responsibility_by > %s',
+            (self.id, order))
+
         self.cache_reset()
 
     @property
@@ -293,12 +400,16 @@ class Title(dexfile.DexLine, db.Entry):
         return utils.FieldTuple([t[0] for t in titles])
 
     def add_title(self, title_name, alt_name=None):
+        title_name = sanitize_title(title_name)
+        alt_name = sanitize_title(alt_name)
         for title in self.titles:
             if title == title_name or (title.startswith(title_name + '=')
                                        or title.endswith('=' + title_name)):
                 raise exceptions.DuplicateEntry(
                     f'{title} is already attached to this title')
 
+        # get the current position of the last title, so we can order this
+        # after it
         order = self.cursor.selectvalue(
             'select max(order_title_by) + 1'
             ' from title_title'
@@ -311,14 +422,40 @@ class Title(dexfile.DexLine, db.Entry):
             ' (title_id, title_name, alternate_name, order_title_by)'
             ' values (%s, %s, %s, %s)',
             (self.id, title_name, alt_name, order))
+
         self.cache_reset()
 
     def update_title(self, old_title, new_title, new_alt):
+        new_title = sanitize_title(new_title)
+        new_alt = sanitize_title(new_alt)
         self.cursor.execute(
             'update title_title'
             ' set title_name = %s, alternate_name = %s'
             ' where title_id = %s and title_name = %s',
             (new_title, new_alt, self.id, old_title))
+
+        self.cache_reset()
+
+    def remove_title(self, old_title):
+        order = self.cursor.selectvalue(
+            'select order_title_by from title_title'
+            ' where title_id = %s and title_name = %s',
+            (self.id, old_title))
+
+        if order is None:
+            raise exceptions.NotFoundException(f'No title {old_title}')
+
+        self.cursor.execute(
+            'delete from title_title'
+            ' where title_id = %s and title_name = %s',
+            (self.id, old_title))
+
+        self.cursor.execute(
+            'update title_title'
+            ' set order_title_by = order_title_by - 1'
+            ' where title_id = %s and order_title_by > %s',
+            (self.id, order))
+
         self.cache_reset()
 
     @property
@@ -348,7 +485,7 @@ class Title(dexfile.DexLine, db.Entry):
 
     def add_series(self, series, series_index=None,
                    series_visible=False, number_visible=False):
-
+        series = sanitize_series(series)
         for s in self.series:
             s = dexfile.SERIES_VISIBLE.sub('', s)
             s = dexfile.SERIES_NUMBERED.sub('', s)
@@ -370,6 +507,34 @@ class Title(dexfile.DexLine, db.Entry):
             ' values (%s, %s, %s, %s, %s, %s)',
             (self.id, series.id, series_index, order,
              series_visible, number_visible))
+
+        self.cache_reset()
+
+    def remove_series(self, series):
+        series_id = self.cursor.selectvalue(
+            'select series_id from series'
+            ' where series_name = %s',
+            (series,))
+
+        if series_id is None:
+            raise exceptions.NotFoundException("No series with this name")
+
+        order = self.cursor.selectvalue(
+            'select order_series_by from title_series'
+            ' where title_id = %s and series_id = %s',
+            (self.id, series_id))
+
+        self.cursor.execute(
+            'delete from title_series'
+            ' where title_id = %s and series_id = %s',
+            (self.id, series_id))
+
+        self.cursor.execute(
+            'update title_series'
+            ' set order_series_by = order_series_by - 1'
+            ' where title_id = %s and order_series_by > %s',
+            (self.id, order))
+
         self.cache_reset()
 
     @property

@@ -46,7 +46,7 @@ class Catalog(object):
             if len(candidates) > 3 and candidates[3]:
                 code_ids = []
                 for shelfcode in candidates[3].split(','):
-                    code_ids += self.editions.grep(shelfcode)
+                    code_ids += self.editions.grep(shelfcode.upper())
                 if ids_filled:
                     ids = ids.intersection(code_ids)
                 else:

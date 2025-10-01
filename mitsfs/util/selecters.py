@@ -1,4 +1,5 @@
 from mitsfs import ui
+from mitsfs.dex.series import Series, sanitize_series
 
 
 def select_generic(candidates):
@@ -139,12 +140,13 @@ def select_author(library):
 
 
 def select_series(library):
-    from mitsfs.dex.series import Series
 
     series = []
     while True:
-        name = ui.read('Enter a series (blank to finish): ',
-                       complete=library.catalog.series.complete).upper()
+        name = sanitize_series(
+            ui.read('Enter a series (blank to finish): ',
+                    complete=library.catalog.series.complete)
+            ).upper()
         if not name:
             break
 

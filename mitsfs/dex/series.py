@@ -149,11 +149,37 @@ def munge_series(name):
     name = SERIESINDEX_RE.sub('', name)
     return (name, index, series_visible, bool(number_visible))
 
+
+SERIES_FORBIDDEN = re.compile(r'[\|@\[\]#=<]')
+def sanitize_series(field, db=None):
+    '''
+    Clean out characters that would cause a Dexline problem
+
+    Parameters
+    ----------
+    field : string
+        the field to be sanitized.
+    db : Database
+        Unnexessary here, but this is used as a coercer, which
+        sends it. The default is None.
+
+    Returns
+    -------
+    string
+        the sanitized string.
+
+    '''
+    if field is None:
+        return None
+    field = re.sub(SERIES_FORBIDDEN, '', field)
+    return field.upper()
+
+
 class Series(db.Entry):
     def __init__(self, db, series_id=None, **kw):
         super().__init__('series', 'series_id', db, series_id, **kw)
 
-    series_name = db.Field('series_name')
+    series_name = db.Field('series_name', coercer=sanitize_series)
 
     def __str__(self):
         return self.series_name

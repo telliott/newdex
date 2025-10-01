@@ -1,3 +1,4 @@
+import re
 from mitsfs.core import db
 
 
@@ -174,6 +175,31 @@ class Authors(object):
             (s.upper(), s.upper()))
 
 
+AUTHOR_FORBIDDEN = re.compile(r'[\|=<]')
+def sanitize_author(field, db=None):
+    '''
+    Clean out characters that would cause a Dexline problem
+
+    Parameters
+    ----------
+    field : string
+        the field to be sanitized.
+    db : Database
+        Unnexessary here, but this is used as a coercer, which
+        sends it. The default is None.
+
+    Returns
+    -------
+    string
+        the sanitized string.
+
+    '''
+    if field is None:
+        return None
+    field = re.sub(AUTHOR_FORBIDDEN, '', field)
+    return field.upper()
+
+
 class Author(db.Entry):
     '''
     Titles tend to grab authors directly, so this class isn't used much. But,
@@ -183,8 +209,8 @@ class Author(db.Entry):
     def __init__(self, db, author_id=None, **kw):
         super().__init__('entity', 'entity_id', db, author_id, **kw)
 
-    name = db.Field('entity_name')
-    alt_name = db.Field('alternate_entity_name')
+    name = db.Field('entity_name', coercer=sanitize_author)
+    alt_name = db.Field('alternate_entity_name', coercer=sanitize_author)
 
     def __str__(self):
         if self.alt_name:
