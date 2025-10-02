@@ -458,6 +458,31 @@ class Title(dexfile.DexLine, db.Entry):
 
         self.cache_reset()
 
+    def merge_title(self, other_book):
+
+        self.cursor.execute(
+            'update book'
+            ' set title_id = %s'
+            ' where title_id = %s',
+            (self.id, other_book.id))
+
+        self.cursor.execute(
+            'delete from title_responsibility'
+            ' where title_id = %s',
+            (other_book.id,))
+
+        self.cursor.execute(
+            'delete from title_series'
+            ' where title_id = %s',
+            (other_book.id,))
+
+        self.cursor.execute(
+            'delete from title_title'
+            ' where title_id = %s',
+            (other_book.id,))
+        
+        self.db.commit()
+
     @property
     @db.cached
     def series(self):

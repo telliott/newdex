@@ -4,8 +4,7 @@ import sys
 import optparse
 import datetime
 
-from mitsfs.dexdb import DexDB
-from mitsfs.ui import Color, banner, tabulate, money_str, \
+from mitsfs.ui import Color, tabulate, money_str, \
                 read, readmoney, readaddress, readdate, \
                 readvalidate, readnumber, readyes, reademail, readphone, \
                 readinitials, specify, specify_book, specify_member, \
@@ -34,19 +33,19 @@ parser = optparse.OptionParser(
     version='%prog ' + __release__)
 
 '''
-icirc is the circulation system app. It handles everything involving people - 
+icirc is the circulation system app. It handles everything involving people -
 adding/deleting members, memberships, checkin/checkout, fines, transactions
 
 The circulation system is built around a set of menus, each of which contains
 its own functions. In general, when you return from one of those functions,
 it will print the menu again. So if you want to clear the screen, generate
-a header, and write some stuff before the menu prints, you need to do it 
-before you return from the function. Otherwise, something else would 
+a header, and write some stuff before the menu prints, you need to do it
+before you return from the function. Otherwise, something else would
 clear the screen and the user never seens your very important message.
 
 This is the case with going back up the menu stack. If your menu's function
 pointer is None, the menu will return control back to your method, at which
-point you likely want to print the header for the menu that's being 
+point you likely want to print the header for the menu that's being
 returned to.
 '''
 
@@ -54,7 +53,7 @@ def no_member_header():
     '''
     Clears the screen and prints the header when there's no member selected'
     '''
-    
+
     ui.clear_screen()
     width = min(termwidth(), 80) - 1
     print('-' * width)
@@ -71,7 +70,7 @@ def member_header(member, title='Member Menu'):
     title = f'  {title}  '
 
     print(f'{title:-^{width}}')
-    
+
     # first row contains member name (including keyholder initials) and
     # membership status. We get the left justification here by calculating
     # length of the fields and padding the rest. Don't forget to strip
@@ -106,29 +105,15 @@ def member_header(member, title='Member Menu'):
 
 
 def main(args):
-    global library # all the information about the library. 
-    global dex # information about the books. Will eventually include this in
-                # library
-    global member #if a member is selected, they will be in here
+    # all the information about the library.
+    global library  
+    # if a member is selected, they will be in here
+    global member 
 
-
-    # the dex will eventually live in library.catalog. But right now it's a 
-    # subclass of Database, and the unit tests break if there's multiple
-    # db connections. So for now we invert the relationship and library
-    # takes the db connection from dex.
-    try:
-        dex = DexDB(client=program)
-    except Exception as e:
-        # The traceback is unlikely to be nearly so useful as the error
-        # message, and will cause people to miss the meat of the error message
-        print(str(e))
-        exit(1)
-
-    library = library.Library(dsn=dex.dsn)
+    library = library.Library()
 
     if library.db.dsn != settings.DATABASE_DSN:
-        library.log.warn(f'Using database: {dex.dsn}')
-        exit()
+        library.log.warn(f'Using database: {library.db.dsn}')
 
     main_menu('')
 
@@ -273,7 +258,7 @@ def member_menu(line):
     def checkout(line, advanced=False):
         '''
         Check out a book for the active member
-        
+
         Handles both regular and advanced checkouts. By default,
         can only check out circulating books today to members who are in good
         standing. If you need to violate these rules, you'll be directed to
@@ -707,7 +692,7 @@ def financial(line):
 
     def assess_fine(line, tx_type='F'):
         '''
-        Add a fine. 
+        Add a fine.
         '''
         financial_header()
         print('Enter the fine amount, this will decrease '
@@ -818,7 +803,7 @@ def financial(line):
 
     def void_transaction(line):
         '''
-        Voids a previous transaction. This gets a little complicated, because 
+        Voids a previous transaction. This gets a little complicated, because
         it also needs to void any linked transactions
         '''
         financial_header()

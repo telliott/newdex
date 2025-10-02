@@ -200,10 +200,10 @@ def sanitize_author(field, db=None):
     return field.upper()
 
 
-class Author(db.Entry):
+class Author(db.EntryDeletable):
     '''
     Titles tend to grab authors directly, so this class isn't used much. But,
-    it's useful for creating them.
+    it's useful for creating and deleting them.
     '''
 
     def __init__(self, db, author_id=None, **kw):
@@ -216,3 +216,30 @@ class Author(db.Entry):
         if self.alt_name:
             return f'{self.name}={self.alt_name}'
         return self.name
+
+    def merge_author(self, other):
+        '''
+        Takes another author and deletes it, replacing it with this author
+
+        Parameters
+        ----------
+        other : Author
+            The author object to merge in and delete.
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.db.getcursor().execute(
+            'update title_responsibility'
+            ' set entity_id = %s'
+            ' where entity_id = %s',
+            (self.id, other.id))
+
+        self.db.getcursor().execute(
+            'delete from entity'
+            ' where entity_id = %s',
+            (other.id,))
+
+        self.db.commit()

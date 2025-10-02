@@ -22,7 +22,6 @@ except ImportError:
 import sys
 import termios
 import traceback
-import pprint
 import datetime
 
 from mitsfs.error import handle_exception
@@ -33,16 +32,6 @@ try:
     we_get_ctypes = True
 except ImportError:
     we_get_ctypes = False
-
-
-__all__ = [
-    'read', 'readlines', 'readnumber', 'specify', 'specify_book',
-    'menu', 'readyes', 'banner', 'motd', 'tabulate', 'specify_member',
-    'readvalidate', 'readmoney', 'readdate', 'menuize_dict',
-    'clear_screen', 'readbarcode', 'money_str', 'reademail',
-    'readaddress', 'readinitials', 'Color', 'termwidth', 'len_color_str',
-    'pfill', 'lfill', 'smul', 'rmul', 'bold', 'sgr0', 'termheight',
-    ]
 
 
 class CompleteAdapter(object):
@@ -70,8 +59,8 @@ class CompleteAdapter(object):
             self.log.error('%s', exc)
 
 
-# This is the way to do tab completion on a mac. If we lose it on Athena,
-# revert to the other line.
+# This is sometimes the way to do tab completion on a mac. If we lose 
+# it on Athena, try the other line.
 #readline.parse_and_bind('bind ^I rl_complete')
 readline.parse_and_bind("tab: complete")
 readline.set_completer_delims('@|')
@@ -131,48 +120,44 @@ def len_color_str(s):
 def money_str(money):
     bal_color = "CYAN"
     if money < 0:
-            bal_color = "RED"
+        bal_color = "RED"
     return color('$%.2f' % (money,), bal_color)
 
 
 def read(prompt, callback=None, preload=None, history=None, complete=None):
-    #stash_and_switch_history(history)
-    #try:
-        if complete is not None:
-            completer = CompleteAdapter(complete)
-            readline.set_completer(completer)
-        elif callback is not None:
-            completer = CompleteAdapter(
-                lambda text: (
-                    i for i in callback() if i.startswith(text.upper())))
-            readline.set_completer(completer)
-        else:
-            completer = None
-        while True:
-            if preload is not None:
-                def setup():
-                    readline.insert_text(preload)
-                    readline.redisplay()
-                    readline.set_pre_input_hook(None)
-                readline.set_pre_input_hook(setup)
-            result = input(prompt)
-            if not result or result[0] != '!':
-                break
-            command = result[1:].strip()
-            if not command:
-                command = '$SHELL -i'
-            os.system(command)
+    if complete is not None:
+        completer = CompleteAdapter(complete)
+        readline.set_completer(completer)
+    elif callback is not None:
+        completer = CompleteAdapter(
+            lambda text: (
+                i for i in callback() if i.startswith(text.upper())))
+        readline.set_completer(completer)
+    else:
+        completer = None
+    while True:
+        if preload is not None:
+            def setup():
+                readline.insert_text(preload)
+                readline.redisplay()
+                readline.set_pre_input_hook(None)
+            readline.set_pre_input_hook(setup)
+        result = input(prompt)
+        if not result or result[0] != '!':
+            break
+        command = result[1:].strip()
+        if not command:
+            command = '$SHELL -i'
+        os.system(command)
 
-        readline.set_completer(None)
-        if completer and completer.errlog:
-            print(completer.errlog)
-        return result.strip()
-    # finally:
-        # unstash_and_unswitch_history()
+    readline.set_completer(None)
+    if completer and completer.errlog:
+        print(completer.errlog)
+    return result.strip()
 
 
 def reqarg(s):
-    if(len(s.strip()) > 0):
+    if (len(s.strip()) > 0):
         return True
     else:
         print("Input cannot be blank")
@@ -495,8 +480,7 @@ def specify_book(
         if n is None or n == 0:
             continue
         return books[n - 1][1][0]
-    
-    
+     
 def specify_member(member_list, line=''):
     preload = ''
     while True:
@@ -635,22 +619,9 @@ def readyes(prompt, history=None):
         return True
     return False
 
-
-def banner(program, release):
-    print('This is %s %s' % (program, release))
-    motd()
-
-
-def motd():
-    from mitsfs.constants import LOCKER
-    try:
-        print(open(os.path.join(LOCKER, 'dexcode/motd')).read())
-    except IOError:
-        pass
-
-
-def menuize_dict(d):
-    return [(Color.select(k + '.'), d[k]) for k in sorted(d)]
+# This seems to be unused
+# def menuize_dict(d):
+#     return [(Color.select(k + '.'), d[k]) for k in sorted(d)]
 
 
 def tabulate(t):

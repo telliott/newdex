@@ -12,7 +12,7 @@ from mitsfs.util import selecters
 title = None
 
 '''
-hamster is the book tracking system. It handles everything involving books -
+hamster is the book inventory system. It handles everything involving books -
 adding/deleting titles, authors, series, editions, etc
 
 Hamster is built around a set of menus, each of which contains
@@ -102,12 +102,34 @@ def main_menu(line):
             print('Enter a grep pattern.')
             print('Can search on sections using < notation.'
                   ' (blank line to exit)')
-            grepstring = ui.read('> ')        
+            grepstring = ui.read('> ')
             if not grepstring:
                 break
             for title in library.catalog.grep(grepstring):
                 print(str(title))
         no_book_header()
+
+    def select(line):
+        '''
+        Select a title to work with in the title menus
+        '''
+        global title
+        title = ui.specify(library)
+        if title:
+            book_menu(line)
+        no_book_header()
+
+    no_book_header()
+
+    recursive_menu([
+        ('S', 'Select Book', select),
+        ('G', 'Grep for Books', grep),
+        ('C', 'Create/Edit Elements', edit_menu),
+        ('Q', 'Quit', None),
+        ], title='Main Menu')
+
+
+def edit_menu(line):
 
     def new_author(line):
         no_book_header()
@@ -178,6 +200,21 @@ def main_menu(line):
         no_book_header()
         print(f'Created {title}')
 
+    def merge_authors(line):
+        no_book_header()
+        print('Select the author to keep')
+        keep = selecters.select_author(library, create=False, single=True)
+        print(f'Select the author to merge into {keep}')
+        merge = selecters.select_author(library, create=False, single=True)
+        merge_txt = str(merge)
+        print(f'Merge {merge} into {keep}?')
+        merge_txt = str(merge)
+        if ui.readyes("Confirm? [yN]: "):
+            keep.merge_author(merge)
+
+        no_book_header()
+        print(f'Merged {merge_txt} into {keep}')
+
     def new_series(line):
         no_book_header()
         print('Create a series:')
@@ -201,26 +238,30 @@ def main_menu(line):
         no_book_header()
         print(f'{name} created')
 
-    def select(line):
-        '''
-        Select a title to work with in the title menus
-        '''
-        global title
-        title = ui.specify(library)
-        if title:
-            book_menu(line)
+    def merge_series(line):
         no_book_header()
+        print('Select the series to keep')
+        keep = selecters.select_series(library, create=False, single=True)
+        print(f'Select the series to merge into {keep}')
+        merge = selecters.select_series(library, create=False, single=True)
+        print(f'Merge {merge} into {keep}?')
+        merge_txt = str(merge)
+        if ui.readyes("Confirm? [yN]: "):
+            keep.merge_series(merge)
+
+        no_book_header()
+        print(f'Merged {merge_txt} into {keep}')
 
     no_book_header()
 
     recursive_menu([
-        ('S', 'Select Book', select),
-        ('G', 'Grep for Books', grep),
         ('T', 'Create Title', new_title),
         ('A', 'Create Author', new_author),
-        ('V', 'Create Series', new_series),
-        ('Q', 'Quit', None),
-        ], title='Main Menu')
+        ('M', 'Merge Authors', merge_authors),
+        ('S', 'Create Series', new_series),
+        ('N', 'Merge Series', merge_series),
+        ('Q', 'Back to Main Menu', None),
+        ], title='Edit Menu')
 
 
 def book_menu(line):
@@ -405,6 +446,16 @@ def advanced_edit(line):
         library.db.commit()
         book_header()
 
+    def merge_title(line):
+        book_header()
+        print('Specify the title to merge')
+        other_book = ui.specify(library)
+
+        print(f'Merging {other_book} into this one')
+        if ui.readyes("Confirm? [yN]: "):
+            title.merge_title(other_book)
+        book_header()
+
     def menu_options():
         menu = [('T', 'Add Title', add_title)]
         if len(title.titles) > 1:
@@ -416,7 +467,7 @@ def advanced_edit(line):
         if title.series:
             menu.append(('V', 'Remove Series', remove_series))
 
-        #menu.append(('M', 'Merge Another Book', merge_book))
+        menu.append(('M', 'Merge Another Title', merge_title))
         menu.append(('Q', 'Back to Book Menu', None))
         return menu
 

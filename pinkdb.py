@@ -214,7 +214,7 @@ def mungeshelf(shelfcodes):
         '  and (' + ' or '.join(['shelfcode=%s'] * len(shelfcodes)) + ')'
         ' group by title_id, book_series_visible, doublecrap')
     args = shelfcodes
-    print ('mungeshelf', query)
+    print('mungeshelf', query)
 
     def constructor(id, bsv, dc, c):
         es = ('@' if bsv else '') + shelfcodes[0] + (dc if dc else '')

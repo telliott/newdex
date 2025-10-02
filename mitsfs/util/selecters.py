@@ -101,7 +101,7 @@ def select_edition(title):
     return books[n - 1]
 
 
-def select_author(library):
+def select_author(library, create=True, single=False):
     from mitsfs.dex.authors import Author
 
     authors = []
@@ -118,6 +118,10 @@ def select_author(library):
         candidates = library.catalog.authors.search(author)
 
         if not candidates:
+            if not create:
+                print('Author not found. Please try again.')
+                continue
+
             if ui.readyes(f'{author} does not exist. Create? [yN] '):
                 selection = Author(library.db, name=author)
                 selection.create()
@@ -127,19 +131,23 @@ def select_author(library):
             if len(author_list) == 1 and author_list[0].name == author:
                 selection = author_list[0]
             else:
-                author_list.append(Author(library.db,
-                                          name=f'Create {author}'))
+                if create:
+                    author_list.append(Author(library.db,
+                                              name=f'Create {author}'))
                 selection = select_generic(author_list)
                 if selection.id is None:
                     selection.name = author
                     selection.create()
         # TODO: Ask about responsibility
+
+        if single:
+            return selection
         authors.append(selection)
 
     return authors
 
 
-def select_series(library):
+def select_series(library, create=True, single=False):
 
     series = []
     while True:
@@ -153,6 +161,10 @@ def select_series(library):
         candidates = library.catalog.series.search(name)
 
         if not candidates:
+            if not create:
+                print('Series not found. Please try again.')
+                continue
+
             if ui.readyes(f'{name} does not exist. Create? [yN] '):
                 selection = Series(library.db, series_name=name)
                 selection.create()
@@ -162,14 +174,20 @@ def select_series(library):
             if (len(series_list) == 1 and series_list[0].series_name == name):
                 selection = series_list[0]
             else:
-                series_list.append(Series(library.db,
-                                          series_name=f'Create {series}'))
+                if create:
+                    series_list.append(Series(library.db,
+                                              series_name=f'Create {series}'))
                 selection = select_generic(series_list)
                 if selection is None:
                     continue
                 if selection.id is None:
                     selection.series_name = name
                     selection.create()
+
+        # this is a bit hacky - single is used for deletion, so we don't
+        # need the other data
+        if single:
+            return selection
 
         series_visible = ui.readyes('Is this series visible'
                                     ' on the spine? [yN] ')

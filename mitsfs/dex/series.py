@@ -175,7 +175,7 @@ def sanitize_series(field, db=None):
     return field.upper()
 
 
-class Series(db.Entry):
+class Series(db.EntryDeletable):
     def __init__(self, db, series_id=None, **kw):
         super().__init__('series', 'series_id', db, series_id, **kw)
 
@@ -219,3 +219,30 @@ class Series(db.Entry):
                 ' where series_id = %s'
                 ' order by order_series_by',
                 (self.id,)))
+
+    def merge_series(self, other):
+        '''
+        Takes another series and deletes it, replacing it with this series
+
+        Parameters
+        ----------
+        other : Series
+            The series object to merge in and delete.
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.db.getcursor().execute(
+            'update title_series'
+            ' set series_id = %s'
+            ' where series_id = %s',
+            (self.id, other.id))
+
+        self.db.getcursor().execute(
+            'delete from series'
+            ' where series_id = %s',
+            (other.id,))
+
+        self.db.commit()
