@@ -4,14 +4,6 @@ import sys
 import optparse
 import datetime
 
-from mitsfs.ui import Color, tabulate, money_str, \
-                read, readmoney, readaddress, readdate, \
-                readvalidate, readnumber, readyes, reademail, readphone, \
-                readinitials, specify, specify_book, specify_member, \
-                len_color_str, termwidth
-
-from mitsfs import ui
-
 from mitsfs.circulation import members
 from mitsfs.circulation.transactions import get_transactions, \
     Transaction, CashTransaction
@@ -19,7 +11,7 @@ from mitsfs.circulation.checkouts import Checkouts
 
 from mitsfs import library
 from mitsfs.core import settings
-from mitsfs.util import selecters
+from mitsfs.util import ui, selecters
 
 __release__ = '1.1'
 
@@ -55,7 +47,7 @@ def no_member_header():
     '''
 
     ui.clear_screen()
-    width = min(termwidth(), 80) - 1
+    width = min(ui.termwidth(), 80) - 1
     print('-' * width)
     print(f'{"MITSFS Circulation System":^{width}}')
     print('-' * width)
@@ -66,7 +58,7 @@ def member_header(member, title='Member Menu'):
     Clears the screen and prints the header for the member selected menus'
     '''
     ui.clear_screen()
-    width = min(termwidth(), 80) - 1
+    width = min(ui.termwidth(), 80) - 1
     title = f'  {title}  '
 
     print(f'{title:-^{width}}')
@@ -75,7 +67,7 @@ def member_header(member, title='Member Menu'):
     # membership status. We get the left justification here by calculating
     # length of the fields and padding the rest. Don't forget to strip
     # out any ansi terminal colors!
-    name_len = len_color_str(member)
+    name_len = ui.len_color_str(member)
     membership_head = 'Membership: ' + member.membership.description
     membership_head_len = len(membership_head)
     keyholder = f' ({member.key_initials})' if member.key_initials else ''
@@ -95,9 +87,9 @@ def member_header(member, title='Member Menu'):
     # second row contains the financial balance, books out and member expiry
     # We center the books out by calculating the length of the spacing in the
     # middle, then putting the books in that
-    balance = money_str(member.balance)
-    balance_len = len('Balance: ') + len_color_str(balance)
-    expiry_len = len_color_str(member.membership.expiry)
+    balance = ui.money_str(member.balance)
+    balance_len = len('Balance: ') + ui.len_color_str(balance)
+    expiry_len = ui.len_color_str(member.membership.expiry)
     spaces = max(1, width - balance_len - expiry_len)
     print(f'Balance: {balance}{books_out:^{spaces}}{member.membership.expiry}')
     print('-' * width)
@@ -125,7 +117,7 @@ def main_menu(line):
         Select a user to work with in the user menus
         '''
         global member
-        member = specify_member(library.members, line)
+        member = ui.specify_member(library.members, line)
         if member:
             member_menu(line)
         no_member_header()
@@ -138,7 +130,7 @@ def main_menu(line):
         no_member_header()
 
         while True:
-            book = specify_book(
+            book = ui.specify_book(
                 library,
                 authorcomplete=library.catalog.authors.complete_checkedout,
                 titlecomplete=library.catalog.titles.complete_checkedout,
@@ -156,7 +148,7 @@ def main_menu(line):
             checkin_date = None
             if pick_date:
                 print("Specify check in date:")
-                checkin_date = readdate(datetime.datetime.today(), False)
+                checkin_date = ui.readdate(datetime.datetime.today(), False)
 
             no_member_header()
             checkouts = book.checkout_history.out
@@ -164,15 +156,16 @@ def main_menu(line):
                 print("No editions of this book are checked out right now.")
                 continue
             if len(checkouts.out) > 1:
-                print(Color.warning('Warning: %s is checked out more than once'
-                                    % (book,)))
+                print(ui.Color.warning(
+                    'Warning: %s is checked out more than once'
+                    % (book,)))
             for checkout in checkouts.out:
-                print(Color.info(checkout.checkin(checkin_date)))
+                print(ui.Color.info(checkout.checkin(checkin_date)))
         no_member_header()
 
     def checkin_advanced(line):
         '''
-        Checkin that lets you specify a date. Useful for bookdrop processing
+        Checkin that lets you ui.specify a date. Useful for bookdrop processing
         '''
         checkin(line, pick_date=True)
 
@@ -183,8 +176,8 @@ def main_menu(line):
         no_member_header()
         print("Adding a new member")
 
-        first = readvalidate("First Name: ").strip()
-        last = readvalidate("Last Name: ").strip()
+        first = ui.readvalidate("First Name: ").strip()
+        last = ui.readvalidate("Last Name: ").strip()
 
         # Find will split the string on the space and search for both parts
         names = library.members.find(f'{first} {last}')
@@ -194,13 +187,13 @@ def main_menu(line):
                 print("    " + str(n))
             print('Are your sure you want to continue, instead of editing a')
             print('membership in the edit menu?')
-            if not readyes('Continue? [' + Color.yN + '] '):
+            if not ui.readyes('Continue? [' + ui.Color.yN + '] '):
                 return
-        email = reademail("Email (required): ")
-        phone = readphone("Phone number: ")
-        address = readaddress()
+        email = ui.reademail("Email (required): ")
+        phone = ui.readphone("Phone number: ")
+        address = ui.readaddress()
 
-        if not readyes('Add this member? [' + Color.yN + '] '):
+        if not ui.readyes('Add this member? [' + ui.Color.yN + '] '):
             return
 
         newmember = members.Member(library.db, first_name=first,
@@ -217,7 +210,7 @@ def main_menu(line):
         print('Member added.')
         print()
 
-        if readyes('Add a membership to new member? [' + Color.yN + '] '):
+        if ui.readyes('Add a membership to new member? [' + ui.Color.yN + '] '):
             membership(None)
         member_menu(line)
         no_member_header()
@@ -227,7 +220,7 @@ def main_menu(line):
         List all copies of the selected book, with who has it checked out
         '''
         no_member_header()
-        title = specify(library)
+        title = ui.specify(library)
         if not title:
             return
 
@@ -240,7 +233,6 @@ def main_menu(line):
 
     no_member_header()
     print('Main Menu')
-    print()
 
     recursive_menu([
         ('S', 'Select Member', select),
@@ -271,10 +263,10 @@ def member_menu(line):
 
             if not ok:
                 if advanced:
-                    print(Color.warning('\n'.join('WARNING: ' + msg
+                    print(ui.Color.warning('\n'.join('WARNING: ' + msg
                                                   for msg in msgs)))
                 else:
-                    print(Color.warning('\n'.join(msgs)))
+                    print(ui.Color.warning('\n'.join(msgs)))
                     print()
                     print(correct + ' or use nonstandard  checkout.')
                     return
@@ -297,7 +289,7 @@ def member_menu(line):
 
             print("Check out books for member", str(member))
             print()
-            book = specify_book(
+            book = ui.specify_book(
                 library,
                 title_predicate=title_predicate,
                 book_predicate=book_predicate,
@@ -314,7 +306,7 @@ def member_menu(line):
             checkout_date = None
             if advanced:
                 print("Specify check out date:")
-                checkout_date = readdate(datetime.datetime.today(), False)
+                checkout_date = ui.readdate(datetime.datetime.today(), False)
 
             checkout = book.checkout(member, checkout_date)
             print('Checking out:')
@@ -337,7 +329,7 @@ def member_menu(line):
         member_header(member)
         while True:
             if not member.checkout_history.out:
-                print(Color.warning('No books are checked out.'))
+                print(ui.Color.warning('No books are checked out.'))
                 return
 
             checkout = selecters.select_checkout(member.checkout_history.out)
@@ -348,10 +340,10 @@ def member_menu(line):
             checkin_date = None
             if pick_date:
                 print("Specify check in date:")
-                checkin_date = readdate(datetime.datetime.today(), False)
+                checkin_date = ui.readdate(datetime.datetime.today(), False)
 
             member_header(member)
-            print(Color.info(checkout.checkin(checkin_date)))
+            print(ui.Color.info(checkout.checkin(checkin_date)))
             print()
 
     def checkin_member_advanced(line):
@@ -366,14 +358,15 @@ def member_menu(line):
         '''
         member_header(member)
         if not member.checkout_history.out:
-            print(Color.warning('No books are checked out.'))
+            print(ui.Color.warning('No books are checked out.'))
             return
 
         while True:
             if not member.checkout_history.out:
                 break
 
-            checkout = selecters.select_checkout('Select book to '
+            checkout = selecters.select_checkout(member.checkout_history.out,
+                                                 prompt='Select book to '
                                                  'declare as lost: ')
             print()
 
@@ -393,6 +386,7 @@ def member_menu(line):
         '''
         member_header(member)
         check_balance(member, print_notices=True)
+        member_header(member)
 
     def unselect(line):
         '''
@@ -437,15 +431,15 @@ def viewmem(line):
 
     def financial_history(line):
         member_header(member, 'Financial History')
-        print(tabulate(
+        print(ui.tabulate(
             [('Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-            [(money_str(t.amount), t.created_by, t.created.date(),
+            [(ui.money_str(t.amount), t.created_by, t.created.date(),
                 t.type_description, t.description)
                 for t in member.transactions]))
 
     def membership_history(line):
         member_header(member, 'Membership History')
-        print(tabulate(
+        print(ui.tabulate(
             [("Membership History", "Keyholder", "Bought")] +
             [(str(m), str(m.created_by), str(m.created.date()))
              for m in member.membership_history]))
@@ -473,8 +467,10 @@ def editmem(line):
         member_header(member, 'Edit Member')
         print(f'Current:\n\t First Name: {member.first_name}, '
               f'Last Name: {member.last_name}')
-        first = read("New First Name (blank to retain): ").strip()
-        last = read("New Last Name (blank to retain): ").strip()
+        first = ui.read("New First Name (blank to retain): ",
+                        preload=member.first_name).strip()
+        last = ui.read("New Last Name (blank to retain): ",
+                       preload=member.last_name).strip()
 
         if first:
             member.first_name = first
@@ -487,7 +483,7 @@ def editmem(line):
     def edit_email(line):
         member_header(member, 'Edit Member')
         print(f'Current: {member.email}')
-        email = reademail("New Email: ").strip()
+        email = ui.reademail("New Email: ").strip()
         print()
         print(member.info())
 
@@ -500,7 +496,7 @@ def editmem(line):
     def edit_address(line):
         member_header(member, 'Edit Member')
         print(f'Current: {member.address}')
-        address = readaddress()
+        address = ui.readaddress()
         if address:
             member.address = address
         member_header(member, 'Edit Member')
@@ -510,7 +506,7 @@ def editmem(line):
     def edit_phone(line):
         member_header(member, 'Edit Member')
         print(f'Current: {member.phone}')
-        phone = readphone('New Phone: ').strip()
+        phone = ui.readphone('New Phone: ').strip()
 
         if phone:
             member.phone = phone
@@ -569,11 +565,11 @@ def starchamber(line):
         elif member.email.lower().endswith('@mit.edu'):
             role = member.email.split('@')[0].lower()
 
-        role = read('Kerberos name? ', preload=role)
+        role = ui.read('Kerberos name? ', preload=role)
         if not role:
             return
         while True:
-            inits = readinitials("Keyholder initials? ").strip()
+            inits = ui.readinitials("Keyholder initials? ").strip()
             if member.check_initials_ok(inits):
                 member.key(role, inits)
                 member_header(member, 'Star Chamber')
@@ -585,7 +581,7 @@ def starchamber(line):
 
     def dekey(line):
         print('Dekeying', member.full_name)
-        if not readyes('Are you sure? '):
+        if not ui.readyes('Are you sure? '):
             return
         cttes = member.committees
         member.dekey()
@@ -595,7 +591,7 @@ def starchamber(line):
             print(f'{member.first_name} was on', ' '.join(cttes))
 
     def add_to_committee(line):
-        committee = read(
+        committee = ui.read(
             'Committee? ',
             callback=lambda: members.star_cttes(library.db) + ['*chamber'],
             ).lower().strip()
@@ -611,7 +607,7 @@ def starchamber(line):
         print(f'{committee} members: {committee_members}')
 
     def remove_committee(line):
-        committee = read(
+        committee = ui.read(
             'Committee? ',
             callback=lambda: member.committees,
             ).lower().strip()
@@ -630,7 +626,7 @@ def starchamber(line):
 
     def merge(line):
         print('User entry that is merging with this one')
-        other = specify_member(library.members, line)
+        other = ui.specify_member(library.members, line)
         if other is None:
             return
         if other.id == member.id:
@@ -679,11 +675,11 @@ def financial(line):
         financial_header()
         print('Enter amount of donation, this will increase'
               'the member\'s balance.')
-        amount = readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        amount = ui.readmoney().copy_abs()
+        desc = ui.read('Enter description: ', history='description')
+        print('Adding %s to account of %s.' % (ui.money_str(amount), member))
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         tx = Transaction(library.db, member.id, amount=amount,
                          transaction_type='D', description=desc)
@@ -698,11 +694,11 @@ def financial(line):
         print('Enter the fine amount, this will decrease '
               'the member\'s balance.')
         amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
+        desc = ui.read('Enter description: ', history='description')
 
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        print(f'Adding {ui.money_str(amount)} to account of {member}.')
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         tx = Transaction(library.db, member.id, amount=amount,
                          transaction_type=tx_type, description=desc)
@@ -723,13 +719,13 @@ def financial(line):
         financial_header()
         print('Enter the amount being paid, this will increase'
               ' the member\'s balance.')
-        amount = readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
+        amount = ui.readmoney().copy_abs()
+        desc = ui.read('Enter description: ', history='description')
 
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        print(f'Adding {money_str(amount)} to cash drawer')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        print(f'Adding {ui.money_str(amount)} to account of {member}.')
+        print(f'Adding {ui.money_str(amount)} to cash drawer')
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         cash_tx = CashTransaction(library.db, member.id, member.normal_str,
                                   amount=amount, transaction_type='P',
@@ -743,12 +739,12 @@ def financial(line):
         '''
         financial_header()
         print('Enter amount (negative for fines, positive for credit).')
-        amount = readmoney()
-        desc = read('Enter description: ', history='description')
+        amount = ui.readmoney()
+        desc = ui.read('Enter description: ', history='description')
 
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        print('Adding %s to account of %s.' % (ui.money_str(amount), member))
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         tx = Transaction(library.db, member.id, amount=amount,
                          transaction_type='L', description=desc)
@@ -768,11 +764,11 @@ def financial(line):
               ' to add a new membership; They can pay there.')
         print('Enter an amount; this will decrease the member\'s balance.')
         amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
+        desc = ui.read('Enter description: ', history='description')
 
-        print('Adding %s to account of %s.' % (money_str(amount), member))
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        print('Adding %s to account of %s.' % (ui.money_str(amount), member))
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         tx = Transaction(library.db, member.id, amount=amount,
                          transaction_type='L', description=desc)
@@ -788,12 +784,12 @@ def financial(line):
         print('Enter the amount the member is being reimbursed, this'
               ' will decrease the member\'s balance.')
         amount = -readmoney().copy_abs()
-        desc = read('Enter description: ', history='description')
+        desc = ui.read('Enter description: ', history='description')
 
-        print(f'Adding {money_str(amount)} to account of {member}.')
-        print(f'Adding {money_str(amount)} to cash drawer')
-        if not readyes(
-                'Commit the transaction? [' + Color.yN + '] '):
+        print(f'Adding {ui.money_str(amount)} to account of {member}.')
+        print(f'Adding {ui.money_str(amount)} to cash drawer')
+        if not ui.readyes(
+                'Commit the transaction? [' + ui.Color.yN + '] '):
             return
         cash_tx = CashTransaction(library.db, member.id, member.normal_str,
                                   amount=amount, transaction_type='R',
@@ -814,28 +810,28 @@ def financial(line):
             return
 
         # generate a selectable list of previous transactions
-        quit_item = (Color.select('Q.'), 'Back to Main Menu')
+        quit_item = (ui.Color.select('Q.'), 'Back to Main Menu')
         print('Non-void Transactions of ', member)
-        print(tabulate(
+        print(ui.tabulate(
             [('#', 'Amount', 'Keyholder', 'Date', 'Type', 'Description')] +
-            [(Color.select(str(i + 1) + '.'), money_str(tx.amount),
+            [(ui.Color.select(str(i + 1) + '.'), ui.money_str(tx.amount),
                 tx.created_by, tx.created.date(),
                 tx.type_description, tx.description)
                 for (i, tx) in enumerate(txns)] +
             [quit_item]))
 
-        num = readnumber(
+        num = ui.readnumber(
             'Select transaction to void: ', 1, len(txns) + 1, escape='Q')
 
         if num is not None:
             print()
             voided = txns[num - 1].void()
             print("Voided transactions:")
-            print(tabulate(
+            print(ui.tabulate(
                 [('Member', 'Amount', 'Keyholder', 'Date', 'Type',
                     'Description')] +
                 [(members.Member(library.db, tx.member_id).full_name,
-                  money_str(tx.amount), tx.created_by, tx.created.date(),
+                  ui.money_str(tx.amount), tx.created_by, tx.created.date(),
                   tx.type_description, tx.description)
                  for tx in voided]))
         financial_header()
@@ -957,12 +953,12 @@ def membership(line):
 
     print("Select membership type:")
 
-    print(tabulate([Color.select(key) + '.',
-                    library.membership_types[key].description,
-                    '$%.2f' % library.membership_types[key].cost]
-                   for key in library.membership_types.keys()))
+    print(ui.tabulate([ui.Color.select(key) + '.',
+                       library.membership_types[key].description,
+                       '$%.2f' % library.membership_types[key].cost]
+                      for key in library.membership_types.keys()))
 
-    member_type_char = readvalidate(
+    member_type_char = ui.readvalidate(
         'Select Membership Type: ', validate=validate).upper()
     member_type = library.membership_types[member_type_char]
 
@@ -980,7 +976,7 @@ def membership(line):
     else:
         msg += '.'
     print(msg)
-    if readyes('Continue? [' + Color.yN + '] '):
+    if ui.readyes('Continue? [' + ui.Color.yN + '] '):
         member.membership_add(member_type)
         check_balance(member, 'Membership Payment')
 
@@ -994,10 +990,10 @@ def check_balance(member, desc="Payment", print_notices=False):
 
     if amount > 0:
         print('Member', member, 'has a negative balance')
-        if readyes('Pay balance? [' + Color.yN + '] '):
-            amount = readmoney(
+        if ui.readyes('Pay balance? [' + ui.Color.yN + '] '):
+            amount = ui.readmoney(
                 amount,
-                prompt2='Is member paying %s? [' + Color.yN + '] ',
+                prompt2='Is member paying %s? [' + ui.Color.yN + '] ',
                 prompt='Amount they are paying: ')
 
             desc = desc + ' by ' + member.normal_str

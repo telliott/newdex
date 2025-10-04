@@ -17,7 +17,7 @@ __all__ = [
 
 db_seed = itertools.count()
 def make_dbname():
-    return ('mitsfs%d'  % next(db_seed))
+    return ('mitsfs%d' % next(db_seed))
 
 
 class Case(unittest.TestCase):
@@ -39,23 +39,23 @@ class Case(unittest.TestCase):
         this test case."""
         self.dbname = make_dbname()
         self.dsn = 'dbname=%s' % self.dbname
-       
+
         try:
             self.adminsql("create database %s encoding='UTF8'", self.dbname)
         except psycopg2.OperationalError:
             raise
-        
+
         # find a schema.sql file walking up the directory. Limit to 5 levels
         # to prevent infinite loops
-        schema_path = '.'
+        schema_path = '../setup'
         for i in range(5):
             if 'schema.sql' in os.listdir(schema_path):
                 break
             schema_path = '../' + schema_path
-            
+
         if 'schema.sql' not in os.listdir(schema_path):
             raise Exception
-            
+
         try:
             output = subprocess.check_output(
                 ('psql', self.dsn, '-f', schema_path + '/schema.sql'),

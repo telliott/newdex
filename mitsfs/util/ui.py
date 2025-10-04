@@ -24,8 +24,7 @@ import termios
 import traceback
 import datetime
 
-from mitsfs.error import handle_exception
-from mitsfs.barcode import validate_barcode
+#from mitsfs.util.barcode import validate_barcode
 
 try:
     import ctypes
@@ -213,16 +212,16 @@ def readnumber(prompt, start, end, history=None, escape=None):
             continue
 
 
-def readbarcode():
-    while True:
-        prompt = "Scan Barcode: "
-        in_barcode = read(prompt, history="barcode").strip()
-        if not in_barcode:
-            return None
-        if validate_barcode(in_barcode):
-            return in_barcode
-        else:
-            print("Invalid Barcode")
+# def readbarcode():
+#     while True:
+#         prompt = "Scan Barcode: "
+#         in_barcode = read(prompt, history="barcode").strip()
+#         if not in_barcode:
+#             return None
+#         if validate_barcode(in_barcode):
+#             return in_barcode
+#         else:
+#             print("Invalid Barcode")
 
 
 def readmoney(
@@ -291,15 +290,6 @@ def readphone(prompt):
 def readaddress():
     new = readlines('Address (End with a dot on a line by itself):')
     return new
-
-
-def readshelfcode(prompt, shelfcodes=None):
-    while True:
-        shelfcode = read(prompt).strip().upper()
-        if shelfcodes and shelfcode not in shelfcodes:
-            print(f'{shelfcode} is not a valid shelfcode')
-            continue
-        return shelfcode
 
 
 def maxresults():
@@ -542,6 +532,23 @@ smul = _putcap('smul')
 rmul = _putcap('rmul')
 sgr0 = _putcap('sgr0')
 bold = _putcap('bold')
+
+
+def handle_exception(context, exc_info):
+    '''
+    Print the traceback, log the exception.
+    If we have email logging on, email the logs and exception
+    '''
+    log = logging.getLogger('mitsfs.error')
+    log.error('%s', context, exc_info=exc_info)
+    # Flush the log file so we can get exception
+    for handler_ref in logging._handlerList:
+        handle = handler_ref()
+        if handle:
+            handle.flush()
+
+    type_, value_, traceback_ = exc_info
+    traceback.print_exception(type_, value_, traceback_)
 
 
 def menu(menu_in, line='', once=False, cleanup=None, title=None):

@@ -6,7 +6,7 @@ MITSFS package
 
 import logging
 import os
-from mitsfs import utils
+from mitsfs.util import utils
 
 #mask = os.umask(0700)
 logging.basicConfig(

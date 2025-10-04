@@ -1,5 +1,5 @@
 from mitsfs.core import db
-from mitsfs.ui import money_str
+from mitsfs.util.ui import money_str
 
 '''
 Classes to write and retrieve the various financial transactions a member can

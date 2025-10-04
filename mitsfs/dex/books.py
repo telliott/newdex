@@ -2,7 +2,7 @@ import datetime
 
 from mitsfs.core import db
 from mitsfs.util import coercers
-from mitsfs import barcode
+from mitsfs.dex import barcode
 from mitsfs.circulation import checkouts
 from mitsfs.circulation import members
 from mitsfs.util import exceptions
@@ -102,7 +102,7 @@ class Book(db.Entry):
 
     def withdraw(self):
         self.withdrawn = True
-        
+
     def __str__(self):
         return '%s<%s<%s<%s<%s' % (
             self.title.authortxt, self.title.titletxt, self.title.seriestxt,

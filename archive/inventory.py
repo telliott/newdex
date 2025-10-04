@@ -7,7 +7,7 @@ from mitsfs.inventory import Inventory
 from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.core.settings import DATABASE_DSN
-from mitsfs.ui import tabulate
+from mitsfs.util.ui import tabulate
 from mitsfs.dex.titles import Title
 
 CLOSING_GLOSS = """

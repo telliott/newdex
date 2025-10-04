@@ -2,7 +2,7 @@
 
 
 import sys
-from mitsfs.ui import banner, specify_book, read
+from mitsfs.util.ui import banner, specify_book, read
 from mitsfs.barcode import valifrob
 from mitsfs.dexdb import DexDB
 __release__ = '0'

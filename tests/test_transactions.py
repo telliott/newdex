@@ -6,8 +6,8 @@ testdir = os.path.dirname(__file__)
 srcdir = '../'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from mitsfs.dexdb import DexDB
-from mitsfs.dexfile import DexLine
+from mitsfs.library import Library
+from mitsfs.core.dexline import DexLine
 
 from mitsfs.circulation.members import Member
 from mitsfs.circulation.transactions import get_transactions, Transaction, \
@@ -27,33 +27,34 @@ def create_test_member(d):
     return newmember
 
 
-class DexDBTest(Case):
+class TransactionsTest(Case):
     def test_transactions(self):
         try:
-            db = DexDB(dsn=self.dsn)
+            library = Library(dsn=self.dsn)
 
-            thor = create_test_member(db)
+            thor = create_test_member(library.db)
 
             # create shelfcodes for our book
-            db.getcursor().execute(
+            library.db.getcursor().execute(
                 "insert into"
                 " shelfcode(shelfcode, shelfcode_description, shelfcode_type)"
                 " values('P', 'Paperbacks', 'C')")
-            db.commit()
-            db.shelfcodes = Shelfcodes(db)
+            library.db.commit()
+            library.shelfcodes.load_from_db()
 
             # create our book for checking out
-            db.add(DexLine('AUTHOR<TITLE<SERIES<P'))
-            titles = list(db.search('AUTHOR', 'TITLE'))
+            library.catalog.add_from_dexline('AUTHOR<TITLE<SERIES<P')
+            titles = list(library.catalog.grep('^AUTHOR$<^TITLE$'))
             title = titles[0]
             book = title.books[0]
 
             # add a couple basic transactions
-            tx1 = Transaction(db, thor.id, amount=10, transaction_type='M',
+            tx1 = Transaction(library.db, thor.id, amount=10,
+                              transaction_type='M',
                               description='Transaction one')
             tx1.create()
 
-            transactions = get_transactions(db, thor.id)
+            transactions = get_transactions(library.db, thor.id)
             self.assertEqual(1, len(transactions))
 
             self.assertEqual(10, transactions[0].amount)
@@ -67,11 +68,12 @@ class DexDBTest(Case):
             self.assertRegex(str(tx1), rx)
 
             # add a second transaction
-            tx2 = Transaction(db, thor.id, amount=-10, transaction_type='P',
+            tx2 = Transaction(library.db, thor.id, amount=-10,
+                              transaction_type='P',
                               description='Transaction two')
             tx2.create()
 
-            self.assertEqual(2, len(get_transactions(db, thor.id)))
+            self.assertEqual(2, len(get_transactions(library.db, thor.id)))
 
             # void a simple transaction
             voided_transactions = tx1.void()
@@ -80,20 +82,22 @@ class DexDBTest(Case):
             self.assertEqual(tx1.id, voided_transactions[0].id)
             self.assertTrue(tx1.is_void())
 
-            self.assertEqual(3, len(get_transactions(db, thor.id)))
+            self.assertEqual(3, len(get_transactions(library.db, thor.id)))
 
-            transactions = get_transactions(db, thor.id, include_voided=False)
+            transactions = get_transactions(library.db, thor.id,
+                                            include_voided=False)
             self.assertEqual(1, len(transactions))
 
-            tx3 = CashTransaction(db, thor.id, thor.normal_str, amount=100,
-                                  transaction_type='M',
+            tx3 = CashTransaction(library.db, thor.id, thor.normal_str,
+                                  amount=100, transaction_type='M',
                                   description='Transaction 3 (cash)')
             tx3.create()
-            cash_id = get_CASH_id(db)
+            cash_id = get_CASH_id(library.db)
 
-            cash_transactions = get_transactions(db, cash_id)
+            cash_transactions = get_transactions(library.db, cash_id)
             self.assertEqual(1, len(cash_transactions))
-            transactions = get_transactions(db, thor.id, include_voided=False)
+            transactions = get_transactions(library.db, thor.id,
+                                            include_voided=False)
             self.assertEqual(2, len(transactions))
 
             self.assertEqual(1, len(tx3.linked_transaction))
@@ -103,22 +107,23 @@ class DexDBTest(Case):
             self.assertTrue(tx3.is_void())
             self.assertTrue(cash_transactions[0].is_void())
 
-            self.assertEqual(5, len(get_transactions(db, thor.id)))
-            self.assertEqual(2, len(get_transactions(db, cash_id)))
+            self.assertEqual(5, len(get_transactions(library.db, thor.id)))
+            self.assertEqual(2, len(get_transactions(library.db, cash_id)))
 
-            transactions = get_transactions(db, thor.id, include_voided=False)
+            transactions = get_transactions(library.db, thor.id,
+                                            include_voided=False)
             self.assertEqual(1, len(transactions))
 
             checkout = book.checkout(thor)
-            tx4 = FineTransaction(db, thor.id, checkout.id, amount=.30,
+            tx4 = FineTransaction(library.db, thor.id, checkout.id, amount=.30,
                                   description='Transaction 4 (fine)')
             tx4.create()
 
-            self.assertEqual(6, len(get_transactions(db, thor.id)))
+            self.assertEqual(6, len(get_transactions(library.db, thor.id)))
 
             self.assertEqual('F', tx4.transaction_type)
-            r = db.cursor.execute('select checkout_id, transaction_id'
-                                  ' from fine_payment')
+            r = library.db.cursor.execute('select checkout_id, transaction_id'
+                                          ' from fine_payment')
             result = r.fetchall()
             self.assertEqual(1, len(result))
 
@@ -126,27 +131,28 @@ class DexDBTest(Case):
             self.assertEqual(result[0][1], tx4.id)
 
             # now a short and a max overdue transaction
-            tx5 = OverdueTransaction(db, thor.id, checkout.id, 5, book)
+            tx5 = OverdueTransaction(library.db, thor.id, checkout.id, 5, book)
             tx5.create()
             self.assertEqual(-.50, tx5.amount)
             self.assertEqual('Book AUTHOR<TITLE<SERIES<P (Paperbacks)< '
                              'overdue 5 days.', tx5.description)
-            self.assertEqual(7, len(get_transactions(db, thor.id)))
+            self.assertEqual(7, len(get_transactions(library.db, thor.id)))
 
-            tx6 = OverdueTransaction(db, thor.id, checkout.id, 500, book)
+            tx6 = OverdueTransaction(library.db, thor.id, checkout.id,
+                                     500, book)
             tx6.create()
             self.assertEqual(-4.00, tx6.amount)
             self.assertEqual('Book AUTHOR<TITLE<SERIES<P (Paperbacks)< '
                              'overdue 500 days.', tx6.description)
-            self.assertEqual(8, len(get_transactions(db, thor.id)))
+            self.assertEqual(8, len(get_transactions(library.db, thor.id)))
 
-            r = db.cursor.execute('select checkout_id, transaction_id'
-                                  ' from fine_payment')
+            r = library.db.cursor.execute('select checkout_id, transaction_id'
+                                          ' from fine_payment')
             result = r.fetchall()
             self.assertEqual(3, len(result))
 
         finally:
-            db.db.close()
+            library.db.db.close()
 
 
 if __name__ == '__main__':

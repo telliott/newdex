@@ -76,6 +76,28 @@ class SeriesIndex(object):
         # titles.sort()
         return titles
 
+    def __contains__(self, series):
+        '''
+        Do we have this series in the dex? Requires an exact match
+
+        Parameters
+        ----------
+        series : str
+            a string to search for.
+
+        Returns
+        -------
+        bool - if the series exists
+
+        '''
+        val = self.db.getcursor().selectvalue(
+            "select series_id"
+            " from series"
+            " where"
+            "  series_name = %s",
+            (series,))
+        return val is not None
+
     def complete(self, s):
         '''
         Autocomplete for a series name
@@ -173,6 +195,26 @@ def sanitize_series(field, db=None):
         return None
     field = re.sub(SERIES_FORBIDDEN, '', field)
     return field.upper()
+
+
+SERIES_VISIBLE = re.compile(r'^@')
+SERIES_NUMBERED = re.compile(r' #?[-.,\d]+B?$')
+def remove_metadata(s):
+    '''
+    Parameters
+    ----------
+    s : string
+        Remove the metadata tags (preceding @, trailing number) from a series.
+
+    Returns
+    -------
+    s : string
+        normalized series value
+
+    '''
+    s = SERIES_VISIBLE.sub('', s)
+    s = SERIES_NUMBERED.sub('', s)
+    return s
 
 
 class Series(db.EntryDeletable):

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 
-from mitsfs.ui import specify, read, readyes
+from mitsfs.util.ui import specify, read, readyes
 from mitsfs.dexdb import DexDB
 
 

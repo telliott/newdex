@@ -5,8 +5,9 @@ import time
 
 from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
-from mitsfs.tex import TEXBASE, texquote
+from mitsfs.util.tex import texquote
 from mitsfs.dex.titles import Title
+from mitsfs.core.settings import CODEBASE
 
 from io import open
 
@@ -57,7 +58,7 @@ def writedex(dexname, longname, books):
         fp.write("\n")
         fp.write(r'\def\Period{3}')
         fp.write("\n")
-        fp.write(r'\input %s/dextex-current.tex' % (TEXBASE))
+        fp.write(r'\input %s/dextex-current.tex' % (CODEBASE))
         fp.write("\n")
         for line in books:
             code = r' {\bf %s}' % (list(line.codes.keys())[0])

@@ -2,7 +2,7 @@ import datetime
 
 from mitsfs.core import settings
 from mitsfs.core import db
-from mitsfs import ui
+from mitsfs.util import ui
 
 from mitsfs.util import coercers
 from mitsfs.circulation import transactions

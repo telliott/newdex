@@ -1,6 +1,5 @@
-from mitsfs.dex import titles, authors, series, shelfcodes
-from mitsfs.core import settings
-
+from mitsfs.dex import titles, authors, series, shelfcodes, books
+from mitsfs.core import settings, dexline
 
 class Catalog(object):
     def __init__(self, db):
@@ -9,7 +8,8 @@ class Catalog(object):
         self.titles = titles.Titles(db)
         self.authors = authors.Authors(db)
         self.series = series.SeriesIndex(db)
-        self.editions = settings.shelfcodes_global or shelfcodes.Shelfcodes(db)
+        self.shelfcodes = settings.shelfcodes_global \
+            or shelfcodes.Shelfcodes(self.db)
 
     def grep(self, candidate):
         if '<' in candidate:
@@ -46,7 +46,7 @@ class Catalog(object):
             if len(candidates) > 3 and candidates[3]:
                 code_ids = []
                 for shelfcode in candidates[3].split(','):
-                    code_ids += self.editions.grep(shelfcode.upper())
+                    code_ids += self.shelfcodes.grep(shelfcode.upper())
                 if ids_filled:
                     ids = ids.intersection(code_ids)
                 else:
@@ -59,3 +59,49 @@ class Catalog(object):
         title_list = [titles.Title(self.db, id) for id in ids]
         title_list.sort(key=lambda x: x.sortkey())
         return title_list
+
+    def add_from_dexline(self, line):
+        # primarily a helper function for testing. takes a dexline string and
+        # writes it into the db
+        title = titles.Title(self.db)
+        title.create()
+
+        if type(line) is str:
+            line = dexline.DexLine(line)
+
+        for author in line.authors:
+            alt = None
+            if '=' in author:
+                author, alt = '='.split(author)
+            if author not in self.authors:
+                author = authors.Author(self.db, name=author, alt_name=alt)
+                author.create(commit=False)
+            else:
+                authorid = self.authors.search(author)[0]
+                author = authors.Author(self.db, authorid)
+            title.add_author(author)
+
+        for title_name in line.titles:
+            alt = None
+            if '=' in title_name:
+                title_name, alt = '='.split(title_name)
+            title.add_title(title_name, alt, commit=False)
+
+        for seriesval in line.series:
+            (name, index, series_visible,
+             number_visible) = series.munge_series(seriesval)
+        if name not in self.series:
+            seriesval = series.Series(self.db, series_name=name)
+            seriesval.create(commit=False)
+        else:
+            seriesid = self.series.search(name)[0]
+            seriesval = series.Series(self.db, seriesid)
+        title.add_series(seriesval, index, series_visible, number_visible)
+
+        for v in line.codes.values():
+            for i in range(0, v.count):
+                book = books.Book(self.db, title=title.id,
+                                  shelfcode=self.shelfcodes[v.shelfcode].id)
+                book.create(commit=False)
+
+        self.db.commit()

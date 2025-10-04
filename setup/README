@@ -1,0 +1,87 @@
+This documentation is primarily aimed at loading the database on something
+other than the primary server for for dev work.  It also assumes that
+you're connected to the database as a user that already has privileges and
+that you will be continuing to use for your development.
+
+On a debian or debian derived system (or Mac OSX), you'll need both
+postgresql-${version} and postgresql-plpython3u-${version}.  The
+production database is *at the moment* tested under 17.
+
+You will also need python3. Current version has been tested under 3.13.5
+
+I usually set up my dev postgres installs to use unix
+authentication, _and_ with my user account having a noinherit role for
+wielding database superuser privileges (this is what the
+speaker-to-postgres role is on the production database, for the
+record).  e.g. on debian, with the default starting permissions, I can:
+
+sudo -u postgres psql
+psql (8.4.8)
+Type "help" for help.
+
+postgres=# create role wheel superuser noinherit;
+CREATE ROLE
+postgres=# create user <your_username> in role wheel;
+CREATE ROLE
+postgres=# create database <DBname> owner=<your_username>;
+CREATE DATABASE
+postgres=# \q
+kcr@ice$
+
+And thereafter I can just run psql to connect to my personal database, and 
+"set role wheel" to assume db superuser powers.
+
+kcr@ice$ psql
+psql (8.4.8)
+Type "help" for help.
+
+kcr=> set role wheel;
+SET
+kcr=# 
+
+If you do this, init.sql (below) will set you up with appropriate
+permissions to access the database as a keyholder (really a member of
+libcomm).
+
+Connect to the database as a superuser, and run init.sql, which will
+make sure the database and all the roles and logging functions are
+created properly.
+
+You should only get an actual error frop the "drop owned" statement; this
+will be quieter if you have an existing database and permission structure
+to drop.
+
+Before running any code, you will likely need to edit mitsfs/core/settings.
+Most of the fields in there are pretty obvious; the one you will definitely
+want to edit is DATABASE_DSN, to point to the db you named above.
+
+At that point, you should be able to go into the tests directory and run
+
+python3 -m unittest discover
+
+Hopefully all the tests will pass for you.
+
+
+
+Npw, set your role and then load your database dump with \i:
+
+mitsfs=> set role "speaker-to-postgres";
+SET
+mitsfs=# \i /store/tmp/mitsfs.20110811.sql
+
+That shouldn't give you any errors if everything's set up properly.
+
+IF YOU DID NOT FOLLOW THE ADVICE ABOUT SETTING UP ACCOUNTS, and
+created your datase as "postgres" or something, you now need to create
+a user account for yourself and grant your user account libcomm and
+possibly "speaker-to-postgres" (if you want to run tests WHICH YOU
+DO), e.g.
+
+mitsfs=# create user devuser;
+CREATE ROLE
+mitsfs=# grant libcomm to devuser;
+GRANT ROLE
+mitsfs=# grant "speaker-to-postgres" to devuser;
+GRANT ROLE
+mitsfs=#
+

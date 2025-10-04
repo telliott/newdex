@@ -2,19 +2,56 @@
 
 import sys
 
-from mitsfs.ui import read
+from mitsfs.util.ui import read, specify
 from mitsfs.dexdb import DexDB
-from mitsfs.dexfile import DexLine
 from mitsfs.core.settings import DATABASE_DSN
-from mitsfs.dex.Shelfcodes import Shelfcodes
-from mitsfs.dex.titles import Title
 
 
+SHELFCODE_GLOSS = """
+Inventory Actual will have handed you a stack of marked shelfdex
+packets (shelfdexes).  This is the process of recording the books that
+are missing.
+
+In general in this program, leaving a prompt blank (counting
+Author/Title as one prompt) will drop you up to the previous level.
+
+All marks you make on the shelfdexes should be in green pen.
+
+Take the first packet.  Put your initials in green pen  in the
+"Panthercomm Intra-Inven" box.
+
+Type the shelfcode marked on the packet at the upper right (the thing
+in parentheses without a number.)
+"""
+
+SPECIFY_GLOSS = """
+Type an author and a title as you would when checking out a book.
+Tab-completion will limit itself to titles the system knows are listed
+in the shelfdexes.
+
+Once you're done with a packet, just hit return twice and it will ask
+you for a shelcode again.  (If the new packet is in the same
+shelfcode, you don't have to drop back, but it's a good habit because
+if you change shelfcodes while the computer doesn't, things get
+confusing.)
+
+When you've finished a pile of packets, return them to Inventory Actual.
+"""
+
+COUNT_GLOSS = """
+Type the number of things missing specified.  If there's no
+number written but M is circled, that's one missing.
+"""
+
+POST_COUNT_GLOSS = """
+If you realize at this point you made a mistake, you can fix it by
+just entering a new number for a given title (remembering that it has
+to be attributed to the same shelfcode, and that 0 is a number).
+"""
 
 
 def main():
     d = DexDB(dsn=DATABASE_DSN)
-    shelfcodes = Shelfcodes(d)
 
     if len(sys.argv) == 1:
         ((inventory_code, inventory_id, inventory_desc),) = d.cursor.execute(
@@ -29,17 +66,20 @@ def main():
 
     print('%s (%s)' % (inventory_desc, inventory_code))
 
+    first = True
+
+    print(SHELFCODE_GLOSS)
     while True:
         shelfcode = read(
             'Shelfcode (q to quit)? ',
-            callback=d.codes.keys,
+            callback=d.shelfcodes.keys,
             history='shelfcode',
             ).upper().strip()
 
-        if not shelfcode or shelfcode.strip().lower() == 'q':
+        if not shelfcode or shelfcode == 'Q':
             break
 
-        code = shelfcodes[shelfcode].code
+        code = d.shelfcodes[shelfcode]
         if not code:
             print('Unknown shelfcode')
             continue
@@ -47,29 +87,33 @@ def main():
         print(code)
 
         title = None
-        print()
-        c = d.cursor.execute(
-            'select title_id, count(*) from title natural join book'
-            ' natural join shelfcode where not withdrawn '
-            'and shelfcode = %s group by title_id having count(*) > 1',
-            (shelfcode,))
+        while True:
+            if first:
+                print(SPECIFY_GLOSS)
+            print()
+            title = specify(d, title)
 
-        books = [Title(d, x) for (x, _) in c.fetchall()]
-        books.sort(key=lambda line: (line.placeauthor, line.placetitle))
-        for (title) in books:
+            if not title:
+                break
+
             print(title)
+
+            if first:
+                print(COUNT_GLOSS)
 
             try:
                 mstr = read(
-                    'How many culled? ', history='count').strip()
-                if mstr in ('','0'):
-                    continue
-                missing = int(mstr)
+                    'How many missing? ', history='count').strip()
+                if mstr == '':
+                    missing = 1
+                else:
+                    missing = int(mstr)
             except (ValueError, KeyboardInterrupt):
                 print('?')
                 continue
 
-            print("removing 1")
+            if first:
+                print(POST_COUNT_GLOSS)
 
             if missing >= 0:
                 print(title.title_id, missing, title)
@@ -97,6 +141,10 @@ def main():
                     ' values (%s, %s)',
                     (inventory_entry_id, missing))
                 d.db.commit()
+                title = None
+
+            first = False
+
 
 if __name__ == '__main__':
     main()

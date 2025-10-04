@@ -1,5 +1,9 @@
-from mitsfs import ui
+import re
+import os
+
+from mitsfs.util import ui
 from mitsfs.dex.series import Series, sanitize_series
+from mitsfs.core.settings import EXPORT_DIRECTORY
 
 
 def select_generic(candidates):
@@ -32,7 +36,8 @@ def select_generic(candidates):
     return candidates[n - 1]
 
 
-def select_checkout(checkouts, show_members=False):
+def select_checkout(checkouts, show_members=False,
+                    prompt="Select a book to check in: "):
     '''
     show an enumerated list of checkouts and ask for a selection
 
@@ -55,11 +60,7 @@ def select_checkout(checkouts, show_members=False):
     print(ui.Color.select('Q.'), 'Back to Main Menu')
     print()
 
-    num = ui.readnumber(
-        "Select a book to check in: ",
-        1,
-        len(checkouts) + 1,
-        escape='Q')
+    num = ui.readnumber(prompt, 1, len(checkouts) + 1, escape='Q')
 
     if num is None:
         return None
@@ -102,6 +103,24 @@ def select_edition(title):
 
 
 def select_author(library, create=True, single=False):
+    '''
+    Allow the user to select one or more authors and return the list.
+
+    Parameters
+    ----------
+    library : TYPE
+        DESCRIPTION.
+    create : bool, optional
+        whether to present creating as an option if no exact match is found
+    single : bool, optional
+        If true, don't loop. Just get one author
+
+    Returns
+    -------
+    list(Author)
+        the list of authors selected
+
+    '''
     from mitsfs.dex.authors import Author
 
     authors = []
@@ -131,13 +150,15 @@ def select_author(library, create=True, single=False):
             if len(author_list) == 1 and author_list[0].name == author:
                 selection = author_list[0]
             else:
+                author_list.sort(key=lambda x: x.name)
                 if create:
                     author_list.append(Author(library.db,
-                                              name=f'Create {author}'))
+                                              name=f'Create [{author}]'))
                 selection = select_generic(author_list)
                 if selection.id is None:
                     selection.name = author
                     selection.create()
+
         # TODO: Ask about responsibility
 
         if single:
@@ -148,6 +169,24 @@ def select_author(library, create=True, single=False):
 
 
 def select_series(library, create=True, single=False):
+    '''
+    Allow the user to select one or more series and return the list.
+
+    Parameters
+    ----------
+    library : TYPE
+        DESCRIPTION.
+    create : bool, optional
+        whether to present creating as an option if no exact match is found
+    single : bool, optional
+        If true, don't loop. Just get one series
+
+    Returns
+    -------
+    list(Series)
+        the list of series selected
+
+    '''
 
     series = []
     while True:
@@ -170,13 +209,14 @@ def select_series(library, create=True, single=False):
                 selection.create()
         else:
             series_list = [Series(library.db, i) for i in candidates]
-            # if there's only one and it's an exact match, adopt it
+           # if there's only one and it's an exact match, adopt it
             if (len(series_list) == 1 and series_list[0].series_name == name):
                 selection = series_list[0]
             else:
+                series_list.sort(key=lambda x: x.series_name)
                 if create:
-                    series_list.append(Series(library.db,
-                                              series_name=f'Create {series}'))
+                    series_list.append(
+                        Series(library.db, series_name=f'Create [{series}]'))
                 selection = select_generic(series_list)
                 if selection is None:
                     continue
@@ -197,3 +237,57 @@ def select_series(library, create=True, single=False):
         series.append((selection, number, series_visible, number_visible))
 
     return series
+
+
+def select_shelfcode(shelfcodes, prompt='Type a shelfcode: '):
+    '''
+    select a shelfcode from the valid ones and return it
+
+    Parameters
+    ----------
+    shelfcodes : TYPE
+        DESCRIPTION.
+    prompt : string (optional)
+        What to prompt the person with.
+
+    Returns
+    -------
+    Shelfcode
+        the shelfcode object selected.
+
+    '''
+    while True:
+        shelfcode = ui.read(prompt).strip().upper()
+        if shelfcode not in shelfcodes:
+            print(f'{shelfcode} is not a valid shelfcode')
+            continue
+        return shelfcodes[shelfcode]
+
+
+def select_safe_filename(path=EXPORT_DIRECTORY, preload=None):
+    '''
+    Prompts the user to select a filename, sanitizes and confirms an overwrite
+
+    Parameters
+    ----------
+    path : string
+        The path two write the file to. Defaults to the EXPORT_DIRECTORY
+        value in settings.
+    preload : string
+        A value to suggest for the filename
+
+    Returns
+    -------
+    string
+        the full filename (with path).
+
+    '''
+    while True:
+        filename = ui.read('Enter a filename: ', preload=preload)
+        filename = filename.sub('/', '_')
+        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
+        candidate = f'{path}/{filename}'
+        if os.path.exists(candidate):
+            if not ui.readyes('{candidate} exists. Overwrite? [yN]'):
+                continue
+        return candidate

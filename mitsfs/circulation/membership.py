@@ -1,7 +1,7 @@
 import datetime
 
 from mitsfs.core import db
-from mitsfs import ui
+from mitsfs.util import ui
 
 '''
 Basic information about what membership a person has, along with what it cost

@@ -6,9 +6,10 @@ from io import open
 
 from mitsfs.dexdb import DexDB
 from mitsfs.dexfile import DexLine
-from mitsfs.ui import read, readnumber, specify
-from mitsfs.tex import TEXBASE, texquote
+from mitsfs.util.ui import read, readnumber, specify
+from mitsfs.tex import texquote
 from mitsfs.dex.titles import Title
+from mitsfs.core.settings import CODEBASE
 
 shelfcode_hint = {}
 for shelfcodes, possible in \
@@ -597,7 +598,7 @@ def writedex(dexname, longname, books):
         fp.write(r'\def\Period{3}')
         fp.write("\n")
         fp.write(r'\input %s/dextex-current.tex' % (
-            TEXBASE))
+            CODEBASE))
         fp.write("\n")
         for line in books:
             code = r' {\bf %s}' % (list(line.codes.keys())[0])

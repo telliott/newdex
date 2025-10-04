@@ -11,11 +11,11 @@ import time
 from io import open
 from functools import reduce
 
-from mitsfs.core.settings import DATABASE_DSN
-from mitsfs.constants import DEXBASE
+from mitsfs.core.settings import DATABASE_DSN, CODEBASE
+#from mitsfs.constants import DEXBASE
 from mitsfs.dexdb import DexDB
 from mitsfs.inventory import Inventory, InventoryUnknown
-from mitsfs.tex import TEXBASE, texquote
+from mitsfs.util.tex import texquote, nicetitle
 from mitsfs.dexfile import Dex, DexLine
 from mitsfs.dex.editions import Edition, InvalidShelfcode
 from mitsfs.dex.titles import Title
@@ -89,10 +89,10 @@ if options.directory:
         os.mkdir(options.directory)
     os.chdir(options.directory)
 
-if os.getcwd() == DEXBASE:
-    print('Preemptively changing directory to /tmp;')
-    print('look for your pinkdexen there.')
-    os.chdir('/tmp')
+# if os.getcwd() == DEXBASE:
+#     print('Preemptively changing directory to /tmp;')
+#     print('look for your pinkdexen there.')
+#     os.chdir('/tmp')
 
 
 def titlecase(s):
@@ -103,27 +103,6 @@ def titlecase(s):
             s.title())
     else:
         return s
-
-
-def nicetitle(line):
-    series = [titlecase(i.replace(',', r'\,')) for i in line.series if i]
-    titles = [  # strip the sortbys
-        titlecase('=' in i and i[:i.find('=')] or i) for i in line.titles]
-    if series:
-        if len(series) == len(titles):
-            titles = ['%s [%s]' % i for i in zip(titles, series)]
-        elif len(titles) == 1:
-            titles = ['%s [%s]' % (titles[0], '|'.join(series))]
-        elif len(series) == 1:
-            titles = ['%s [%s]' % (i, series[0]) for i in titles]
-        else:  # this is apparently Officially Weird
-            print('Wacky title/series match: ', str(line))
-            ntitles = ['%s [%s]' % i for i in zip(titles, series)]
-            if len(line.series) < len(titles):
-                ntitles += titles[len(series):]
-            titles = ntitles
-    return '|'.join(titles)
-
 
 def book(line):
     if noboxed:
@@ -281,7 +260,7 @@ def writedex(
         fp.write(r'\def\Period{3}' + "\n")
     else:
         fp.write(r'\def\Period{0}' + "\n")
-    fp.write(r'\input %s/dextex-current.tex' % TEXBASE)
+    fp.write(r'\input %s/dextex-current.tex' % CODEBASE)
     fp.write("\n")
 
     if blob:

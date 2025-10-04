@@ -1,15 +1,14 @@
 import re
 
-from mitsfs import dexfile
-from mitsfs.core import db
-from mitsfs import utils
-from mitsfs.util import exceptions
+from mitsfs.core import db, dexline
+from mitsfs.util import exceptions, utils
 from mitsfs.dex.editions import Editions
 from mitsfs.dex.books import Book
-from mitsfs.dex.series import sanitize_series
+from mitsfs.dex.series import munge_series
 
-# this class is tested in test_indexes.py
+
 class Titles(object):
+    # this class is tested in test_indexes.py
     def __init__(self, db):
         self.db = db
 
@@ -111,15 +110,16 @@ class Titles(object):
         args += [f'{title}%', f'{title}%']
         c = self.db.getcursor()
         return c.fetchlist(
-            " select distinct title_name"
-            "  from"
-            "   title_title "
-            "   natural join title_responsibility "
-            "   natural join entity"
-            "  where"
+            ' select distinct title_name'
+            '  from'
+            '   title_title '
+            '   natural join title_responsibility'
+            '   natural join entity'
+            '  where'
             f'{author_query}'
-            "   (title_name ilike %s"
-            "    or alternate_name ilike %s)",
+            '   (title_name ilike %s'
+            '    or alternate_name ilike %s)'
+            'order by title_name',
             args)
 
     def complete_checkedout(self, title, author=''):
@@ -265,7 +265,7 @@ def sanitize_title(field, db=None):
     return field.upper()
 
 
-class Title(dexfile.DexLine, db.Entry):
+class Title(dexline.DexLine, db.Entry):
     def __init__(self, database, title_id=None):
         db.Entry.__init__(self, 'title', 'title_id', database, title_id)
         self.title_id = title_id
@@ -297,7 +297,6 @@ class Title(dexfile.DexLine, db.Entry):
         FieldTuple (string)
             Tuple of the authors attached to this title, in order.
         '''
-        # TODO: Figure out what to do with responsibility_types
         authors = self.cursor.fetchlist(
             "select"
             "  concat_ws('=', entity_name, alternate_entity_name)"
@@ -426,7 +425,7 @@ class Title(dexfile.DexLine, db.Entry):
         titles = self._cache_query('titles', sql)
         return utils.FieldTuple([t[0] for t in titles])
 
-    def add_title(self, title_name, alt_name=None):
+    def add_title(self, title_name, alt_name=None, commit=True):
         title_name = sanitize_title(title_name)
         alt_name = sanitize_title(alt_name)
         for title in self.titles:
@@ -449,7 +448,9 @@ class Title(dexfile.DexLine, db.Entry):
             ' (title_id, title_name, alternate_name, order_title_by)'
             ' values (%s, %s, %s, %s)',
             (self.id, title_name, alt_name, order))
-
+        if commit:
+            self.db.commit()
+            
         self.cache_reset()
 
     def update_title(self, old_title, new_title, new_alt):
@@ -537,11 +538,8 @@ class Title(dexfile.DexLine, db.Entry):
 
     def add_series(self, series, series_index=None,
                    series_visible=False, number_visible=False):
-        series = sanitize_series(series)
-        for s in self.series:
-            s = dexfile.SERIES_VISIBLE.sub('', s)
-            s = dexfile.SERIES_NUMBERED.sub('', s)
-            if s == str(series):
+        for s in self.series:         
+            if munge_series(s)[0] == series.series_name:
                 raise exceptions.DuplicateEntry(
                     f'{s} is already attached to this title')
 
@@ -639,6 +637,9 @@ class Title(dexfile.DexLine, db.Entry):
         '''
         count = {}
         for book in self.books:
+            if book.shelfcode is None:
+                print(f'Problematic shelfcode for {book.title.titles}')
+                continue
             shelfcode = (('@' if book.visible else '')
                          + book.shelfcode.code +
                          (book.doublecrap if book.doublecrap else ''))
@@ -647,7 +648,7 @@ class Title(dexfile.DexLine, db.Entry):
         return Editions(','.join(f'{k}:{v}' for k, v in count.items()))
 
     def __str__(self):
-        result = dexfile.DexLine.__str__(self)
+        result = dexline.DexLine.__str__(self)
         return result
 
     def __repr__(self):

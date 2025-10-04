@@ -1,0 +1,231 @@
+
+\ifx\documentstyle\thisMacroOughtNotBeDefined
+\else
+  \immediate\write16{}
+  \immediate\write16{ This is a plain TeX document, not LaTeX; process with}
+  \immediate\write16{ tex \jobname}
+  \batchmode \makeatletter @@end
+\fi
+
+% \special{header=duplex}  % be double-sided
+
+\hbadness=10000  \vbadness=10000            % shut up about underful boxes!
+\nopagenumbers
+
+\font\small="DejaVu Serif" at 7pt  % times-roman
+\font\normalsize="DejaVu Serif"
+\font\large="DejaVu Serif" scaled\magstep1
+\font\huge="DejaVu Serif" scaled\magstep5
+\font\unifont="unifont"
+
+\def\ifundef#1{\expandafter\ifx\csname#1\endcsname\relax}
+\newif\ifshelf   \ifundef{Shelf}   \shelffalse   \else \shelftrue   \fi
+\newif\ifreverse \ifundef{Reverse} \reversefalse \else \reversetrue \fi
+\newif\ifsupple  \ifundef{Supple}  \supplefalse  \else \suppletrue  \fi
+\newif\ifbox     \ifundef{Box}     \boxfalse     \else \boxtrue     \fi
+
+\small
+\ifshelf
+ \hoffset=-.75in  \hsize=8in                 % too big for punched holes
+\else
+ \hoffset=-.25in  \hsize=7in                 % big enough for punched holes
+\fi
+\ifshelf \voffset=.5in \vsize=9.25in \else \voffset=-.25in \vsize=10in \fi
+\emergencystretch \hsize
+\raggedright
+\leftskip=1em  \parindent=-\leftskip        % indent every line *after* first
+\tolerance=10000  \pretolerance=\tolerance  % always go for breaks
+\linepenalty 10000                          % always minimize #lines
+\adjdemerits 0                              % don't care much re tight/loose
+\baselineskip=0pt \lineskiplimit=100ex      % always fall back to \lineskip
+\lineskip 1.25ex
+\hyphenpenalty 10000                        % mostly for codes' sakes
+
+\catcode`|=13  \def|{/\penalty-9000}
+\catcode`[=13  \def[{\penalty-7000\char`[}
+\def\[{\char`[}  % brackets around boxed books get backslashed and are
+\def\]{\char`]}  % horrible breakpoints.
+\catcode`(=13  \def({\penalty-5000\char`(}
+\catcode`:=13  \def:{\char`:\penalty-3000{}}
+\def\:{\char`:}  % colons in shelfcodes get backslashed and aren't breakpoints
+\catcode`;=13  \def;{\char`;\penalty-3000{}}
+\catcode`,=13  \def,{\char`,\penalty-1000{}}
+\def\,{\char`,}  % commas in series get backslashed and aren't good breakpoints
+
+\newdimen\Authordim
+\newdimen\Titledim  
+\newdimen\Codedim   
+\ifshelf
+  \Authordim=.35\hsize
+  \Titledim =.55\hsize
+  \Codedim  =.06\hsize
+\else
+  \Authordim=.30\hsize
+  \Titledim =.50\hsize
+  \Codedim  =.15\hsize
+\fi
+
+% the wacky stuff is mostly for Shelfdex only (with headline excluded)
+\newcount\nbook
+\def\ifnormalbook{\ifnum\deadcycles=0}  % headlines are only pseudo-books
+\def\Maybreak{\ifnormalbook \advance\nbook by 1\relax
+                \ifshelf \ifnum\nbook=\Shelf \Setbreak \nbook=0\relax
+                \fi \else
+                \ifnum\nbook=\Period \Setbreak \nbook=0\relax \fi \fi \fi}
+% \Setbreak can also appear directly in the main body
+\def\Setbreak{\vskip 2pt \hrule \vskip 2pt \vfil\penalty-500\vfilneg}
+\def\Err#1{\ifnormalbook $\approx\ \cal{M}$\else#1\fi}
+
+% \fbox stolen straight from latex2.09
+\newdimen\fboxrule \fboxrule=0.2pt
+\newdimen\fboxsep  \fboxsep=1pt
+\long\def\fbox#1{\leavevmode\setbox0\hbox{#1}\dimen0\fboxrule
+    \advance\dimen0\fboxsep\relax \advance\dimen0\dp0\relax
+   \hbox{\lower \dimen0\hbox
+  {\vbox{\hrule height\fboxrule
+          \hbox{\vrule width\fboxrule \hskip\fboxsep
+          \vbox{\vskip\fboxsep \box0\vskip\fboxsep}\hskip
+                 \fboxsep\vrule width\fboxrule}%
+                 \hrule height\fboxrule}}}}
+\newcount\nbullet
+\def\bull#1{\ifnormalbook\nbullet=#1{}\space\fbox
+   {\ifnum\nbullet=0\relax(none)\else\dobullet\fi}\fi}
+\def\dobullet{%
+  \ifnum\nbullet>0\relax
+    \hbox{$\circ$}%
+    \advance\nbullet by -1\relax
+  \fi
+  \ifnum\nbullet<0\relax
+    \hbox{\tt x}%
+    \advance\nbullet by +1\relax
+  \fi
+  \ifnum\nbullet=0\else\space\expandafter\dobullet\fi
+}
+\def\fullbull#1{\ifnormalbook\nbullet=#1{}\space\fbox
+   {\ifnum\nbullet=0\relax(none)\else\dofullet\fi}\fi}
+\def\dofullet{%
+  \ifnum\nbullet>0\relax
+    \hbox{$\bullet$}%
+    \advance\nbullet by -1\relax
+  \fi
+  \ifnum\nbullet<0\relax
+    \hbox{\tt x}%
+    \advance\nbullet by +1\relax
+  \fi
+  \ifnum\nbullet=0\else\space\expandafter\dofullet\fi
+}
+
+
+\def\Column#1#2{\hbox to #1{\vtop{\hsize=#1 #2}}}
+\edef\Book#1#2#3{\line{
+        \ifshelf
+          \Column{\Codedim}{\noexpand\Err{#3}}
+          \hfil
+        \fi
+        \ifreverse\Column{\Titledim}{#2\ifshelf\noexpand\bull{#3}\fi}
+             \else\Column{\Authordim}{#1}\fi
+        \hfil
+        \ifreverse\Column{\Authordim}{#1}\else\Column{\Titledim}{#2}\fi
+        \ifshelf\else
+          \hfil
+          \Column{\Codedim}{#3}
+        \fi
+        } \noexpand\Maybreak %\ifshelf\noexpand\Maybreak\else\filbreak\fi
+}
+\edef\BookThingy#1#2#3#4{\line{
+        \ifshelf
+          \Column{\Codedim}{\noexpand\Err{#3}}
+          \hfil
+        \fi
+        \ifreverse\Column{\Titledim}{#2\ifshelf\noexpand\bull{#3}\noexpand\fullbull{#4}\fi}
+             \else\Column{\Authordim}{#1}\fi
+        \hfil
+        \ifreverse\Column{\Authordim}{#1}\else\Column{\Titledim}{#2}\fi
+        \ifshelf\else
+          \hfil
+          \Column{\Codedim}{#3}
+        \fi
+        } \noexpand\Maybreak %\ifshelf\noexpand\Maybreak\else\filbreak\fi
+}
+\def\NextLetter{\par\penalty-10001}
+\def\dexoutput{\plainoutput
+  \ifnum\outputpenalty=-10001
+    \ifodd\pageno\else\plainoutput\fi
+  \fi}
+\output{\dexoutput}
+
+\edef\Name{The MITSFS \dexname}
+\edef\thismonth{\ifcase\month\or January\or February\or March\or April\or 
+        May\or June\or July\or August\or September\or October\or November\or 
+        December\fi}
+\edef\today{\thismonth\ \number\day\string, \number\year}
+\edef\When{\ifsupple\Supple\else\today\fi}
+\def\Page{Page \the\pageno}  % shelfdex may redefine, below
+\def\Lead{\leaders\hrule height.675ex depth-.625ex \hfill}
+\def\Cen#1{\strut \Lead #1\Lead \strut}
+\headline={\vbox{
+    \ifreverse\Book{\When}{\Name}{\Page}\else\Book{\Name}{\When}{\Page}\fi
+    \Book{\Cen{AUTHOR}}{\Cen{TITLE}}{\Cen{\ifshelf ERR\else CODE\fi}}
+}}
+
+% Seriesdex starts with a list of the series names
+\def\Series#1#2#3{\line{
+        \Column{.07\hsize}{\hfill#3}
+        \hfil
+        \Column{.40\hsize}{#1}
+        \hfil
+        \Column{.45\hsize}{#2}
+}}
+\def\beginserieslist{\begingroup
+        \headline={\vbox{
+        \Series{MITSFS \dexname\ \it(Quick List of Series)}{\When}{\Page}
+        \Series{\Cen{SERIES}}{\Cen{AUTHOR}}{\Cen{ENTRIES}}
+}}}
+\def\endserieslist{\vfill\eject\endgroup
+        \ifodd\pageno\else{\headline={}\ \vfill\eject}\fi\pageno=1\relax}
+
+% Shelfdex may (but doesn't always) define \chunk (and then insert some).
+\ifundef{chunk}\else
+  \countdef\chunkno=0\relax \countdef\pageno=1\relax
+  \def\Page{Page \the\chunkno.\the\pageno}
+  \chunkno=1\relax \pageno=1\relax
+  \def\chunk{%
+    \vfill\eject
+    \ifodd\pageno\else
+      { \headline={}\chunkno=0\relax\pageno=0\relax \ \vfill\eject }%
+    \fi
+    \advance\chunkno by 1\relax \pageno=1\relax
+    \nbook=0\relax
+  } 
+\fi
+
+\newtoks\realheadline
+\ifshelf
+  \realheadline=\headline
+  \headline={%
+    \ifnum\pageno=1\relax
+      \vbox{%
+        \vbox to 0pt{%
+          \vskip-1in
+          \normalsize
+          \def\say#1{\hbox to 0pt{\hskip1cm #1\hskip10in}}
+          \ifbox
+          \say{Do {\bf NOT} remove anything from this box except in
+               accordance with the Boxer Rebellion rites}
+          \say{and the authorization of the Skinner!} 
+          \say{(At least bubble in any books you take and notify
+               Panthercomm.)}
+          \else
+          \def\blank#1{$\underline{\hskip#1}$}
+          \say{Workers: \blank{1.5in}}
+          \say{\hbox to .5\hsize{Start time: \blank{1in}}
+               Panthercomm intra-Inven: \blank{1in}}
+          \say{\hbox to .5\hsize{End time: \blank{1in}}
+               Panthercomm post-Inven: \blank{1in}}
+          \fi
+        }%
+      }%
+    \fi
+  \the\realheadline  
+  }%
+\fi

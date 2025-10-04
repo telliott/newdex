@@ -2,7 +2,7 @@
 
 import sys
 
-from mitsfs.ui import read, specify
+from mitsfs.util.ui import read, specify
 from mitsfs.dexdb import DexDB
 from mitsfs.core.settings import DATABASE_DSN
 

@@ -16,15 +16,14 @@ import copy
 import psycopg2
 
 from mitsfs import barcode
-from mitsfs import constants
+#from mitsfs import constants
 from mitsfs.core import db
 from mitsfs import dexfile
 from mitsfs import lock_file
-from mitsfs import utils
 from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.dex.editions import Edition, Editions, InvalidShelfcode
 from mitsfs.util.coercers import coerce_shelfcode, uncoerce_shelfcode
-from mitsfs.util import exceptions
+from mitsfs.util import utils, exceptions
 from mitsfs.circulation.checkouts import Checkouts, Checkout
 from mitsfs.circulation.members import Member
 from mitsfs.dex.titles import Titles, Title

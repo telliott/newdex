@@ -3,16 +3,14 @@ import sys
 import re
 from datetime import datetime
 
-from mitsfs import ui
 from mitsfs import library
 from mitsfs.core import settings
-from mitsfs.util import exceptions
 from mitsfs.dex.series import Series, munge_series, sanitize_series
 from mitsfs.dex.titles import Title, sanitize_title
 from mitsfs.dex.authors import Author, sanitize_author
 from mitsfs.dex.books import Book
-from mitsfs.util import selecters
-from mitsfs.util.tex import nicetitle, texquote
+from mitsfs.util import utils, exceptions, selecters, tex, ui
+
 
 title = None
 
@@ -131,33 +129,6 @@ def main_menu(line):
             book_menu(line)
         no_book_header()
 
-    no_book_header()
-
-    recursive_menu([
-        ('S', 'Select Book', select),
-        ('G', 'Grep for Books', grep),
-        ('C', 'Create/Edit Elements', edit_menu),
-        ('E', 'Export Files', export_menu),
-        ('Q', 'Quit', None),
-        ], title='Main Menu')
-
-
-def edit_menu(line):
-
-    def new_author(line):
-        no_book_header()
-        print('Create an author:')
-        name = sanitize_author(ui.read('Author name (last, first): ')).upper()
-        if not name:
-            return
-
-        alt_name = sanitize_author(ui.read('Alternate name (blank if none): ')
-                                   ).upper() or None
-        author = Author(library.db, name=name, alt_name=alt_name)
-        author.create()
-        no_book_header()
-        print(f'{author} created')
-
     def new_title(line):
         '''
         Central function to quickly enter a new book. Will let you do basic
@@ -191,8 +162,8 @@ def edit_menu(line):
 
         series = selecters.select_series(library)
 
-        shelfcode = ui.readshelfcode('Quick add shelfcode?: ',
-                                     library.shelfcodes)
+        shelfcode = selecters.select_shelfcode(library.shelfcodes,
+                                               'Quick add shelfcode?: ')
 
         title = Title(library.db)
         title.create()
@@ -206,12 +177,40 @@ def edit_menu(line):
 
         if shelfcode:
             book = Book(library.db, title=title.id,
-                        shelfcode=library.shelfcodes[shelfcode])
+                        shelfcode=shelfcode)
             book.create()
 
         library.db.commit()
         no_book_header()
         print(f'Created {title}')
+
+    no_book_header()
+
+    recursive_menu([
+        ('S', 'Select Book', select),
+        ('G', 'Grep for Books', grep),
+        ('T', 'Create Title', new_title),
+        ('C', 'Create/Edit Elements', edit_menu),
+        ('E', 'Export Files', export_menu),
+        ('Q', 'Quit', None),
+        ], title='Main Menu')
+
+
+def edit_menu(line):
+
+    def new_author(line):
+        no_book_header()
+        print('Create an author:')
+        name = sanitize_author(ui.read('Author name (last, first): ')).upper()
+        if not name:
+            return
+
+        alt_name = sanitize_author(ui.read('Alternate name (blank if none): ')
+                                   ).upper() or None
+        author = Author(library.db, name=name, alt_name=alt_name)
+        author.create()
+        no_book_header()
+        print(f'{author} created')
 
     def merge_authors(line):
         no_book_header()
@@ -268,7 +267,6 @@ def edit_menu(line):
     no_book_header()
 
     recursive_menu([
-        ('T', 'Create Title', new_title),
         ('A', 'Create Author', new_author),
         ('M', 'Merge Authors', merge_authors),
         ('S', 'Create Series', new_series),
@@ -292,13 +290,16 @@ def book_menu(line):
         return False
 
     def add_edition(line):
+        '''
+        Add a physical copy of this book to the title
+        '''
         book_header()
         print("Adding a New Edition")
-        shelfcode = ui.readshelfcode('Shelfcode for book: ',
-                                     library.shelfcodes)
+        shelfcode = selecters.select_shelfcode(library.shelfcodes,
+                                               'Shelfcode for book: ')
         double = None
         series_visible = False
-        if library.shelfcodes[shelfcode].is_double:
+        if shelfcode.is_double:
             double = ui.read("Double value: ")
 
         if title.series:
@@ -307,7 +308,7 @@ def book_menu(line):
 
         review = ui.readyes('Review copy? [yN] ')
         book = Book(library.db, title=title.id,
-                    shelfcode=library.shelfcodes[shelfcode],
+                    shelfcode=shelfcode,
                     doublecrap=double, review=review, visible=series_visible)
         book.create()
 
@@ -346,15 +347,22 @@ def book_menu(line):
         book_header()
 
     def add_series(line):
+        '''Add a series to the title'''
         book_header()
         print('Add Series')
         series = selecters.select_series(library)
         for (volume, series_index, series_visible, number_visible) in series:
-            title.add_series(volume, series_index,
-                             series_visible, number_visible)
+            try:
+                title.add_series(volume, series_index,
+                                 series_visible, number_visible)
+            except exceptions.DuplicateEntry:
+                print(f'{volume.series_name} is already attached')
+                continue
+
         library.db.commit()
 
     def withdraw(line):
+        '''withdraw this book from the library'''
         book = selecters.select_edition(title)
         if book:
             book.withdraw()
@@ -375,6 +383,7 @@ def book_menu(line):
 def advanced_edit(line):
 
     def add_title(line):
+        '''Add a title to this book'''
         book_header()
         print('Add Title')
         titles = []
@@ -400,6 +409,7 @@ def advanced_edit(line):
         book_header()
 
     def remove_title(line):
+        '''Remove a title from this book. Can't remove the last one'''
         book_header()
         print('Remove Title')
         if len(title.titles) > 1:
@@ -418,6 +428,7 @@ def advanced_edit(line):
         book_header()
 
     def add_author(line):
+        '''Add an author to this book'''
         book_header()
         print('Add Author')
         authors = selecters.select_author(library)
@@ -442,11 +453,17 @@ def advanced_edit(line):
         print('Add Series')
         series = selecters.select_series(library)
 
+        book_header()
         for (selection, number, series_visible, number_visible) in series:
-            title.add_series(selection, number, series_visible, number_visible)
+            try:
+                title.add_series(selection, number,
+                                 series_visible, number_visible)
+            except exceptions.DuplicateEntry:
+                print(f'{selection.series_name} is already attached')
+                continue
+
         library.db.commit()
 
-        book_header()
 
     def remove_series(line):
         book_header()
@@ -499,8 +516,7 @@ def export_menu(line):
         database = match.group(1)
 
         path = settings.BACKUP_DIRECTORY
-        now = datetime.now()
-        filename = now.strftime("%Y%m%d_%H%M%S") + '.sql'
+        filename = f'Dexdb_{utils.timestamp()}.sql'
 
         os.system(f'pg_dump -d {database} -f {path}/{filename}')
         no_book_header()
@@ -509,11 +525,9 @@ def export_menu(line):
     def export_text(line):
         no_book_header()
         print('Export to Text')
-        path = settings.EXPORT_DIRECTORY
-        filename = ui.read('Enter a filename: ', preload='pinkdex.txt')
-        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
-        sys.stdout.flush()
-        fp = open(f'{path}/{filename}', 'w')
+        path = selecters.select_safe_filename(preload='pinkdex.txt')
+        fp = open(path, 'w')
+
         print("Fetching...")
         titles = library.catalog.titles.book_titles()
         print('Sorting...')
@@ -530,21 +544,18 @@ def export_menu(line):
                 continue
 
         fp.close()
-        print(f'Exported the text dex to {path}/{filename}')
+        print(f'Exported the text dex to {path}')
 
     def export_dex(line):
         no_book_header()
         print('Export to Dex')
-        path = settings.EXPORT_DIRECTORY
-        filename = ui.read('Enter a filename: ', preload='pinkdex.tex')
-        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
-        sys.stdout.flush()
-        fp = open(f'{path}/{filename}', 'w')
+        path = selecters.select_safe_filename('pinkdex.tex')
+        fp = open(path, 'w')
 
         fp.write(r'\def\dexname{Pinkdex}')
         fp.write("\n")
         fp.write(r'\def\Period{0}' + "\n")
-        fp.write(r'\input %s/dextex-current.tex' % settings.CODEBASE)
+        fp.write(r'\input %s/dextex-current.tex' % settings.TEXBASE)
         fp.write("\n")
 
         print("Fetching...")
@@ -568,9 +579,9 @@ def export_menu(line):
                 sys.stdout.flush()
             try:
                 fp.write('\\Book{%s}{%s}{%s}\n' % (
-                    texquote(title.authortxt),
-                    texquote(nicetitle(title)),
-                    texquote(str(title.codes).replace(':', r'\:'))))
+                    tex.texquote(title.authortxt),
+                    tex.texquote(tex.nicetitle(title)),
+                    tex.texquote(str(title.codes).replace(':', r'\:'))))
             except Exception:
                 print(f'Problematic: {title.titles}')
                 continue
@@ -582,19 +593,16 @@ def export_menu(line):
     def export_shelf(line):
         no_book_header()
         print('Export to Dex')
-        path = settings.EXPORT_DIRECTORY
-        shelfcode = ui.readshelfcode('Select a shelfcode: ',
-                                     library.shelfcodes)
-        file_code = re.sub('/', '_', shelfcode)
-        filename = ui.read('Enter a filename: ',
-                           preload=f'pinkdex_{file_code}.tex')
-        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
-        sys.stdout.flush()
-        fp = open(f'{path}/{filename}', 'w')
+        shelfcode = selecters.select_shelfcode(library.shelfcodes)
+
+        file_code = re.sub('/', '_', shelfcode.code)
+        path = selecters.select_safe_filename(
+            preload=f'pinkdex_{file_code}.tex')
+        fp = open(path, 'w')
 
         print("Fetching...")
         titles = library.catalog.titles.book_titles(
-            shelfcode=library.shelfcodes[shelfcode])
+            shelfcode=shelfcode)
         print('Sorting...')
         titles.sort(key=lambda x: x.sortkey())
         print('Writing...')
@@ -603,18 +611,18 @@ def export_menu(line):
         fp.write("\n")
         fp.write(r'\def\Reverse{1}' + "\n")
         fp.write(r'\def\Shelf{1}' + "\n")
-        fp.write(r'\def\Supple{%s}' % shelfcode)
+        fp.write(r'\def\Supple{%s}' % shelfcode.code)
         fp.write("\n")
         fp.write(r'\def\Period{3}' + "\n")
-        fp.write(r'\input %s/dextex-current.tex' % settings.CODEBASE)
+        fp.write(r'\input %s/dextex-current.tex' % settings.TEXBASE)
         fp.write("\n")
 
         for title in titles:
-            count = title.codes[shelfcode]
+            count = title.codes[shelfcode.code]
 
             fp.write('\\Book{%s}{%s}{%s} %% %s' % (
-                texquote(title.authortxt),
-                texquote(nicetitle(title)),
+                tex.texquote(title.authortxt),
+                tex.texquote(tex.nicetitle(title)),
                 count, str(title)))
             fp.write("\n")
         fp.write(r'\vfill \eject \bye' + "\n")

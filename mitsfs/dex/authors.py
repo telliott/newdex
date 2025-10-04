@@ -35,7 +35,7 @@ class Authors(object):
         bool - if the author exists
 
         '''
-        val = self.db.getcursor().select_value(
+        val = self.db.getcursor().selectvalue(
             "select entity_id"
             " from entity"
             " where"
@@ -118,7 +118,8 @@ class Authors(object):
             ' from entity'
             ' where'
             ' entity_name ilike %s'
-            ' or alternate_entity_name ilike %s',
+            ' or alternate_entity_name ilike %s'
+            ' order by entity_name',
             (f'{key}%', f'{key}%'))
 
     def complete_checkedout(self, key):
@@ -203,7 +204,7 @@ def sanitize_author(field, db=None):
 class Author(db.EntryDeletable):
     '''
     Titles tend to grab authors directly, so this class isn't used much. But,
-    it's useful for creating and deleting them.
+    it's useful for sorting, creating and deleting them.
     '''
 
     def __init__(self, db, author_id=None, **kw):

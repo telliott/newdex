@@ -15,7 +15,7 @@ import subprocess
 import sys
 import traceback
 
-from mitsfs import utils
+from mitsfs.util import utils
 from io import open
 
 

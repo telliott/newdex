@@ -8,7 +8,7 @@ import datetime
 import re
 
 from mitsfs.core import db
-from mitsfs import ui
+from mitsfs.util import ui
 from mitsfs.util.coercers import coerce_boolean
 from mitsfs.circulation.membership import Membership
 from mitsfs.circulation.transactions import get_transactions, Transaction

@@ -101,11 +101,11 @@ class IndexesTest(Case):
             # test the shelfcode index
             self.assertEqual(
                 10,
-                len(list(library.catalog.editions.get_titles('S'))))
+                len(list(library.shelfcodes.get_titles('S'))))
 
             self.assertEqual(
                0,
-               len(list(library.catalog.editions.get_titles('L'))))
+               len(list(library.shelfcodes.get_titles('L'))))
 
             # add an L copy of one of the books
             library.db.getcursor().selectvalue(
@@ -118,11 +118,11 @@ class IndexesTest(Case):
 
             self.assertEqual(
                1,
-               len(list(library.catalog.editions.get_titles('L'))))
+               len(list(library.shelfcodes.get_titles('L'))))
 
-            self.assertEqual(2, len(library.catalog.editions.keys()))
+            self.assertEqual(2, len(library.catalog.shelfcodes.keys()))
 
-            stats = library.catalog.editions.stats()
+            stats = library.shelfcodes.stats()
             self.assertEqual(2, len(stats.keys()))
             self.assertEqual(10, stats['S'])
             self.assertEqual(1, stats['L'])

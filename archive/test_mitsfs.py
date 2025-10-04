@@ -365,49 +365,5 @@ class MitsfsTest(Case):
             d.db.close()
 
 
-# class MitsfsNoDBTest(unittest.TestCase):
-#     def testHandleException(self):
-#         with patch("mitsfs.error.subprocess.Popen", wraps=MockPopen) as mockP:
-#             try:
-#                 try:
-#                     {}['foo']
-#                 except Exception:
-#                     os.environ['MITSFS_EMAIL_DEBUG'] = 'destination@example.com'
-#                     handle_exception('test', sys.exc_info())
-#                 m = email.parser.Parser().parsestr(mockP.input.getvalue())
-#                 self.assertEqual('destination@example.com', m['to'])
-#                 self.assertRegex(
-#                     m['Subject'],
-#                     r"\[.+ error\] [a-zA-Z0-9]+ - KeyError:'foo'")
-#                 self.assertRegex(
-#                     '\n' + m.get_payload(0).get_payload(),
-#                     r'''
-# program: .+
-# user: [^\n:]+
-# context: test
-# traceback:
-# Traceback \(most recent call last\):
-
-#  +File ".*/test_mitsfs.py", line \d+, in testHandleException
-#  +{}\['foo'\]
-#  +~~\^\^\^\^\^\^\^
-
-# KeyError: 'foo'
-# ''')
-#             finally:
-#                 pass
-
-# class MockPopen:
-#     input = StringIO()
-#     input.close = lambda *args, **kwargs: None
-
-#     def __init__(self, *args, **kwargs):
-#         self.args = args
-#         self.kwargs = args
-#         self.stdin = MockPopen.input
-
-#     def wait(self):
-#         return 0
-
 if __name__ == '__main__':
     unittest.main()
