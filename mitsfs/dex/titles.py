@@ -190,6 +190,33 @@ class Titles(object):
             "  or alternate_entity_name ilike %s",
             (f'{author}%', f'{author}%'))
 
+    def book_titles(self, shelfcode=None):
+        '''
+        A list of titles for which we have a book
+
+        Parameters
+        ----------
+        shelfcode : Shelfcode (optional)
+           Limit this to books of a specific shelfcode
+
+        Returns
+        -------
+        list(str)
+            a list of titles for autocomplete.
+
+        '''
+        c = self.db.getcursor()
+        if shelfcode:
+            return [Title(self.db, i) for i in c.fetchlist(
+                'select distinct title_id'
+                ' from title natural join book'
+                ' where not withdrawn and shelfcode_id = %s', (shelfcode.id,))]
+        else:
+            return [Title(self.db, i) for i in c.fetchlist(
+                'select distinct title_id'
+                ' from title natural join book'
+                ' where not withdrawn')]
+
     def grep(self, s):
         '''
         Parameters
@@ -480,7 +507,7 @@ class Title(dexfile.DexLine, db.Entry):
             'delete from title_title'
             ' where title_id = %s',
             (other_book.id,))
-        
+
         self.db.commit()
 
     @property

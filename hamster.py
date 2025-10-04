@@ -1,13 +1,18 @@
+import os
 import sys
+import re
+from datetime import datetime
 
 from mitsfs import ui
 from mitsfs import library
 from mitsfs.core import settings
+from mitsfs.util import exceptions
 from mitsfs.dex.series import Series, munge_series, sanitize_series
 from mitsfs.dex.titles import Title, sanitize_title
 from mitsfs.dex.authors import Author, sanitize_author
 from mitsfs.dex.books import Book
 from mitsfs.util import selecters
+from mitsfs.util.tex import nicetitle, texquote
 
 title = None
 
@@ -76,6 +81,13 @@ def book_header(header='Book Menu'):
 
     print('-' * width)
 
+def progress_meter(it, divisor=1000):
+    count = 0
+    for i in it:
+        if count % divisor == 0:
+            print('.', end='')
+        count += 1
+        yield i
 
 def recursive_menu(*args, **kw):
     return ui.menu(*args, cleanup=library.db.rollback, **kw)
@@ -125,6 +137,7 @@ def main_menu(line):
         ('S', 'Select Book', select),
         ('G', 'Grep for Books', grep),
         ('C', 'Create/Edit Elements', edit_menu),
+        ('E', 'Export Files', export_menu),
         ('Q', 'Quit', None),
         ], title='Main Menu')
 
@@ -476,6 +489,147 @@ def advanced_edit(line):
     recursive_menu(menu_options, title='Advanced Title Edits')
 
     book_header()
+
+
+def export_menu(line):
+
+    def backup_db(line):
+        print('Backup Database')
+        match = re.search('dbname=([^ ]+)', library.db.dsn)
+        database = match.group(1)
+
+        path = settings.BACKUP_DIRECTORY
+        now = datetime.now()
+        filename = now.strftime("%Y%m%d_%H%M%S") + '.sql'
+
+        os.system(f'pg_dump -d {database} -f {path}/{filename}')
+        no_book_header()
+        print(f'Exported the db to {path}/{filename}')
+
+    def export_text(line):
+        no_book_header()
+        print('Export to Text')
+        path = settings.EXPORT_DIRECTORY
+        filename = ui.read('Enter a filename: ', preload='pinkdex.txt')
+        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
+        sys.stdout.flush()
+        fp = open(f'{path}/{filename}', 'w')
+        print("Fetching...")
+        titles = library.catalog.titles.book_titles()
+        print('Sorting...')
+        titles.sort(key=lambda x: x.sortkey())
+        print('Writing...')
+        for title in titles:
+            try:
+                fp.write(str(title) + "\n")
+            except exceptions.InvalidShelfcode:
+                print(f'BAD SHELFCODE: {title.titles}')
+                continue
+            except Exception:
+                print(f'Problematic: {title.titles}')
+                continue
+
+        fp.close()
+        print(f'Exported the text dex to {path}/{filename}')
+
+    def export_dex(line):
+        no_book_header()
+        print('Export to Dex')
+        path = settings.EXPORT_DIRECTORY
+        filename = ui.read('Enter a filename: ', preload='pinkdex.tex')
+        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
+        sys.stdout.flush()
+        fp = open(f'{path}/{filename}', 'w')
+
+        fp.write(r'\def\dexname{Pinkdex}')
+        fp.write("\n")
+        fp.write(r'\def\Period{0}' + "\n")
+        fp.write(r'\input %s/dextex-current.tex' % settings.CODEBASE)
+        fp.write("\n")
+
+        print("Fetching...")
+        titles = library.catalog.titles.book_titles()
+        print('Sorting...')
+        titles.sort(key=lambda x: x.sortkey())
+        print('Writing...')
+
+        letter = None
+
+        for title in titles:
+            newletter = None
+            if (len(getattr(title, 'placeauthor')) > 0):
+                newletter = getattr(title, 'placeauthor').upper()[0]
+
+            if letter != newletter:
+                if letter is not None:
+                    fp.write(r'\NextLetter' + "\n")
+                letter = newletter
+                print(letter)
+                sys.stdout.flush()
+            try:
+                fp.write('\\Book{%s}{%s}{%s}\n' % (
+                    texquote(title.authortxt),
+                    texquote(nicetitle(title)),
+                    texquote(str(title.codes).replace(':', r'\:'))))
+            except Exception:
+                print(f'Problematic: {title.titles}')
+                continue
+
+        fp.write(r'\vfill \eject \bye' + "\n")
+        fp.close()
+        print('done.')
+
+    def export_shelf(line):
+        no_book_header()
+        print('Export to Dex')
+        path = settings.EXPORT_DIRECTORY
+        shelfcode = ui.readshelfcode('Select a shelfcode: ',
+                                     library.shelfcodes)
+        file_code = re.sub('/', '_', shelfcode)
+        filename = ui.read('Enter a filename: ',
+                           preload=f'pinkdex_{file_code}.tex')
+        filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
+        sys.stdout.flush()
+        fp = open(f'{path}/{filename}', 'w')
+
+        print("Fetching...")
+        titles = library.catalog.titles.book_titles(
+            shelfcode=library.shelfcodes[shelfcode])
+        print('Sorting...')
+        titles.sort(key=lambda x: x.sortkey())
+        print('Writing...')
+
+        fp.write(r'\def\dexname{Pinkdex}')
+        fp.write("\n")
+        fp.write(r'\def\Reverse{1}' + "\n")
+        fp.write(r'\def\Shelf{1}' + "\n")
+        fp.write(r'\def\Supple{%s}' % shelfcode)
+        fp.write("\n")
+        fp.write(r'\def\Period{3}' + "\n")
+        fp.write(r'\input %s/dextex-current.tex' % settings.CODEBASE)
+        fp.write("\n")
+
+        for title in titles:
+            count = title.codes[shelfcode]
+
+            fp.write('\\Book{%s}{%s}{%s} %% %s' % (
+                texquote(title.authortxt),
+                texquote(nicetitle(title)),
+                count, str(title)))
+            fp.write("\n")
+        fp.write(r'\vfill \eject \bye' + "\n")
+        fp.close()
+        print('done.')
+
+    no_book_header()
+
+    recursive_menu([
+        ('B', 'Backup Database', backup_db),
+        ('T', 'Export Text Dex', export_text),
+        ('D', 'Export Full Dex', export_dex),
+        ('S', 'Export Shelfcode', export_shelf),
+        ('Q', 'Back to Main Menu', None),
+        ], title='Edit Book')
 
 
 if __name__ == '__main__':
