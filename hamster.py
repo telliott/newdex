@@ -40,7 +40,8 @@ def no_book_header():
     ui.clear_screen()
     width = min(ui.termwidth(), 80) - 1
     print('-' * width)
-    print(f'{"MITSFS Book Management System":^{width}}')
+    head = f'MITSFS Book Management System ({library.db.dsn})'
+    print(f'{head:^{width}}')
     print('-' * width)
 
 
@@ -96,10 +97,8 @@ def main(args):
     global title  # if a title is selected, it will be in here
 
     library = library.Library()
-    print("Hello")
     if library.db.dsn != settings.DATABASE_DSN:
         library.log.warn(f'Using database: {library.db.dsn}')
-        exit()
 
     main_menu('')
 
