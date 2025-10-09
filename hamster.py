@@ -153,26 +153,33 @@ def main_menu(line):
             if name in candidates:
                 if not ui.readyes(f'{name} already exists. Continue? [yN] '):
                     continue
-            alt_name = ui.read('Alternate title?: ') or None
-            if alt_name:
-                alt_name = alt_name.upper()
+            alt_name = ui.read('Alternate title?: ')
 
-            titles.append((name.upper(), alt_name))
+            titles.append((name.upper(),
+                           alt_name.upper() if alt_name else None))
 
         series = selecters.select_series(library)
 
         shelfcode = selecters.select_shelfcode(library.shelfcodes,
                                                'Quick add shelfcode?: ')
 
+        no_book_header()
         title = Title(library.db)
         title.create()
         for author in authors:
             title.add_author(author)
         for name, alt in titles:
-            title.add_title(name, alt)
+            try: 
+                title.add_title(name, alt.upper() if alt else None)
+            except exceptions.DuplicateEntry:
+                print(f'skipping {name}: already attached to this title')
         for (volume, series_index, series_visible, number_visible) in series:
-            title.add_series(volume, series_index,
-                             series_visible, number_visible)
+            try: 
+                title.add_series(volume, series_index,
+                                 series_visible, number_visible)
+            except exceptions.DuplicateEntry:
+                print(f'skipping {volume.series_name}:'
+                      ' already attached to this title')
 
         if shelfcode:
             book = Book(library.db, title=title.id,
@@ -180,7 +187,6 @@ def main_menu(line):
             book.create()
 
         library.db.commit()
-        no_book_header()
         print(f'Created {title}')
 
     no_book_header()
@@ -397,15 +403,18 @@ def advanced_edit(line):
                 if not ui.readyes(f'{name} already exists. Continue? [yN] '):
                     continue
 
-            alt_name = ui.read('Alternate title?: ') or None
-
-            titles.append((name.upper(), alt_name.upper()))
-
-        for name, alt in titles:
-            title.add_title(name, alt)
-        library.db.commit()
+            alt_name = ui.read('Alternate title?: ')
+            
+            titles.append((name.upper(), alt_name.upper if alt_name else None))
 
         book_header()
+        for name, alt in titles:
+            try: 
+                title.add_title(name, alt)
+            except exceptions.DuplicateEntry:
+                print(f'skipping {name}: already attached to this title')
+        library.db.commit()
+
 
     def remove_title(line):
         '''Remove a title from this book. Can't remove the last one'''

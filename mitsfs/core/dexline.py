@@ -76,7 +76,7 @@ class DexLine(object):
         ('codes', Editions, Editions(''), True),
         )
     fields = [name for (name, constructor, default, copy) in fieldtypes]
-    splits = ['authors', 'titles', 'series']
+    # splits = ['authors', 'titles', 'series']
     # emptytuple = utils.FieldTuple()
     # emptycodes = Editions()
 
@@ -136,16 +136,26 @@ class DexLine(object):
     def __repr__(self):
         return 'DexLine(' + repr(str(self)) + ')'
 
-    authortxt = property(lambda self: str(self.authors))
-    titletxt = property(lambda self: str(self.titles))
-    seriestxt = property(lambda self: str(self.series))
+    @property
+    def authortxt(self):
+        return str(self.authors)
 
-    placeauthor = property(lambda self:
-                           sanitize_sort_key(str(self.authors[0])))
+    @property
+    def titletxt(self):
+        return str(self.titles)
+
+    @property
+    def seriestxt(self):
+        return str(self.series)
+
+    # These are the sort keys
+    @property
+    def placeauthor(self):
+        return sanitize_sort_key(str(self.authors[0]))
 
     @property
     def placetitle(self):
-        '''The alt title is the one we want to sort on'''
+        # We want to sort on the alt title, as that's where the numbers are
         index = self.titles[0].find('=')
         if index != -1:
             return sanitize_sort_key(self.titles[0][index + 1:])
@@ -153,9 +163,12 @@ class DexLine(object):
             return sanitize_sort_key(self.titles[0])
 
     TRAILING_NUMBER = re.compile(r' [0-9,]+$')
-    placeseries = property(
-        lambda self: len(self.series) and sanitize_sort_key(
-            self.TRAILING_NUMBER.sub('', str(self.series))) or '')
+    @property
+    def placeseries(self):
+        if self.series:
+            return sanitize_sort_key(
+                self.TRAILING_NUMBER.sub('', str(self.series)))
+        return ''
 
     def sortkey(self):
         return (

@@ -18,5 +18,5 @@ class InvalidShelfcode(Exception):
 class DuplicateEntry(Exception):
     pass
 
-class NotFoundExcpetion(Exception):
+class NotFoundException(Exception):
     pass

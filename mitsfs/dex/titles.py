@@ -18,7 +18,6 @@ class Titles(object):
         -------
         list(str)
             A list of all the titles we have in the dex.
-
         '''
         c = self.db.getcursor()
         return c.fetchlist("select CONCAT_WS('=', title_name, alternate_name)"
@@ -239,7 +238,7 @@ class Titles(object):
             (s.upper(), s.upper()))
 
 
-TITLE_FORBIDDEN = re.compile(r'[\|=<]')
+TITLE_FORBIDDEN = re.compile(r'[\\|=<]')
 def sanitize_title(field, db=None):
     '''
     Clean out characters that would cause a Dexline problem. Also uppercases
@@ -426,6 +425,29 @@ class Title(dexline.DexLine, db.Entry):
         return utils.FieldTuple([t[0] for t in titles])
 
     def add_title(self, title_name, alt_name=None, commit=True):
+        '''
+        Add a title (name of book) to this title (title)
+
+        Parameters
+        ----------
+        title_name : string
+            The title to add.
+        alt_name : string, optional
+            Any alternate title, usually the one to sort by.
+            The default is None.
+        commit : bool, optional
+            Whether to commit the added title to the db. The default is True.
+
+        Raises
+        ------
+        exceptions.DuplicateEntry
+            Raised when this title_name is already on the book.
+
+        Returns
+        -------
+        None.
+
+        '''
         title_name = sanitize_title(title_name)
         alt_name = sanitize_title(alt_name)
         for title in self.titles:
@@ -450,10 +472,28 @@ class Title(dexline.DexLine, db.Entry):
             (self.id, title_name, alt_name, order))
         if commit:
             self.db.commit()
-            
+
         self.cache_reset()
 
-    def update_title(self, old_title, new_title, new_alt):
+    def update_title(self, old_title, new_title, new_alt=None):
+        '''
+        Update one of the titles associated with a title
+
+        Parameters
+        ----------
+        old_title : string
+            The title to replace.
+        new_title : string
+            The title to rplace it with.
+        new_alt : string, optional
+            The new alternate (sort) title to replace the ond one with.
+            Can be none
+
+        Returns
+        -------
+        None.
+
+        '''
         new_title = sanitize_title(new_title)
         new_alt = sanitize_title(new_alt)
         self.cursor.execute(
@@ -487,6 +527,22 @@ class Title(dexline.DexLine, db.Entry):
         self.cache_reset()
 
     def merge_title(self, other_book):
+        '''
+        Take another title object and merge it with this one. This is done by
+        moving all the books associated with the other title over to this
+        title, then deleting the title, author and series associations of the
+        book being merged, followed by deleting the title entirely.
+
+        Parameters
+        ----------
+        other_book : Title object
+            The title object to merge into this title.
+
+        Returns
+        -------
+        None.
+
+        '''
 
         self.cursor.execute(
             'update book'
@@ -506,6 +562,11 @@ class Title(dexline.DexLine, db.Entry):
 
         self.cursor.execute(
             'delete from title_title'
+            ' where title_id = %s',
+            (other_book.id,))
+
+        self.cursor.execute(
+            'delete from title'
             ' where title_id = %s',
             (other_book.id,))
 
@@ -538,7 +599,7 @@ class Title(dexline.DexLine, db.Entry):
 
     def add_series(self, series, series_index=None,
                    series_visible=False, number_visible=False):
-        for s in self.series:         
+        for s in self.series:
             if munge_series(s)[0] == series.series_name:
                 raise exceptions.DuplicateEntry(
                     f'{s} is already attached to this title')
@@ -561,6 +622,26 @@ class Title(dexline.DexLine, db.Entry):
         self.cache_reset()
 
     def remove_series(self, series):
+        '''
+        Removes the series association from a title. Someday, we will replace
+        this with a series object, but for current Dexline compatibility,
+        still identified by string.
+
+        Parameters
+        ----------
+        series : string
+            The series to remove from the title.
+
+        Raises
+        ------
+        exceptions.NotFoundException
+            The series name provided doesn't exist.
+
+        Returns
+        -------
+        None.
+
+        '''
         series_id = self.cursor.selectvalue(
             'select series_id from series'
             ' where series_name = %s',

@@ -13,7 +13,7 @@ from mitsfs.circulation.members import Member
 from mitsfs.dex.series import Series
 from mitsfs.dex.authors import Author
 from mitsfs.dex.books import Book
-from mitsfs.dex.titles import Title
+from mitsfs.dex.titles import Title, sanitize_title
 from mitsfs.util import exceptions
 
 
@@ -33,7 +33,8 @@ class TitleTest(Case):
 
             title = Title(library.db)
             title.create()
-
+            title_id = title.id
+            
             thor_name = 'ODINSON, THOR'
             loki_name = 'ODINSON, LOKI'
             loki_alt = 'PRINCE OF MISCHIEF'
@@ -56,6 +57,10 @@ class TitleTest(Case):
             title.add_title("TITLE 1", "TITLE ONE")
             title.add_series(series, 3, True)
 
+            # test title sanitization
+            self.assertEqual(None, sanitize_title(None))
+            self.assertEqual('ABCDE', sanitize_title('a\\b|c=d<e'))
+            
             self.assertEqual("TITLE 1=TITLE ONE", str(title.titles))
 
             book = Book(library.db, title=title,
@@ -64,13 +69,27 @@ class TitleTest(Case):
 
             self.assertEqual(1, len(title.authors))
             self.assertEqual(thor_name, title.authors[0])
-
+  
             title.add_author(loki)
             self.assertEqual(2, len(title.authors))
             self.assertEqual(thor_name, title.authors[0])
             self.assertEqual(str(loki), title.authors[1])
-            self.assertEqual(f'{thor_name}|{loki_name}={loki_alt}',
-                             str(title.authors))
+           
+            title.remove_author(loki)
+            self.assertRaises(exceptions.NotFoundException,
+                              title.remove_author, loki)
+            db_title = Title(library.db, title_id)
+            self.assertEqual(1, len(db_title.authors))
+            self.assertEqual(thor_name, db_title.authors[0])
+            title.add_author(loki)
+            title = Title(library.db, title_id)
+
+            self.assertEqual(2, len(title.author_objects))
+            self.assertEqual(thor_name, title.author_objects[0].name)
+            self.assertEqual(loki_name, title.author_objects[1].name)
+            self.assertEqual(f'{thor}', str(title.author_objects[0]))
+            self.assertEqual(f'{loki_name}={loki_alt}',
+                             str(title.author_objects[1]))
 
             self.assertEqual(f'@{series_name} 3', title.series[0])
             self.assertRaises(exceptions.DuplicateEntry,
