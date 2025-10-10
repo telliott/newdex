@@ -134,7 +134,7 @@ class TransactionsTest(Case):
             tx5 = OverdueTransaction(library.db, thor.id, checkout.id, 5, book)
             tx5.create()
             self.assertEqual(-.50, tx5.amount)
-            self.assertEqual('Book AUTHOR<TITLE<SERIES<P (Paperbacks)< '
+            self.assertEqual('Book AUTHOR<TITLE<SERIES<P< '
                              'overdue 5 days.', tx5.description)
             self.assertEqual(7, len(get_transactions(library.db, thor.id)))
 
@@ -142,7 +142,7 @@ class TransactionsTest(Case):
                                      500, book)
             tx6.create()
             self.assertEqual(-4.00, tx6.amount)
-            self.assertEqual('Book AUTHOR<TITLE<SERIES<P (Paperbacks)< '
+            self.assertEqual('Book AUTHOR<TITLE<SERIES<P< '
                              'overdue 500 days.', tx6.description)
             self.assertEqual(8, len(get_transactions(library.db, thor.id)))
 

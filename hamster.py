@@ -30,7 +30,7 @@ pointer is None, the menu will return control back to your method, at which
 point you likely want to print the header for the menu that's being
 returned to.
 '''
-
+  
 
 def no_book_header():
     '''
@@ -278,6 +278,8 @@ def edit_menu(line):
         ('N', 'Merge Series', merge_series),
         ('Q', 'Back to Main Menu', None),
         ], title='Edit Menu')
+
+    no_book_header()
 
 
 def book_menu(line):

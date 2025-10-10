@@ -5,18 +5,18 @@ import re
 from mitsfs.core import db
 from mitsfs.util.exceptions import InvalidShelfcode
 from mitsfs.util import coercers
-'''
-
-A shelfcode is a short string of characters that lets you know what section
-of the library you can find a book in.
-
-It is usually identified by that short string, but also has an underlying
-integer id in the db for joining with other tables.
-
-'''
 
 
 class Shelfcode(db.Entry):
+    '''
+    
+    A shelfcode is a short string of characters that lets you know what section
+    of the library you can find a book in.
+    
+    It is usually identified by that short string, but also has an underlying
+    integer id in the db for joining with other tables.
+    
+    '''
     def __init__(self, db, shelfcode_id=None, **kw):
         super().__init__('shelfcode', 'shelfcode_id',
                          db, shelfcode_id, **kw)
@@ -29,33 +29,48 @@ class Shelfcode(db.Entry):
     is_double = db.InfoField('shelfcode_doublecode',
                              coercer=coercers.coerce_boolean)
 
-    def __str__(self):
+    @property
+    def detail(self):
         return "%s (%s)" % (self.code, self.description)
+   
+    def __str__(self):
+        return self.code
 
-    '''
-    Coercing to an int simply returns the shelfcode ID
-    '''
 
     def __int__(self):
+        '''
+        Coercing to an int simply returns the shelfcode ID
+        '''
         return self.id
 
-    '''
-    deprecates this shelfcode so that it won't show up in the lists any more
-    '''
 
-    def deprecate(self, db):
-        db.getcursor().execute("update shelfcode"
-                               " set shelfcode_type = 'D'"
-                               " where shelfcode_id = %s", (self.id))
-        db.commit
+    def deprecate(self):
+        '''
+        Deprecates this shelfcode so that it won't show up in the
+        lists any more
 
-    '''
-    add a shelfcode to the db
+        Parameters
+        ----------
+        db : TYPE
+            DESCRIPTION.
 
-    @return: the shelfcode with db id now included
-    '''
+        Returns
+        -------
+        None.
+
+        '''
+        self.db.getcursor().execute("update shelfcode"
+                                    " set shelfcode_type = 'D'"
+                                    " where shelfcode_id = %s", (self.id))
+        self.db.commit
+
 
     def commit(self, db):
+        '''
+        add a shelfcode to the db
+    
+        @return: the shelfcode with db id now included
+        '''
         c = db.getcursor()
         # this won't put the id in because it's a named tuple. Need to reload
         # shelfcodes after a commit
@@ -70,18 +85,15 @@ class Shelfcode(db.Entry):
         return
 
 
-'''
-
-A dictionary of shelfcode objects, keyed by shelfcode
-
-Loaded from the db on initialization
-
-'''
 parse_shelfcodes = None
 
 
 class Shelfcodes(dict):
-
+    '''
+    A dictionary of shelfcode objects, keyed by shelfcode
+    
+    Loaded from the db on initialization
+    '''
     def __init__(self, db):
         super().__init__()
 

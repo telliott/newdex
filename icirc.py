@@ -342,8 +342,9 @@ def member_menu(line):
                 print("Specify check in date:")
                 checkin_date = ui.readdate(datetime.datetime.today(), False)
 
+            result = checkout.checkin(checkin_date)
             member_header(member)
-            print(ui.Color.info(checkout.checkin(checkin_date)))
+            print(ui.Color.info(result))
             print()
 
     def checkin_member_advanced(line):

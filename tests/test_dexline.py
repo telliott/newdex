@@ -2,8 +2,6 @@
 
 import sys
 import os
-import shutil
-import tempfile
 import unittest
 
 testdir = os.path.dirname(__file__)
@@ -15,7 +13,7 @@ from mitsfs.dex.shelfcodes import Shelfcodes
 from mitsfs.util import utils
 
 
-class DexfileTest(unittest.TestCase):
+class DexlineTest(unittest.TestCase):
 
     def testFieldtuple(self):
         self.assertEqual((), utils.FieldTuple())
