@@ -908,10 +908,13 @@ def admin(line):
         '''
         no_member_header()
         checkouts = Checkouts(library.db)
-        for email, name, overdue in checkouts.vgg():
+        overdue_books = checkouts.vgg()
+        for email, name, overdue in overdue_books:
             print(name, '<' + email + '>')
             for stamp, code, title in overdue:
                 print('', stamp, code, title)
+        if not overdue_books:
+            print("No books are overdue. Well done!")
 
     no_member_header()
     menu = [
