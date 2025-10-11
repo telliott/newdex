@@ -284,7 +284,7 @@ def select_safe_filename(path=EXPORT_DIRECTORY, preload=None):
     '''
     while True:
         filename = ui.read('Enter a filename: ', preload=preload)
-        filename = filename.sub('/', '_')
+        filename = filename.replace('/', '_')
         filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
         candidate = f'{path}/{filename}'
         if os.path.exists(candidate):
