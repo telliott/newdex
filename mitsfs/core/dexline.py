@@ -171,13 +171,13 @@ class DexLine(object):
         return ''
 
     def sortkey(self):
-        return (
+        self._sortkey = (
             (self.placeauthor, self.placetitle, self.authortxt,
              self.placetitle, self.titletxt),
             self)
+        return self._sortkey
 
     VSRE = re.compile(r' #([-.,\d]+B?)$')
-
     def shelfkey(self, shelfcode):
         edition = Edition(shelfcode)
 
@@ -195,7 +195,8 @@ class DexLine(object):
                 if m:
                     key += [sanitize_sort_key(m.group(0))]
         key += [self.placetitle]
-        return tuple(key)
+        self._shelfkey = tuple(key)
+        return self._shelfkey
 
     def __eq__(self, other):
         return (self.authors, self.titles) == (other.authors, other.titles)

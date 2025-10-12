@@ -288,6 +288,6 @@ def select_safe_filename(path=EXPORT_DIRECTORY, preload=None):
         filename = re.sub(r'[^0-9a-zA-Z\._]', '', filename)
         candidate = f'{path}/{filename}'
         if os.path.exists(candidate):
-            if not ui.readyes('{candidate} exists. Overwrite? [yN]'):
+            if not ui.readyes(f'{candidate} exists. Overwrite? [yN] '):
                 continue
         return candidate
