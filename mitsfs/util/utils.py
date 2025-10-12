@@ -1,7 +1,6 @@
 #!/usr/bin/python
 import time
 import logging
-import re
 
 
 class FieldTuple(tuple):
