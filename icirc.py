@@ -401,19 +401,23 @@ def member_menu(line):
         # returning an explicit False lets us go up a menu level
         return False
 
+    def menu_options():
+        menu = [
+            ('O', 'Check Out Books', checkout),
+            ('N', 'Check Out Books (nonstandard)', checkout_member_advanced),
+            ('I', 'Check In Books', checkin_member),
+            ('A', 'Check in with Different Date', checkin_member_advanced),
+            ('L', 'Declare Book Lost', lost),
+            ('V', 'View Member', viewmem),
+            ('E', 'Edit Member and Membership', editmem)]
+        if member.balance < 0:
+            menu.append(('P', 'Pay Outstanding Fines', pay_fines))
+        menu.append(('F', 'Financial Transaction', financial))
+        menu.append(('Q', 'Unselect Member', unselect))    
+        return menu
+
     member_header(member)
-    recursive_menu([
-        ('O', 'Check Out Books', checkout),
-        ('N', 'Check Out Books (nonstandard)', checkout_member_advanced),
-        ('I', 'Check In Books', checkin_member),
-        ('A', 'Check in with Different Date', checkin_member_advanced),
-        ('L', 'Declare Book Lost', lost),
-        ('V', 'View Member', viewmem),
-        ('E', 'Edit Member and Membership', editmem),
-        ('P', 'Pay Outstanding Fines', pay_fines),
-        ('F', 'Financial Transaction', financial),
-        ('Q', 'Unselect Member', unselect),
-    ])
+    recursive_menu(menu_options)
 
     # need to print the header for the menu we are returning to
     no_member_header()
