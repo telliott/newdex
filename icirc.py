@@ -239,7 +239,7 @@ def main_menu(line):
         ('I', 'Check In Books', checkin),
         ('B', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
         ('N', 'New Member', newmem),
-        ('D', 'Display Book', display),
+        ('D', 'Display Book Checkouts', display),
         ('A', 'Admin', admin),
         ('Q', 'Quit', None),
         ])
@@ -694,7 +694,7 @@ def financial(line):
         financial_header()
         print('Enter the fine amount, this will decrease '
               'the member\'s balance.')
-        amount = -readmoney().copy_abs()
+        amount = -ui.readmoney().copy_abs()
         desc = ui.read('Enter description: ', history='description')
 
         print(f'Adding {ui.money_str(amount)} to account of {member}.')
@@ -764,7 +764,7 @@ def financial(line):
               ' membership and is now paying. Use the Edit Member menu'
               ' to add a new membership; They can pay there.')
         print('Enter an amount; this will decrease the member\'s balance.')
-        amount = -readmoney().copy_abs()
+        amount = -ui.readmoney().copy_abs()
         desc = ui.read('Enter description: ', history='description')
 
         print('Adding %s to account of %s.' % (ui.money_str(amount), member))
@@ -784,7 +784,7 @@ def financial(line):
         financial_header()
         print('Enter the amount the member is being reimbursed, this'
               ' will decrease the member\'s balance.')
-        amount = -readmoney().copy_abs()
+        amount = -ui.readmoney().copy_abs()
         desc = ui.read('Enter description: ', history='description')
 
         print(f'Adding {ui.money_str(amount)} to account of {member}.')
