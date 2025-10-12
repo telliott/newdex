@@ -1,23 +1,13 @@
 #!/usr/bin/python
 '''
-
-code for manipulating pinkdexen stored in postgres databases
-
+code for manipulating data stored in postgres databases
 '''
-
 
 import functools
 import logging
 import os
 import re
-
 import psycopg2
-
-__all__ = [
-    'Database', 'Field', 'ReadField', 'ReadFieldUncached',
-    'Entry', 'cached', 'EntryDeletable',
-    # 'StaticField',
-    ]
 
 
 class Database(object):
@@ -150,17 +140,24 @@ class EasyCursor(psycopg2.extensions.cursor):
             return []
         return [x[0] for x in self.fetchall()]
         
-    '''
-    Pass in a query and a list of args tuples, and executes the sql repeatedly
-    for each tuple provided
-
-    @param query: the sql query
-    @param args: a list of args tuples, each to be executed against the sql
-
-    @return: the cursor object
-    '''
 
     def executemany(self, sql, argsiter):
+        '''
+        Pass in a query and a list of args tuples, and executes the sql 
+        repeatedly for each tuple provided
+    
+        Parameters
+        ----------
+        sql : str
+            SQL string.
+        args : tuple, optional
+            list of the values to flow into the SQL statement
+    
+        Returns
+        -------
+       EasyCursor
+            the cursor object
+        '''
         for args in argsiter:
             self.execute(sql, args)
         return self
@@ -194,64 +191,74 @@ class ValidationError(Exception):
     pass
 
 
-'''Raised when we are unable to locate an item in the database'''
-
-
-class NotFoundException(Exception):
-    pass
-
-
-'''
-These  classes allow reading a single field from the db in a generic
-fashion. They are used in the membership section of the code.
-
-Field enables full getting and setting of the field.
-ReadFieldUncached is currently unused (used to be for checkout_lost, not
-                                       sure why)
-ReadField is the most common. Does a read (no write) but wraps it in a cache.
-
-'''
-
-
 class Field(property):
     '''
-    Create a field object. Enables just-in-time retrieveal of field values
-
-    @param fieldname: the name of the field
-    @param coercer: a function to take the field data extracted from the
-        database and turn it into another object
-    @param validator: a function to check against before writing to the db.
-
-    All the above functions passed in must take a value, and an optional
-    database object
+    These  classes allow reading a single field from the db in a generic
+    fashion. They are used in the membership section of the code.
+    
+    Field enables full getting and setting of the field.
+    ReadFieldUncached is currently unused (used to be for checkout_lost, not
+                                           sure why)
+    ReadField is the most common. Does a read (no write) but wraps it in a 
+    cache.
+    
     '''
 
     def __init__(
             self, fieldname, coercer=None, validator=None,
             prep_for_write=None
             ):
+        '''
+        Create a field object. Enables just-in-time retrieveal of field values
+
+        Parameters
+        ----------
+        fieldname : string
+            the name of the field.
+        coercer : functional, optional
+            a function to take the field data extracted from the
+            database and turn it into another object. The default is None.
+        validator : function, optional
+            a function to check against before writing to the db.
+            The default is None.
+        prep_for_write : function, optional
+            uncoerces the data back into a storable format. 
+            The default is None.
+
+        Returns
+        -------
+        None.
+
+        '''
         self.field = fieldname
         self.prep_for_write = prep_for_write
         self.validator = validator
         self.coercer = coercer
         super().__init__(self.get, self.set)
 
-    '''
-    Pretty standard getter. Coerces the value into whatever the coerce function
-    returns.
-
-    @param obj: This confuses the heck out of me and there's no documentation
-        about it. As far as I can tell, obj is class this field is a member of.
-        So if you set x=Field(foo) and then make this a class variable, calls
-        to get are transformed into __get__(self, class)
-
-        This lets you define Entry objects below that contain Fields, and
-        those have access to the params in the entry object. Python can
-        be really cryptic sometimes.
-    @return: the value in the database in this field for the ID of the caller
-    '''
 
     def get(self, obj):
+        '''
+        Pretty standard getter. Coerces the value into whatever the coerce 
+        function returns.
+    
+        Parameters
+        ----------
+        obj: 
+            This confuses the heck out of me and there's no documentation
+            about it. As far as I can tell, obj is class this field is a 
+            member of. So if you set x=Field(foo) and then make this a class 
+            variable, calls to get are transformed into __get__(self, class)
+    
+            This lets you define Entry objects below that contain Fields, and
+            those have access to the params in the entry object. Python can
+            be really cryptic sometimes.
+        
+        Returns
+        -------
+        object.
+            the value in the database in this field for the ID of the caller
+        '''
         if self.field in obj.cache:
             return obj.cache[self.field]
 
@@ -263,22 +270,25 @@ class Field(property):
             val = self.coercer(val, obj.db)
         return val
 
-    '''
-    Set variables.
-
-    This does a fair amount before it writes.
-    1) If there's a prep_for_write defined, applies it to the value. Usually
-        done to turn a coerced object back into a string.
-    2) apply strip() to it if you can
-    3) validate that the value is correct if a validator was provided
-    4) coerce the data into the right form. Does not do this if
-        prep_for_write is defined, because that'll turn it back into an object
-
-    @param obj: See above
-
-    '''
 
     def set(self, obj, val):
+        '''
+        Set variables.
+    
+        This does a fair amount before it writes.
+        1) If there's a prep_for_write defined, applies it to the value. 
+            Usually done to turn a coerced object back into a string.
+        2) apply strip() to it if you can
+        3) validate that the value is correct if a validator was provided
+        4) coerce the data into the right form. Does not do this if
+            prep_for_write is defined, because that'll turn it back into an 
+            object
+    
+        Parameters
+        ----------
+        obj: 
+            See dicumentation for set
+        '''
         if self.prep_for_write:
             val = self.prep_for_write(val, obj.db)
         if hasattr(val, 'strip'):

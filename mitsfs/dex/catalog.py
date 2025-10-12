@@ -1,6 +1,5 @@
 from mitsfs.dex import titles, authors, series, shelfcodes, books
 from mitsfs.core import settings, dexline
-from mitsfs.util import ui
 
 class Catalog(object):
     def __init__(self, db):
@@ -57,8 +56,6 @@ class Catalog(object):
             ids = set(self.titles.grep(candidate)
                       + self.authors.grep(candidate)
                       + self.series.grep(candidate))
-        if not ids:
-            return [ui.Color.warning('No titles found')]
         title_list = [titles.Title(self.db, id) for id in ids]
         title_list.sort(key=lambda x: x.sortkey())
         return title_list

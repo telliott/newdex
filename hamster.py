@@ -114,8 +114,11 @@ def main_menu(line):
             grepstring = ui.read('> ')
             if not grepstring:
                 break
-            for title in library.catalog.grep(grepstring):
+            results = library.catalog.grep(grepstring)
+            for title in results:
                 print(str(title))
+            if not results:
+                print(ui.Color.warning('No titles found'))
             print()
             
         no_book_header()
