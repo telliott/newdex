@@ -211,6 +211,9 @@ class Shelfcodes(dict):
         List of title_ids that have a book in this shelfcode
 
         '''
+        if s not in self: 
+            return []
+        
         c = self.db.getcursor()
         return c.fetchlist(
             'select distinct title_id'

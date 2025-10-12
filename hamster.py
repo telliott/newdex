@@ -116,6 +116,8 @@ def main_menu(line):
                 break
             for title in library.catalog.grep(grepstring):
                 print(str(title))
+            print()
+            
         no_book_header()
 
     def select(line):
