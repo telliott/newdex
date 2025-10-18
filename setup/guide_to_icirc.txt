@@ -1,0 +1,49 @@
+How To Use icirc
+
+icirc is a series of menus, depending on whether you have selected a member you are working with or are working on the library as a whole. Most of the time, you'll be wanting to select a member first, and then do something with them.
+
+If you ever find yourself stuck or confused, ctrl-C will generally get you out of anything where 'Q' isn't an option. That'll get you back to a header which should help orient you. Worst case, just keep hitting 'Q' (or ctrl-C if Q isn't available) and you'll end up out of the program and can restart from the beginning.
+
+The most common tasks you will want to do:
+
+Someone is standing in front of me wanting to check out a book
+
+From the main menu, choose Select Member (S) and type in part of the person's name (a few characters is fine - there's both autocomplete and a selection menu.) Then choose Check Out Books (O). It will ask you for a title and author - again, you don't need to type in everything. It will then ask you which edition you want to check out, and you select the appropriate one. Then you can do another one, or exit out.
+
+If the book isn't found, it likely the system thinks it is already checked out. You can use Display Book (D) in the main menu to show you who the dex thinks currently has it out.
+
+Someone is standing in front of me wanting to check in a book
+
+From the main menu, choose Select Member (S) and type in part of the person's name (a few characters is fine - there's both autocomplete and a selection menu.) Then choose Check In Books (I). It will show you all the books this member has checked out. Select the number and it's checked in. Check in as many as you want, then quit back to the member menu.
+
+Someone is standing in front of me wanting to become a member
+
+From the main menu, select New Member (N). It will ask a series of questions to get basic member information, then whether you want to add a membership for them. Follow the screens, take money from them if necessary, and they're part of the library family! They will be selected at that point, so if they want to check out books you can do it from there.
+
+I got into the library and there's books in the book drop
+
+Select Bookdrop Checkin (B) from the main menu. Enter and author and title (partial is fine) and it'll show you all the checkouts that match. Select one, and it'll ask you for a date to check out (selecting 'y' will use the current day). Do that for each book in the drop, then enter a blank to go back to the main menu.
+
+
+Other useful things you can do in icirc. :
+
+Admin > Overdue Books: VGG will care about this - track down who is being naughty. There's a few other interesting things in the admin menu, but they aren't very relevant right now.
+
+Select Member > Check Out Books (nonstandard) - you generally shouldn't use this, but it will let you check out a noncirculating book, or check out a book on a day other than today.
+
+Select Member > Check in With Different Date - another way to check in books in the bookdrop; slightly faster if you're only working with one person.
+
+Select Member > Declare Book Lost - when they've lost a book (and not provided a replacement). Withdraws the book from the library and charges them.
+
+Select Member > View Member - shows details about the member, with additional menus to look at their checkout history, financial history, and what memberships they have purchased.
+
+Select Member > Edit Member > New/Renew Membership - when an already-existing member wants to buy a membership.
+
+Select Member > Edit Member > Edit Member - the sub-menus here let you change name, phone, etc
+
+Select Member > Edit Member > Star Chamber - Key and dekey members. Also some committee management stuff that will be more relevant when everyone isn't running with the same permissions.
+
+Select Member > Pay Outstanding Fines - Give us money so we'll let you check out books again. Will only show up if the member has a negative balance.
+
+Select Member > Financial Transactions - Here's where you process donations, payments that aren't for fines already incurred (including memberships that haven't been paid for). There's an advanced menu that you probably don't want to go into unless you are LHE, but that is where you go to void previous transactions.
+

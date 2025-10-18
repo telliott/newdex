@@ -133,7 +133,7 @@ def main_menu(line):
             book_menu(line)
         no_book_header()
 
-    def new_title(line):
+    def new_book(line):
         '''
         Central function to quickly enter a new book. Will let you do basic
         creation all in one place.
@@ -199,7 +199,7 @@ def main_menu(line):
     recursive_menu([
         ('S', 'Select Book', select),
         ('G', 'Grep for Books', grep),
-        ('T', 'Create Title', new_title),
+        ('B', 'Create Book', new_book),
         ('C', 'Create/Edit Elements', edit_menu),
         ('E', 'Export Files', export_menu),
         ('Q', 'Quit', None),
@@ -337,6 +337,10 @@ def book_menu(line):
         else:
             old_title = title.titles[0]
 
+        if not old_title:
+            book_header()
+            return
+        
         old_alt = ''
         if '=' in old_title:
             (old_title, old_alt) = old_title.split('=')
@@ -414,14 +418,17 @@ def advanced_edit(line):
             
             titles.append((name.upper(), alt_name.upper if alt_name else None))
 
-        book_header()
+        message = None
         for name, alt in titles:
             try: 
                 title.add_title(name, alt)
             except exceptions.DuplicateEntry:
-                print(f'skipping {name}: already attached to this title')
+                message = f'skipping {name}: already attached to this title'
         library.db.commit()
-
+        
+        book_header()
+        if message:
+            print(message)
 
     def remove_title(line):
         '''Remove a title from this book. Can't remove the last one'''
@@ -435,6 +442,10 @@ def advanced_edit(line):
             print("Can't remove the only title")
             return
 
+        if not old_title:
+            book_header()
+            return
+        
         old_alt = ''
         if '=' in old_title:
             (old_title, old_alt) = old_title.split('=')
@@ -448,11 +459,19 @@ def advanced_edit(line):
         print('Add Author')
         authors = selecters.select_author(library)
 
-        for author in authors:
-            title.add_author(author)
-        library.db.commit()
+        messages = []
+        if authors:
+            for author in authors:
+                try:
+                    title.add_author(author)
+                except exceptions.DuplicateEntry:
+                    messages.append(f'{author} is already attached')
+                    continue
+            library.db.commit()
 
         book_header()
+        for message in messages:
+            print(message)
 
     def remove_author(line):
         book_header()
@@ -468,27 +487,32 @@ def advanced_edit(line):
         print('Add Series')
         series = selecters.select_series(library)
 
+        messages = []
+        if series:
+            for (selection, number, series_visible, number_visible) in series:
+                try:
+                    title.add_series(selection, number,
+                                     series_visible, number_visible)
+                except exceptions.DuplicateEntry:
+                    messages.append(
+                        f'{selection.series_name} is already attached')
+                    continue
+            library.db.commit()
+
         book_header()
-        for (selection, number, series_visible, number_visible) in series:
-            try:
-                title.add_series(selection, number,
-                                 series_visible, number_visible)
-            except exceptions.DuplicateEntry:
-                print(f'{selection.series_name} is already attached')
-                continue
-
-        library.db.commit()
-
+        for message in messages:
+            print(message)
 
     def remove_series(line):
         book_header()
         print('Remove Series')
 
         series = selecters.select_generic(title.series)
-        (name, _, _, _) = munge_series(series)
+        if series:
+            (name, _, _, _) = munge_series(series)
 
-        title.remove_series(name)
-        library.db.commit()
+            title.remove_series(name)
+            library.db.commit()
         book_header()
 
     def merge_title(line):
@@ -512,13 +536,13 @@ def advanced_edit(line):
         if title.series:
             menu.append(('V', 'Remove Series', remove_series))
 
-        menu.append(('M', 'Merge Another Title', merge_title))
+        menu.append(('M', 'Merge Another Book', merge_title))
         menu.append(('Q', 'Back to Book Menu', None))
         return menu
 
     book_header()
 
-    recursive_menu(menu_options, title='Advanced Title Edits')
+    recursive_menu(menu_options, title='Advanced Book Edits')
 
     book_header()
 
@@ -540,7 +564,7 @@ def export_menu(line):
     def export_text(line):
         no_book_header()
         print('Export to Text')
-        path = selecters.select_safe_filename(preload='pinkdex.txt')
+        path = selecters.select_safe_filename(preload='dexPlainText.txt')
         fp = open(path, 'w')
 
         print("Fetching...")
@@ -654,6 +678,7 @@ def export_menu(line):
         ('Q', 'Back to Main Menu', None),
         ], title='Edit Book')
 
+    no_book_header()
 
 if __name__ == '__main__':
     main(sys.argv)

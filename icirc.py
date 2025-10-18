@@ -239,7 +239,7 @@ def main_menu(line):
         ('I', 'Check In Books', checkin),
         ('B', 'Bookdrop Checkin (Choose Date)', checkin_advanced),
         ('N', 'New Member', newmem),
-        ('D', 'Display Book Checkouts', display),
+        ('D', 'Display Book', display),
         ('A', 'Admin', admin),
         ('Q', 'Quit', None),
         ])

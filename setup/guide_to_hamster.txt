@@ -1,0 +1,48 @@
+How to Use hamster
+
+Hamster is a series of menus designed to maintain the library's inventory. It has two modes - working with the entire library, and working with a single book that you have selected. 
+
+Before we can talk about hamster, we should talk about how the library thinks about books and their components
+
+An author is a person who has written a book (or, in corner cases, edited one or published one.) Possibly several books. Authors have the author name, and possibly an alternate name, which is primarily used to express the author's name is a different language. 
+
+A series is simply a set of books that are linked together. Sometimes it's very explicit (Lord of the Rings), sometimes less so (the Culture novels). Some series are explicitly numbered and have the name of the series  (and possibly the number) visible on the book spine. This is relevant because when we sort on the shelves, we sort on visible series names/numbers and hamster keeps track of that.
+
+A title is (drumroll), the title of a book, and, unlike authors and series, they don't exist independently of a book. Titles can have alternate titles which are used when we want to engineer the sort order using numbers or other abbreviations that folks might search on (so "Star Trek: The Next Generation Disc Seven" has an alternate title of "ST:TNG Disc 7")
+
+A book is a collection of one or more authors, one or more series, and one or more titles. Note the emphasis on *or more*. Multiple authors is obvious. Multiple series happen when you have a subseries and an overarching series (think - all the Discworld offshoots.) Multiple titles comes up when we have compendiums of multiple titles (note: not doubles. Doubles are special. If we actually get a new double (unlikely) find a member of libcomm to key it in). 
+
+A shelfcode is a section of the library, such as S-CX (Small Comics) or VL-REF (Very Large Reference Books). 
+
+An edition is an actual physical copy. It's an association of a book with a shelfcode. We might have multiple copies in a shelfcode, or copies of the book in multiple places (usually L and S)
+
+So, these components are what we'll be working with in hamster.
+
+Common Tasks
+
+We have a book! Need to add it to the dex!
+
+The first thing we need to do is to figure out if we already have the book in the dex and just need to add an edition, or if this is a new book we haven't seen before. From the main menu, you have a couple options, but most of the time, you'll just use Select Book (S). It'll ask you for an author and a title. No need to type in the whole thing - if there's ambiguity, it'll give you a list to choose from (it also supports autocomplete). If we have a book, adding an edition is easy. Select Add Edition (E), give it the shelfcode and you're done!
+
+If we don't have a book, ctrl-C back to the main menu and use Create Book (B). That will walk you through adding authors (creating them if necessary), series (creating them if necessary) and the titles. It'll then also give you the option to add a shelfcode so that you can create the edition at the same time. 
+
+We've added books to the library. How do we get them on the website?
+
+The Export Files (E) menu gives you the ability to export in various formats (including a database backup that we should run periodically.) Export Text Dex (T) will, after grinding away for a bit, export the traditional text dex into /tmp which can be copied over to /mit/mitsfs/ookcomm/production/pinkdex on athena.
+
+If you're feeling inspired to make a print copy, there's also the option of generating the laTeX files, either for the whole dex or a shelfcode.
+
+Other useful things you can do in hamster:
+
+Grep for Books: This lets you search the dex in fairly powerful ways. There's two ways to search - if you give it a regex, it'll run that regex against a dexline and return anything that matches in any of the sections. But you can also specify your strings using standard dex notation, splitting the fields by '<' (AUTHOR<TITLE<SERIES<SHELFCODE). This lets you do something like 'asimov|pratchett<^B<<L' that'll give you every book either of them wrote that has a title starting with B where we have a Large edition.
+
+Create/Edit Elements: This menu lets you create authors and series. It also lets you merge together authors or series if you want to clean them up.
+
+Select Book > Withdraw Edition: Lets you remove an edition from the library
+
+Select Book > Edit Title: Fix up a typo in a title
+
+Select Book > Advanced Edit: Add and remove authors, series and titles from a book, including the ability to create new authors and series inline. Also gives you the option to merge another book into the one selected, which can be handy if different editions were created independently.
+
+
+[A note to people who might try working with the programming itself - the components are not all named this way, because the model is slightly different. It's confusing! Series is still series. Author is entity. A book is called a title, but also has a title (leading to a table named title_title). An edition is called a book. A collection of shelfcodes are the editions of a title. Yeah, yeah. Cleaning it up slowly..)

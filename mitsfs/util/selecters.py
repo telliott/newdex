@@ -258,6 +258,8 @@ def select_shelfcode(shelfcodes, prompt='Type a shelfcode: '):
     '''
     while True:
         shelfcode = ui.read(prompt).strip().upper()
+        if not shelfcode:
+            return None
         if shelfcode not in shelfcodes:
             print(f'{shelfcode} is not a valid shelfcode')
             continue
