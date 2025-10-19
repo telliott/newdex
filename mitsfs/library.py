@@ -26,6 +26,9 @@ class Library():
         settings.membership_types_global = MembershipTypes(self.db)
         settings.timewarps_global = Timewarps(self.db)
 
+    _log = logging.getLogger('mitsfs.error')
+    _log.setLevel(settings.LOG_LEVEL)
+
     @property
     def shelfcodes(self):
         return settings.shelfcodes_global
@@ -48,4 +51,4 @@ class Library():
 
     @property
     def log(self):
-        return logging.getLogger('mitsfs.error')
+        return self._log

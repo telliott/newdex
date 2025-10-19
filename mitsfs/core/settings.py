@@ -1,3 +1,4 @@
+import logging
 
 shelfcodes_global = None
 membership_types_global = None
@@ -9,3 +10,5 @@ EXPORT_DIRECTORY = '/tmp'
 LOCKER = '/Users/telliott'
 CODEBASE = LOCKER + '/newdex'
 TEXBASE = CODEBASE + '/tex'
+
+LOG_LEVEL = logging.DEBUG

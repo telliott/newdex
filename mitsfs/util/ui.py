@@ -25,6 +25,7 @@ import traceback
 import datetime
 
 #from mitsfs.util.barcode import validate_barcode
+from mitsfs.core import settings
 
 try:
     import ctypes
@@ -540,6 +541,8 @@ def handle_exception(context, exc_info):
     If we have email logging on, email the logs and exception
     '''
     log = logging.getLogger('mitsfs.error')
+    log.setLevel(settings.LOG_LEVEL)
+
     log.error('%s', context, exc_info=exc_info)
     # Flush the log file so we can get exception
     for handler_ref in logging._handlerList:
