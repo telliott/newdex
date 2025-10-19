@@ -365,7 +365,6 @@ def specify(library, preload=None, predicate=None):
         if n == 0:
             return None
         if n is None:
-            author_preload, title_preload = author, title
             continue
 
         book = possibles[n - 1]
@@ -435,7 +434,6 @@ def specify_book(
         if n == 0:
             return None
         if n is None:
-            author_preload, title_preload = author, title
             continue
 
         book = possibles[n - 1]
@@ -541,7 +539,6 @@ def handle_exception(context, exc_info):
     If we have email logging on, email the logs and exception
     '''
     log = logging.getLogger('mitsfs.error')
-    log.setLevel(settings.LOG_LEVEL)
 
     log.error('%s', context, exc_info=exc_info)
     # Flush the log file so we can get exception

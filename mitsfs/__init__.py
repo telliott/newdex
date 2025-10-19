@@ -7,10 +7,10 @@ MITSFS package
 import logging
 import os
 from mitsfs.util import utils
-
+from mitsfs.core import settings
 #mask = os.umask(0700)
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=settings.LOG_LEVEL,
     format='%(name)s: %(message)s',
     filename='/tmp/mitsfs.log.%d' % os.getuid(),
     filemode='a')

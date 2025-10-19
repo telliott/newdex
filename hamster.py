@@ -112,7 +112,7 @@ def main_menu(line):
             print('Can search on sections using < notation.'
                   ' (blank line to exit)')
             grepstring = ui.read('> ')
-            if not grepstring:
+            if not grepstring or grepstring.upper() == 'Q':
                 break
             results = library.catalog.grep(grepstring)
             for title in results:

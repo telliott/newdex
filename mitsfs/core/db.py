@@ -8,7 +8,6 @@ import logging
 import os
 import re
 import psycopg2
-from mitsfs.core import settings
 
 class Database(object):
     def getcursor(self):
@@ -70,7 +69,6 @@ class EasyCursor(psycopg2.extensions.cursor):
 
     def execute(self, sql, args=None):
         log = logging.getLogger('mitsfs.sql')
-        log.setLevel(settings.LOG_LEVEL)
         
         log.debug('%s', self.mogrify(sql, args))
         try:
