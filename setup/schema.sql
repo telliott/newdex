@@ -421,31 +421,31 @@ grant select on book to public;
 grant insert, update, delete on book to panthercomm;
 
 
-create table barcode (
-       book_id integer not null references book,
-       barcode text unique primary key not null,
-       barcode_created timestamp with time zone default current_timestamp not null,
-       barcode_created_by varchar(64) default current_user not null,
-       barcode_created_with varchar(64) default 'SQL' not null,
-       barcode_modified timestamp with time zone default current_timestamp not null,
-       barcode_modified_by varchar(64) default current_user not null,
-       barcode_modified_with varchar(64) default 'SQL' not null);
+-- create table barcode (
+--        book_id integer not null references book,
+--        barcode text unique primary key not null,
+--        barcode_created timestamp with time zone default current_timestamp not null,
+--        barcode_created_by varchar(64) default current_user not null,
+-- --        barcode_created_with varchar(64) default 'SQL' not null,
+--        barcode_modified timestamp with time zone default current_timestamp not null,
+--        barcode_modified_by varchar(64) default current_user not null,
+--        barcode_modified_with varchar(64) default 'SQL' not null);
 
-create index barcode_book_id_idx on barcode(book_id);
+-- create index barcode_book_id_idx on barcode(book_id);
 
-create trigger barcode_insert
-       before insert on barcode
-       for each row execute procedure insert_row_created_with();
-create trigger barcode_update
-       before update on barcode
-       for each row execute procedure update_row_modified();
-create trigger barcode_log
-       before insert or update or delete on barcode
-       for each row execute procedure log_row('book_id');
+-- create trigger barcode_insert
+--        before insert on barcode
+--        for each row execute procedure insert_row_created_with();
+-- create trigger barcode_update
+--        before update on barcode
+--        for each row execute procedure update_row_modified();
+-- create trigger barcode_log
+--        before insert or update or delete on barcode
+--        for each row execute procedure log_row('book_id');
 
-grant select on barcode to public;
-grant insert on barcode to keyholders;
-grant update, delete on barcode to panthercomm;
+-- grant select on barcode to public;
+-- grant insert on barcode to keyholders;
+-- grant update, delete on barcode to panthercomm;
 
 create or replace view shelf_count as
  select title_id, shelfcode, count(shelfcode) as bookcount
@@ -615,85 +615,84 @@ create view top_checkout_titles as
 
 
 
-create table inventory (
-       inventory_id integer default nextval('id_seq') not null primary key,
-       inventory_code text unique not null,
-       inventory_stamp timestamp with time zone default current_timestamp not null,
-       inventory_desc text not null,
-       inventory_closed timestamp with time zone);
+-- create table inventory (
+--       inventory_id integer default nextval('id_seq') not null primary key,
+--      inventory_code text unique not null,
+--       inventory_stamp timestamp with time zone default current_timestamp not null,
+--       inventory_desc text not null,
+--       inventory_closed timestamp with time zone);
 
-grant select on inventory to public;
-grant insert, update, delete on inventory to libcomm;
+-- grant select on inventory to public;AS
+-- grant insert, update, delete on inventory to libcomm;
 
-
-create table shelf_divisions (
-       title_id integer not null references title,
-       inventory_id integer not null references inventory,
-       shelfcode_id integer not null references shelfcode,
-       division_comment text
-);
-
-grant select on shelf_divisions to public;
-grant insert, update, delete on shelf_divisions to keyholders;
-
-
-create table inventory_found (
-       inventory_found_id integer default nextval('id_seq') not null primary key,
-       inventory_id integer not null references inventory,
-       title_id integer not null references title,
-       format_id integer not null references format,
-       found_tag text not null,
-       inventory_reshelved boolean default false,
-       orange boolean,
-       flag boolean default false,
-       inventory_entry_id integer,
-       resolving_id integer);
-
-grant select on inventory_found to public;
-grant insert, update, delete on inventory_found to prentices;
-
-
-create table inventory_packet (
-       inventory_packet_id integer default nextval('id_seq') not null primary key,
-       inventory_id integer not null references inventory,
-       inventory_packet_name text not null);
-
-grant select on inventory_packet to public;
-grant insert, update, delete on inventory_packet to libcomm;
-
-
-create table inventory_entry (
-       inventory_entry_id integer default nextval('id_seq') not null primary key,
-       inventory_id integer not null references inventory,
-       title_id integer not null references title,
-       shelfcode_id integer not null references shelfcode,
-       inventory_packet_id integer references inventory_packet,
-       entry_number integer,
-       entry_expected integer not null default 0,
-       book_series_visible boolean,
-       doublecrap text,
-       unique(inventory_id, title_id, shelfcode_id));
-
-grant select on inventory_entry to public;
-grant insert, update, delete on inventory_entry to libcomm;
-
-
-create table inventory_missing (
-       inventory_entry_id integer not null references inventory_entry,
-       missing bool not null default true,
-       missing_count integer);
-grant select on inventory_missing to public;
-grant insert, update, delete on inventory_entry to libcomm;
-
-
-create table inventory_checkout (
-       inventory_id integer not null references inventory,
-       title_id integer not null references title,
-       shelfcode_id integer not null references shelfcode,
-       inventory_outcount integer not null);
-grant select on inventory_missing to public;
-grant insert, update, delete on inventory_entry to libcomm;
-
+-- create table shelf_divisions (
+--        title_id integer not null references title,
+--        inventory_id integer not null references inventory,
+--        shelfcode_id integer not null references shelfcode,
+--        division_comment text
+-- );
+-- 
+-- grant select on shelf_divisions to public;
+-- grant insert, update, delete on shelf_divisions to keyholders;
+-- 
+-- 
+-- create table inventory_found (
+--        inventory_found_id integer default nextval('id_seq') not null primary key,
+--        inventory_id integer not null references inventory,
+--        title_id integer not null references title,
+--        format_id integer not null references format,
+--        found_tag text not null,
+--        inventory_reshelved boolean default false,
+--        orange boolean,
+--        flag boolean default false,
+--        inventory_entry_id integer,
+--        resolving_id integer);
+-- 
+-- grant select on inventory_found to public;
+-- grant insert, update, delete on inventory_found to prentices;
+-- 
+-- 
+-- create table inventory_packet (
+--        inventory_packet_id integer default nextval('id_seq') not null primary key,
+--        inventory_id integer not null references inventory,
+--        inventory_packet_name text not null);
+-- 
+-- grant select on inventory_packet to public;
+-- grant insert, update, delete on inventory_packet to libcomm;
+-- 
+-- 
+-- create table inventory_entry (
+--        inventory_entry_id integer default nextval('id_seq') not null primary key,
+--        inventory_id integer not null references inventory,
+--        title_id integer not null references title,
+--        shelfcode_id integer not null references shelfcode,
+--        inventory_packet_id integer references inventory_packet,
+--        entry_number integer,
+--        entry_expected integer not null default 0,
+--        book_series_visible boolean,
+--        doublecrap text,
+--        unique(inventory_id, title_id, shelfcode_id));
+-- 
+-- grant select on inventory_entry to public;
+-- grant insert, update, delete on inventory_entry to libcomm;
+-- 
+-- 
+-- create table inventory_missing (
+--       inventory_entry_id integer not null references inventory_entry,
+--       missing bool not null default true,
+--       missing_count integer);
+-- grant select on inventory_missing to public;
+-- grant insert, update, delete on inventory_entry to libcomm;
+-- 
+-- 
+-- create table inventory_checkout (
+--        inventory_id integer not null references inventory,
+--        title_id integer not null references title,
+--        shelfcode_id integer not null references shelfcode,
+--        inventory_outcount integer not null);
+-- grant select on inventory_missing to public;
+-- grant insert, update, delete on inventory_entry to libcomm;
+-- 
 
 create table membership_type (
        membership_type_id integer default nextval('id_seq') not null,
@@ -886,5 +885,33 @@ create trigger timewarp_log
 
 grant select on timewarp to keyholders;
 grant insert, update, delete on timewarp to "*chamber";
+
+create table inventory (
+       inventory_id integer default nextval('id_seq') not null primary key,
+       inventory_stamp timestamp with time zone default current_timestamp not null,
+       inventory_desc text not null,
+       inventory_closed timestamp with time zone);
+
+grant select on inventory to public;
+grant insert, update, delete on inventory to libcomm;
+
+create table inventory_missing (
+        inventory_id integer not null, 
+        book_id integer not null,
+        shelfcode varchar(10) not null,
+        located boolean default false);
+
+grant select on inventory_missing to public;
+grant insert, update, delete on inventory_missing to libcomm;
+
+create table inventory_sections (
+        inventory_id integer not null,
+        shelfcode varchar(10) not null,
+        section integer not null,
+        member_id integer default null,
+        complete boolean default false);
+
+grant select on inventory_sections to public;
+grant insert, update, delete on inventory_sections to libcomm;
 
 reset role;

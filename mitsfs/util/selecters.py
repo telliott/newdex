@@ -25,11 +25,8 @@ def select_generic(candidates):
     n = None
     if len(candidates) == 0:
         print("Nothing found, Try again")
-    if (len(candidates) == 1):
-        return candidates[0]
-    else:
-        for i, candidate in enumerate(candidates):
-            print(ui.Color.select(str(i + 1) + '.') + str(candidate))
+    for i, candidate in enumerate(candidates):
+        print(ui.Color.select(str(i + 1) + '.') + str(candidate))
     n = ui.readnumber('? ', 0, len(candidates) + 1, 'select')
     if n is None or n == 0:
         return None
@@ -94,8 +91,7 @@ def select_edition(title):
                 outto = f' (out to {book.outto})'
             print(
                 ui.Color.select(str(i + 1) + '.') +
-                '%s %s%s' % (book.shelfcode,
-                             ', '.join(book.barcodes), outto))
+                '%s %s' % (book.shelfcode, outto))
         n = ui.readnumber('? ', 0, len(books) + 1, 'select')
     if n is None or n == 0:
         return None

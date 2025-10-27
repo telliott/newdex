@@ -20,3 +20,6 @@ class DuplicateEntry(Exception):
 
 class NotFoundException(Exception):
     pass
+
+class InventoryAlreadyOpenException(Exception):
+    pass

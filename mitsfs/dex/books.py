@@ -2,7 +2,6 @@ import datetime
 
 from mitsfs.core import db
 from mitsfs.util import coercers
-from mitsfs.dex import barcode
 from mitsfs.circulation import checkouts
 from mitsfs.circulation import members
 from mitsfs.util import exceptions
@@ -29,29 +28,20 @@ class Book(db.Entry):
     # probably vestigial
     comment = db.Field('book_comment')
 
+    @property 
+    def titles(self):
+        return self.title.titles
+    
+    @property 
+    def authors(self):
+        return self.title.authors
+    
+    
     def create(self, commit=True):
         if self.title is None or self.shelfcode is None:
             raise exceptions.Ambiguity('Title and Shelfcode must be'
                                        ' defined to create a book')
         super().create(commit)
-
-    @property
-    def barcodes(self):
-        return self.cursor.fetchlist(
-            'select barcode from barcode'
-            ' where book_id=%s order by barcode_created',
-            (self.id,))
-
-    def addbarcode(self, in_barcode):
-        in_barcode = barcode.valifrob(in_barcode)
-        if in_barcode:
-            self.cursor.execute(
-                'insert into barcode(book_id, barcode) values (%s,%s)',
-                (self.id, in_barcode))
-            self.db.commit()
-            return True
-        else:
-            return False
 
     @property
     def checkout_history(self):
@@ -104,9 +94,9 @@ class Book(db.Entry):
         self.withdrawn = True
 
     def __str__(self):
-        return '%s<%s<%s<%s<%s' % (
+        return '%s<%s<%s<%s' % (
             self.title.authortxt, self.title.titletxt, self.title.seriestxt,
-            self.shelfcode, '|'.join(self.barcodes))
+            self.shelfcode)
 
     def str_pretty(self):
         '''
@@ -116,10 +106,12 @@ class Book(db.Entry):
         return [
             self.title.authortxt[:20],
             self.title.titletxt[:12],
-            str(self.shelfcode).ljust(5),
-            '|'.join(self.barcodes)[:10],
+            str(self.shelfcode).ljust(5)
             ]
 
     def __repr__(self):
         return '#%d:%d %s' % (
-            self.title.title_id[0], self.book_id[0], str(self))
+            self.title.title_id, self.id, str(self))
+
+    def __eq__(self, other):
+        return self.id == other.id

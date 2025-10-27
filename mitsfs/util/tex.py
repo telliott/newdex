@@ -1,3 +1,4 @@
+from mitsfs.core import settings
 
 def texquote(s):
     s = ''.join(((i in '&$%#_') and ('\\' + i) or i for i in s))
@@ -36,3 +37,19 @@ def nicetitle(line):
                 ntitles += titles[len(series):]
             titles = ntitles
     return '|'.join(titles)
+
+def tex_header(dexname, supplemental=None):
+    lines = []
+    lines.append(r'\def\dexname{%s}' % dexname)
+    
+    if (supplemental):
+        lines.append(r'\def\Reverse{1}')
+        lines.append(r'\def\Shelf{1}')
+        lines.append(r'\def\Supple{%s}' % supplemental)
+    
+    lines.append(r'\def\Period{%i}' % (3 if supplemental else 0))
+    lines.append(r'\input %s/dextex-current.tex' % settings.TEXBASE)
+    return '\n'.join(lines) + '\n'
+
+def tex_footer():
+    return r'\vfill \eject \bye' + '\n'

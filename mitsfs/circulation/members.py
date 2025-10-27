@@ -3,8 +3,6 @@
 Code for manipulating the online membership book
 
 '''
-
-import datetime
 import re
 
 from mitsfs.core import db
@@ -73,7 +71,7 @@ class Members(object):
         return [
             Member(self.db, i)
             for i in
-            self.db.cursor.execute(
+            self.db.cursor.fetchlist(
                 'select member_id'
                 ' from member'
                 ' where'
@@ -180,6 +178,9 @@ class Member(db.Entry):
             self.membership_ = Membership(self.db, membership_id=member_id)
         return self.membership_
 
+    def __eq__(self, other):
+        return self.id == other.id
+    
     def membership_add(self, member_type):
         '''
         Adds new membership of the provided MembershipType object

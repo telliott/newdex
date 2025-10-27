@@ -201,7 +201,7 @@ class Titles(object):
         Returns
         -------
         list(str)
-            a list of titles for autocomplete.
+            a list of title objects for autocomplete.
 
         '''
         c = self.db.getcursor()
@@ -679,17 +679,10 @@ class Title(dexline.DexLine, db.Entry):
         cursor = self.cursor
         # This is a subselect so we can sort by shelcode_Id
         book_list = cursor.fetchlist(
-            "select distinct book_id"
-            " from ("
-            "  select book_id"
-            "  from"
-            "   book"
-            "   natural left join barcode"
-            "  where"
-            "   title_id=%s and"
-            "   not withdrawn"
-            "  order by shelfcode_id, barcode)"
-            " as q",
+            "select book_id"
+            " from book"
+            " where title_id=%s and not withdrawn"
+            " order by shelfcode_id",
             (self.id, ))
         return [Book(self.db, book_id) for book_id in book_list]
 

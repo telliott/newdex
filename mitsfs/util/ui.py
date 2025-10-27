@@ -24,7 +24,6 @@ import termios
 import traceback
 import datetime
 
-#from mitsfs.util.barcode import validate_barcode
 from mitsfs.core import settings
 
 try:
@@ -213,18 +212,6 @@ def readnumber(prompt, start, end, history=None, escape=None):
             continue
 
 
-# def readbarcode():
-#     while True:
-#         prompt = "Scan Barcode: "
-#         in_barcode = read(prompt, history="barcode").strip()
-#         if not in_barcode:
-#             return None
-#         if validate_barcode(in_barcode):
-#             return in_barcode
-#         else:
-#             print("Invalid Barcode")
-
-
 def readmoney(
         amount=None,
         prompt='Amount: ',
@@ -388,7 +375,7 @@ def specify_book(
             complete = authorcomplete
         print('To return, type Control-C or leave author and title blank')
         author = read(
-            'Author or Barcode: ',
+            'Author: ',
             preload=author_preload,
             history='authors',
             complete=complete,
@@ -442,14 +429,14 @@ def specify_book(
             (x, list(y))
             for (x, y) in itertools.groupby(
                 (i for i in book.books if book_predicate(i)),
-                lambda x: (x.shelfcode, x.barcodes, x.outto))]
+                lambda x: (x.shelfcode, x.outto))]
 
         n = None
         if len(books) == 0:
             print("Nothing found, Try again")
         else:
             print(book)
-            for (i, ((shelfcode, barcodes, outto), booklist)) in \
+            for (i, ((shelfcode, outto), booklist)) in \
                     enumerate(books):
                 count = len(booklist)
                 if outto:
@@ -457,13 +444,11 @@ def specify_book(
                 if count > 1:
                     s = (
                         Color.select(str(i + 1) + '.') +
-                        '%2dx %s %s%s' % (
-                            count, shelfcode, ', '.join(barcodes), outto))
+                        '%2dx %s %s' % (count, shelfcode, outto))
                 else:
                     s = (
                         Color.select(str(i + 1) + '.') +
-                        '    %s %s%s' % (
-                            shelfcode, ', '.join(barcodes), outto))
+                        '    %s %s' % (shelfcode, outto))
                 print(s)
             n = readnumber('? ', 0, len(books) + 1, 'select')
         if n is None or n == 0:

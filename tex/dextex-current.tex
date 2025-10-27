@@ -185,6 +185,7 @@
         \ifodd\pageno\else{\headline={}\ \vfill\eject}\fi\pageno=1\relax}
 
 % Shelfdex may (but doesn't always) define \chunk (and then insert some).
+% Nowhere in the code references this
 \ifundef{chunk}\else
   \countdef\chunkno=0\relax \countdef\pageno=1\relax
   \def\Page{Page \the\chunkno.\the\pageno}

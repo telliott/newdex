@@ -42,8 +42,13 @@ class Shelfcode(db.Entry):
         Coercing to an int simply returns the shelfcode ID
         '''
         return self.id
-
-
+    
+    def __eq__(self, other):
+        '''
+        Do the two objects have the same id
+        '''
+        return self.id == other.id
+    
     def deprecate(self):
         '''
         Deprecates this shelfcode so that it won't show up in the
@@ -175,7 +180,6 @@ class Shelfcodes(dict):
             for title_id
             in c.execute(q, values))
 
-    # Tested in test_indexes
     def stats(self):
         '''
         Helper function to show book counts for each shelfcode. Ignores
@@ -218,7 +222,7 @@ class Shelfcodes(dict):
         return c.fetchlist(
             'select distinct title_id'
             ' from book'
-            ' where shelfcode_id = %s',
+            ' where not withdrawn and shelfcode_id = %s',
             (self[s].id,))
 
     @staticmethod
