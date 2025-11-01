@@ -220,7 +220,8 @@ def main_menu(line):
             no_shelfcode_header()
             for book in inv.get_missing_books():
                 print (ui.Color.warning(f'{book} withdrawn'))
-             
+            # returning an explicit False lets us go up a menu level
+            return False 
         
     def menu_options():
         if library.inventory:

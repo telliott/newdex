@@ -265,8 +265,6 @@ def sanitize_title(field, db=None):
 
 def check_for_leading_article(t):
     '''
-    
-
     Parameters
     ----------
     t : string

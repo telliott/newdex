@@ -153,7 +153,7 @@ def main_menu(line):
                 break
 
             if check_for_leading_article(name):
-                if not ui.readyes(f'This looks like it starts with an '
+                if not ui.readyes('This looks like it starts with an '
                                   'article. Are you sure? [yN] '):
                     continue
                 
@@ -171,6 +171,18 @@ def main_menu(line):
 
         shelfcode = selecters.select_shelfcode(library.shelfcodes,
                                                'Quick add shelfcode?: ')
+
+        if shelfcode: 
+            double = None
+            series_visible = False
+            if shelfcode.is_double:
+                double = ui.read("Double value: ")
+    
+            if series:
+                series_visible = ui.readyes('Is the series name'
+                                            ' visible on the spine? [yN] ')
+    
+            review = ui.readyes('Review copy? [yN] ')
 
         no_book_header()
         title = Title(library.db)
@@ -192,7 +204,8 @@ def main_menu(line):
 
         if shelfcode:
             book = Book(library.db, title=title.id,
-                        shelfcode=shelfcode)
+                    shelfcode=shelfcode,
+                    doublecrap=double, review=review, visible=series_visible)
             book.create()
 
         library.db.commit()
@@ -331,7 +344,7 @@ def book_menu(line):
 
         if title.series:
             series_visible = ui.readyes(f'Is series ({title.series})'
-                                        ' visible? [yN] ')
+                                        ' visible on the spine? [yN] ')
 
         review = ui.readyes('Review copy? [yN] ')
         book = Book(library.db, title=title.id,
@@ -667,7 +680,7 @@ def export_menu(line):
         titles.sort(key=lambda x: x.sortkey())
         print('Writing...')
         
-        fp.write(tex.header('Shelfdex', shelfcode.code))
+        fp.write(tex.tex_header('Shelfdex', shelfcode.code))
 
         for title in titles:
             count = int(title.codes[shelfcode.code])
