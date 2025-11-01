@@ -13,7 +13,7 @@ from mitsfs.circulation.members import Member
 from mitsfs.dex.series import Series
 from mitsfs.dex.authors import Author
 from mitsfs.dex.books import Book
-from mitsfs.dex.titles import Title, sanitize_title
+from mitsfs.dex.titles import Title, sanitize_title, check_for_leading_article
 from mitsfs.util import exceptions
 
 
@@ -60,6 +60,13 @@ class TitleTest(Case):
             # test title sanitization
             self.assertEqual(None, sanitize_title(None))
             self.assertEqual('ABCDE', sanitize_title('a\\b|c=d<e'))
+            
+            # test article starts
+            self.assertTrue(check_for_leading_article('A PROBLEM'))
+            self.assertTrue(check_for_leading_article('AN ERROR'))
+            self.assertTrue(check_for_leading_article('THE FAUX PAS'))
+            self.assertFalse(check_for_leading_article('ALL GOOD'))
+            
             
             self.assertEqual("TITLE 1=TITLE ONE", str(title.titles))
 

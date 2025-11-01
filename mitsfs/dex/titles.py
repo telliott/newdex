@@ -263,7 +263,23 @@ def sanitize_title(field, db=None):
     field = re.sub(TITLE_FORBIDDEN, '', field)
     return field.upper()
 
+def check_for_leading_article(t):
+    '''
+    
 
+    Parameters
+    ----------
+    t : string
+        The title to check.
+
+    Returns
+    -------
+    Boolean
+        True if the title starts with an article, which is probably 
+        unintentional.
+    '''
+    return t.upper().startswith(('A ', 'AN ', 'THE '))
+    
 class Title(dexline.DexLine, db.Entry):
     def __init__(self, database, title_id=None):
         db.Entry.__init__(self, 'title', 'title_id', database, title_id)

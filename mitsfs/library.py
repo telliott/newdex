@@ -10,7 +10,7 @@ from mitsfs.dex.catalog import Catalog
 from mitsfs.circulation.membership_types import MembershipTypes
 from mitsfs.circulation.timewarps import Timewarps
 from mitsfs.circulation.members import Members
-
+from mitsfs.dex.inventory import Inventories
 
 class Library():
     def __init__(self, db=None, client='mitsfs.dexdb',
@@ -49,3 +49,16 @@ class Library():
     @property
     def log(self):
         return logging.getLogger('mitsfs.error')
+
+    # set to false because inventory can be none and we want to cache that
+    _inventory = False
+    
+    @property
+    def inventory(self):
+        if self._inventory is False:
+            i = Inventories(self.db)
+            self._inventory = i.get_open()
+        return self._inventory
+
+    def reset_inventory(self):
+        self._inventory = False

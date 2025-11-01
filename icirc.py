@@ -51,7 +51,8 @@ def no_member_header():
     print('-' * width)
     print(f'{"MITSFS Circulation System":^{width}}')
     print('-' * width)
-
+    if library.inventory:
+        print(ui.Color.warning('INVENTORY IS UNDERWAY. PROCEED WITH CAUTION'))
 
 def member_header(member, title='Member Menu'):
     '''
@@ -93,6 +94,8 @@ def member_header(member, title='Member Menu'):
     spaces = max(1, width - balance_len - expiry_len)
     print(f'Balance: {balance}{books_out:^{spaces}}{member.membership.expiry}')
     print('-' * width)
+    if library.inventory:
+        print(ui.Color.warning('INVENTORY IS UNDERWAY. PROCEED WITH CAUTION'))
     return
 
 
@@ -161,6 +164,9 @@ def main_menu(line):
                     % (book,)))
             for checkout in checkouts.out:
                 print(ui.Color.info(checkout.checkin(checkin_date)))
+            if library.inventory:
+                print(ui.Color.warning('Inventory active. '
+                                       'Do not return to shelf!'))
         no_member_header()
 
     def checkin_advanced(line):
@@ -345,6 +351,10 @@ def member_menu(line):
             result = checkout.checkin(checkin_date)
             member_header(member)
             print(ui.Color.info(result))
+            if library.inventory:
+                print(ui.Color.warning('Inventory active. '
+                                       'Do not return to shelf!'))
+
             print()
 
     def checkin_member_advanced(line):

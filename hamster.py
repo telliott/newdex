@@ -1,12 +1,11 @@
 import os
 import sys
 import re
-from datetime import datetime
 
 from mitsfs import library
 from mitsfs.core import settings
 from mitsfs.dex.series import Series, munge_series, sanitize_series
-from mitsfs.dex.titles import Title, sanitize_title
+from mitsfs.dex.titles import Title, sanitize_title, check_for_leading_article
 from mitsfs.dex.authors import Author, sanitize_author
 from mitsfs.dex.books import Book
 from mitsfs.util import utils, exceptions, selecters, tex, ui
@@ -153,6 +152,11 @@ def main_menu(line):
             if not name:
                 break
 
+            if check_for_leading_article(name):
+                if not ui.readyes(f'This looks like it starts with an '
+                                  'article. Are you sure? [yN] '):
+                    continue
+                
             candidates = library.catalog.titles.complete(name,
                                                          authors[0].name)
             if name in candidates:
@@ -193,6 +197,9 @@ def main_menu(line):
 
         library.db.commit()
         print(f'Created {title}')
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. '
+                                   'Do not put on shelf!'))
 
     no_book_header()
 
@@ -224,6 +231,10 @@ def edit_menu(line):
 
     def merge_authors(line):
         no_book_header()
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. Merging unavailable.'))
+            return
+        
         print('Select the author to keep')
         keep = selecters.select_author(library, create=False, single=True)
         print(f'Select the author to merge into {keep}')
@@ -262,6 +273,10 @@ def edit_menu(line):
 
     def merge_series(line):
         no_book_header()
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. Merging unavailable.'))
+            return
+
         print('Select the series to keep')
         keep = selecters.select_series(library, create=False, single=True)
         print(f'Select the series to merge into {keep}')
@@ -326,6 +341,10 @@ def book_menu(line):
 
         book_header()
         print(f'Added {shelfcode}')
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. '
+                                   'Do not put new book on shelf!'))
+            return
 
     def edit_title(line):
         ''' change the title'''
@@ -379,6 +398,11 @@ def book_menu(line):
 
     def withdraw(line):
         '''withdraw this book from the library'''
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. '
+                                   'Withdrawing unavailable.'))
+            return
+        
         book = selecters.select_edition(title)
         if book:
             book.withdraw()
@@ -517,6 +541,9 @@ def advanced_edit(line):
 
     def merge_title(line):
         book_header()
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. Merging unavailable.'))
+            return
         print('Specify the title to merge')
         other_book = ui.specify(library)
 
@@ -588,15 +615,10 @@ def export_menu(line):
     def export_dex(line):
         no_book_header()
         print('Export to Dex')
-        path = selecters.select_safe_filename('pinkdex.tex')
+        path = selecters.select_safe_filename(preload='pinkdex.tex')
         fp = open(path, 'w')
 
-        fp.write(r'\def\dexname{Pinkdex}')
-        fp.write("\n")
-        fp.write(r'\def\Period{0}' + "\n")
-        fp.write(r'\input %s/dextex-current.tex' % settings.TEXBASE)
-        fp.write("\n")
-
+        fp.write(tex.tex_header('Pinkdex'))
         print("Fetching...")
         titles = library.catalog.titles.book_titles()
         print('Sorting...')
@@ -625,7 +647,7 @@ def export_menu(line):
                 print(f'Problematic: {title.titles}')
                 continue
 
-        fp.write(r'\vfill \eject \bye' + "\n")
+        fp.write(tex.tex_footer())
         fp.close()
         print('done.')
 
@@ -640,31 +662,22 @@ def export_menu(line):
         fp = open(path, 'w')
 
         print("Fetching...")
-        titles = library.catalog.titles.book_titles(
-            shelfcode=shelfcode)
+        titles = library.catalog.titles.book_titles(shelfcode=shelfcode)
         print('Sorting...')
         titles.sort(key=lambda x: x.sortkey())
         print('Writing...')
-
-        fp.write(r'\def\dexname{Pinkdex}')
-        fp.write("\n")
-        fp.write(r'\def\Reverse{1}' + "\n")
-        fp.write(r'\def\Shelf{1}' + "\n")
-        fp.write(r'\def\Supple{%s}' % shelfcode.code)
-        fp.write("\n")
-        fp.write(r'\def\Period{3}' + "\n")
-        fp.write(r'\input %s/dextex-current.tex' % settings.TEXBASE)
-        fp.write("\n")
+        
+        fp.write(tex.header('Shelfdex', shelfcode.code))
 
         for title in titles:
-            count = title.codes[shelfcode.code]
+            count = int(title.codes[shelfcode.code])
 
             fp.write('\\Book{%s}{%s}{%s} %% %s' % (
                 tex.texquote(title.authortxt),
                 tex.texquote(tex.nicetitle(title)),
                 count, str(title)))
             fp.write("\n")
-        fp.write(r'\vfill \eject \bye' + "\n")
+        fp.write(tex.tex_footer())
         fp.close()
         print('done.')
 
