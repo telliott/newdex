@@ -469,6 +469,10 @@ class Entry(object):
     def __int__(self):
         return self.id
 
+    def __eq__(self, other):
+        if hasattr(other, 'id'):
+            return self.id == other.id
+        return False
 
 class EntryDeletable(Entry):
     def delete(self, commit=True):

@@ -140,17 +140,19 @@ def main_menu(line):
         no_book_header()
         print("Create a new title")
 
-        authors = selecters.select_author(library)
-
+        authors = None
+        while not authors:
+            authors = selecters.select_author(library)
+         
         titles = []
-        while True:
+        while not titles:
             blank = ''
             if titles:
                 blank = ' (blank to finish)'
             name = ui.read(f'Enter a title{blank}: ',
                            complete=library.catalog.titles.complete).upper()
             if not name:
-                break
+                continue
 
             if check_for_leading_article(name):
                 if not ui.readyes('This looks like it starts with an '
@@ -234,14 +236,54 @@ def edit_menu(line):
         name = sanitize_author(ui.read('Author name (last, first): ')).upper()
         if not name:
             return
-
+        
+        candidates = library.catalog.authors.search(name)
+        if candidates:
+            print('The following authors already exist.')
+            can_create = True
+            for author in [Author(library.db, i) for i in candidates]:
+                if author.name == name:
+                    can_create = False
+                print(f'\t{author.name}')
+            
+            if not can_create:
+                print(ui.Color.warning(f'{name} already exists. Not creating'))
+                return
+            
+            if not ui.readyes('Continue? [yN] '):
+                no_book_header()
+                return
+            
         alt_name = sanitize_author(ui.read('Alternate name (blank if none): ')
                                    ).upper() or None
+        
         author = Author(library.db, name=name, alt_name=alt_name)
         author.create()
         no_book_header()
         print(f'{author} created')
 
+    def edit_author(line):
+        no_book_header()
+        author = None
+        while not author:
+            author = selecters.select_author(library, False, True)
+        old = str(author)
+        new_name = ui.read('Enter a new value for this author: ',
+                           preload=author.name)
+        new_alt = ui.read('Enter a alt name for this author: ',
+                           preload=author.alt_name)
+        if new_name and new_name != author.name:
+            candidates = library.catalog.authors.search(new_name)
+            for author in [Author(library.db, i) for i in candidates]:
+                if author.name == new_name:
+                    print(ui.Color.warning(f'{author.name} already exists.'
+                                           ' Not changing'))
+                    return
+            author.name = new_name
+        author.alt_name = new_alt
+        no_book_header()
+        print(f'Changed {old} to {author}')
+        
     def merge_authors(line):
         no_book_header()
         if library.inventory:
@@ -252,9 +294,13 @@ def edit_menu(line):
         keep = selecters.select_author(library, create=False, single=True)
         print(f'Select the author to merge into {keep}')
         merge = selecters.select_author(library, create=False, single=True)
+        if keep == merge:
+            no_book_header()
+            print(ui.Color.warning('Not merging an author with themself.'))
+            return
+        
         merge_txt = str(merge)
         print(f'Merge {merge} into {keep}?')
-        merge_txt = str(merge)
         if ui.readyes("Confirm? [yN]: "):
             keep.merge_author(merge)
 
@@ -273,8 +319,17 @@ def edit_menu(line):
         candidates = library.catalog.series.search(name)
         if candidates:
             print('The following series already exist.')
+            
+            can_create = True
             for series in [Series(library.db, i) for i in candidates]:
+                if series.series_name == name:
+                    can_create = False
                 print(f'\t{series.series_name}')
+            
+            if not can_create:
+                print(ui.Color.warning(f'{name} already exists. Not creating'))
+                return
+
             if not ui.readyes('Continue? [yN] '):
                 no_book_header()
                 return
@@ -283,6 +338,25 @@ def edit_menu(line):
         selection.create()
         no_book_header()
         print(f'{name} created')
+
+    def edit_series(line):
+        no_book_header()
+        series = None
+        while not series:
+            series = selecters.select_series(library, False, True)
+        old = str(series)
+        new_name = ui.read('Enter a new value for this series: ',
+                           preload=series.series_name)
+        if new_name and new_name != series.series_name:
+            candidates = library.catalog.series.search(new_name)
+            for series in [Series(library.db, i) for i in candidates]:
+                if series.series_name == new_name:
+                    print(ui.Color.warning(f'{series.series_name} already '
+                                           'exists. Not changing'))
+                    return
+            series.series_name = new_name
+        no_book_header()
+        print(f'Changed {old} to {series}')
 
     def merge_series(line):
         no_book_header()
@@ -294,6 +368,11 @@ def edit_menu(line):
         keep = selecters.select_series(library, create=False, single=True)
         print(f'Select the series to merge into {keep}')
         merge = selecters.select_series(library, create=False, single=True)
+        if keep == merge:
+            no_book_header()
+            print(ui.Color.warning('Not merging a series with itself.'))
+            return
+        
         print(f'Merge {merge} into {keep}?')
         merge_txt = str(merge)
         if ui.readyes("Confirm? [yN]: "):
@@ -306,8 +385,10 @@ def edit_menu(line):
 
     recursive_menu([
         ('A', 'Create Author', new_author),
+        ('E', 'Edit Author', edit_author),
         ('M', 'Merge Authors', merge_authors),
         ('S', 'Create Series', new_series),
+        ('T', 'Edit Series', edit_series),
         ('N', 'Merge Series', merge_series),
         ('Q', 'Back to Main Menu', None),
         ], title='Edit Menu')

@@ -225,7 +225,7 @@ class Series(db.EntryDeletable):
 
     def __str__(self):
         return self.series_name
-
+    
     def __len__(self):
         '''
         Returns

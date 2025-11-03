@@ -324,11 +324,6 @@ grant insert, update, delete on format to libcomm;
 
 -- alter table format add column format_deprecated boolean default false not null;
 
---insert into format(format, format_description) values ('P', 'Paperback');
---insert into format(format, format_description) values ('H', 'Hardcover');
---insert into format(format, format_description) values ('LP', 'Large Paperback');
---insert into format(format, format_description) values ('VLP', 'Very Large Paperback');
---insert into format(format, format_description) values ('VLH', 'Very Large Hardcover');
 insert into format(format, format_description) values ('?', 'Something');
 insert into format(format, format_description) values ('S', 'Small (pocket paperback sized)');
 insert into format(format, format_description) values ('L', 'Large (normal hardcover sized)');
@@ -378,8 +373,6 @@ create index shelfcode_shelfcode_type on shelfcode(shelfcode_type);
 
 grant select on shelfcode to public;
 grant insert, update, delete on shelfcode to libcomm;
-
--- alter table shelfcode add column shelfcode_class char(1) default 'F' not null;
 
 
 create table shelfcode_format (

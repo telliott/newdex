@@ -244,3 +244,4 @@ class Author(db.EntryDeletable):
             (other.id,))
 
         self.db.commit()
+        

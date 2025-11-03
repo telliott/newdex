@@ -140,6 +140,8 @@ def select_author(library, create=True, single=False):
             if ui.readyes(f'{author} does not exist. Create? [yN] '):
                 selection = Author(library.db, name=author)
                 selection.create()
+            else:
+                continue
         else:
             author_list = [Author(library.db, i) for i in candidates]
             # if there's only one and it's an exact match, adopt it
