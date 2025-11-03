@@ -155,6 +155,10 @@ class DexLine(object):
 
     @property
     def placetitle(self):
+        # handle the accidental blank title. Shouldn't happen any more
+        if not self.titles[0]: 
+            return ''
+        
         # We want to sort on the alt title, as that's where the numbers are
         index = self.titles[0].find('=')
         if index != -1:
