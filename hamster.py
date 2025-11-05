@@ -164,7 +164,7 @@ def main_menu(line):
             if name in candidates:
                 if not ui.readyes(f'{name} already exists. Continue? [yN] '):
                     continue
-            alt_name = ui.read('Alternate title?: ')
+            alt_name = ui.read('Sort title (optional)?: ')
 
             titles.append((name.upper(),
                            alt_name.upper() if alt_name else None))
@@ -270,7 +270,7 @@ def edit_menu(line):
         old = str(author)
         new_name = ui.read('Enter a new value for this author: ',
                            preload=author.name)
-        new_alt = ui.read('Enter a alt name for this author: ',
+        new_alt = ui.read('Enter an alt name for this author: ',
                            preload=author.alt_name)
         if new_name and new_name != author.name:
             candidates = library.catalog.authors.search(new_name)
@@ -467,7 +467,7 @@ def book_menu(line):
             return
 
         new_alt = sanitize_title(
-            ui.read('Enter a new alternate title: ', preload=old_alt,
+            ui.read('Enter a new sort title (if any): ', preload=old_alt,
                     complete=library.catalog.titles.complete)).upper() \
             or None
 
@@ -532,7 +532,7 @@ def advanced_edit(line):
                 if not ui.readyes(f'{name} already exists. Continue? [yN] '):
                     continue
 
-            alt_name = ui.read('Alternate title?: ')
+            alt_name = ui.read('Sort title (optional)?: ')
             
             titles.append((name.upper(), alt_name.upper if alt_name else None))
 
