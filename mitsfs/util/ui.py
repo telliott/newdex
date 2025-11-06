@@ -142,12 +142,8 @@ def read(prompt, callback=None, preload=None, history=None, complete=None):
                 readline.set_pre_input_hook(None)
             readline.set_pre_input_hook(setup)
         result = input(prompt)
-        if not result or result[0] != '!':
+        if result:
             break
-        command = result[1:].strip()
-        if not command:
-            command = '$SHELL -i'
-        os.system(command)
 
     readline.set_completer(None)
     if completer and completer.errlog:
