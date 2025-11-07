@@ -140,7 +140,7 @@ def main_menu(line):
                 print(f'No books for {shelfcode.code}. Continuing...')
                 continue
             print('Sorting...')
-            titles.sort(key=lambda x: x.sortkey())
+            titles.sort(key=lambda x: x.shelfkey(shelfcode.code))
             titles_per_section = math.ceil(len(titles)/len(sections))
             
             count = 0

@@ -183,8 +183,8 @@ class DexLine(object):
 
     VSRE = re.compile(r' #([-.,\d]+B?)$')
     def shelfkey(self, shelfcode):
-        edition = Edition(shelfcode)
-
+        edition = self.codes[shelfcode]
+        
         if edition.double_info:
             key = [edition.double_info, self.placeauthor]
         else:

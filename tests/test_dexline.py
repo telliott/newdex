@@ -38,8 +38,6 @@ class DexlineTest(unittest.TestCase):
         self.assertEqual(
             (('AUTHOR', 'TITLE', 'AUTHOR|AUTHOR', 'TITLE', 'TITLE|TITLE'), m),
             m.sortkey())
-        # dexline.shelfkey is almost certainly broken owing to how it handles
-        # the shelfcode argument
         self.assertEqual(
             ('7', 'AUTHOR', 'SERIES 000099', ' 000099', 'TITLE'),
             m.shelfkey('@D7'))

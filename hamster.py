@@ -758,7 +758,7 @@ def export_menu(line):
         print("Fetching...")
         titles = library.catalog.titles.book_titles(shelfcode=shelfcode)
         print('Sorting...')
-        titles.sort(key=lambda x: x.sortkey())
+        titles.sort(key=lambda x: x.shelfkey(shelfcode.code))
         print('Writing...')
         
         fp.write(tex.tex_header('Shelfdex', shelfcode.code))
