@@ -132,6 +132,78 @@ def main_menu(line):
             book_menu(line)
         no_book_header()
 
+    def quick_new_book(line):
+        '''
+        Central function to quickly enter a new book. One (writer-only) author, 
+        one title, one series, along with basic creation.
+        '''
+        no_book_header()
+        print("Create a new title")
+
+        author = selecters.select_author(library, single=True)
+         
+        titles = []
+        while not titles:
+            name = ui.read('Enter a title: ',
+                           complete=library.catalog.titles.complete).upper()
+            if not name:
+                continue
+
+            if check_for_leading_article(name):
+                if not ui.readyes('This looks like it starts with an '
+                                  'article. Are you sure? [yN] '):
+                    continue
+                
+            candidates = library.catalog.titles.complete(name, author.name)
+            if name in candidates:
+                if not ui.readyes(f'{name} already exists for this author. '
+                                  'Continue? [yN] '):
+                    return
+            alt_name = ui.read('Sort title (optional)?: ')
+
+            titles.append((name.upper(), 
+                           alt_name.upper() if alt_name else None))
+
+        series = selecters.select_series(library, single=True)
+
+        shelfcode = selecters.select_shelfcode(library.shelfcodes,
+                                               'Quick add shelfcode?: ')
+
+        if shelfcode: 
+            double = None
+            series_visible = False
+            if shelfcode.is_double:
+                double = ui.read("Double value: ")
+    
+            if series:
+                series_visible = ui.readyes('Is the series name'
+                                            ' visible on the spine? [yN] ')
+    
+            review = ui.readyes('Review copy? [yN] ')
+
+        no_book_header()
+        title = Title(library.db)
+        title.create()
+        title.add_author(author)
+        for name, alt in titles:
+            title.add_title(name.upper(), alt.upper() if alt else None)
+        
+        for (volume, series_index, series_visible, number_visible) in series:
+            title.add_series(volume, series_index, 
+                             series_visible, number_visible)
+
+        if shelfcode:
+            book = Book(library.db, title=title.id,
+                    shelfcode=shelfcode,
+                    doublecrap=double, review=review, visible=series_visible)
+            book.create()
+
+        library.db.commit()
+        print(f'Created {title}')
+        if library.inventory:
+            print(ui.Color.warning('Inventory active. '
+                                   'Do not put on shelf!'))
+
     def new_book(line):
         '''
         Central function to quickly enter a new book. Will let you do basic
@@ -221,7 +293,8 @@ def main_menu(line):
     recursive_menu([
         ('S', 'Select Book', select),
         ('G', 'Grep for Books', grep),
-        ('B', 'Create Book', new_book),
+        ('B', 'Quick Create Book', quick_new_book),
+        ('A', 'Advanced Create Book', new_book),
         ('C', 'Create/Edit Elements', edit_menu),
         ('E', 'Export Files', export_menu),
         ('Q', 'Quit', None),

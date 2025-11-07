@@ -134,16 +134,14 @@ def read(prompt, callback=None, preload=None, history=None, complete=None):
         readline.set_completer(completer)
     else:
         completer = None
-    while True:
-        if preload is not None:
-            def setup():
-                readline.insert_text(preload)
-                readline.redisplay()
-                readline.set_pre_input_hook(None)
-            readline.set_pre_input_hook(setup)
-        result = input(prompt)
-        if result:
-            break
+    
+    if preload is not None:
+        def setup():
+            readline.insert_text(preload)
+            readline.redisplay()
+            readline.set_pre_input_hook(None)
+        readline.set_pre_input_hook(setup)
+    result = input(prompt)
 
     readline.set_completer(None)
     if completer and completer.errlog:

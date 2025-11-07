@@ -223,8 +223,9 @@ def select_series(library, create=True, single=False):
                     selection.create()
 
         # this is a bit hacky - single is used for deletion, so we don't
-        # need the other data
-        if single:
+        # need the other data. But in the deletion case it won't allow creates
+        # so we also test for that
+        if single and not create:
             return selection
 
         series_visible = ui.readyes('Is this series visible'
@@ -233,7 +234,8 @@ def select_series(library, create=True, single=False):
         number_visible = ui.readyes('Is this number visible'
                                     ' on the spine? [yN] ')
         series.append((selection, number, series_visible, number_visible))
-
+        if single: 
+            return series[0]
     return series
 
 
