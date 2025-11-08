@@ -11,6 +11,7 @@ from mitsfs.circulation.membership_types import MembershipTypes
 from mitsfs.circulation.timewarps import Timewarps
 from mitsfs.circulation.members import Members
 from mitsfs.dex.inventory import Inventories
+from mitsfs.dex.authors import responsibility_types
 
 class Library():
     def __init__(self, db=None, client='mitsfs.dexdb',
@@ -25,6 +26,7 @@ class Library():
         settings.shelfcodes_global = Shelfcodes(self.db)
         settings.membership_types_global = MembershipTypes(self.db)
         settings.timewarps_global = Timewarps(self.db)
+        settings.responsibility_types_global = responsibility_types(self.db)
 
     @property
     def shelfcodes(self):
@@ -37,6 +39,10 @@ class Library():
     @property
     def timewarps(self):
         return settings.timewarps_global
+
+    @property
+    def responsibilities(self):
+        return settings.responsibility_types_global
 
     @property
     def members(self):

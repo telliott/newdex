@@ -159,13 +159,15 @@ def reqarg(s):
 
 def readvalidate(
         prompt, callback=None, preload=None, history=None, complete=None,
-        validate=reqarg
+        validate=reqarg, upper=None
         ):
     while True:
         results = read(
             prompt, callback=callback, preload=preload,
             history=history, complete=complete,
             )
+        if upper:
+            results = results.upper()
         if validate(results):
             return results
 

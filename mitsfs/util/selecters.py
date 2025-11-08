@@ -5,6 +5,7 @@ from mitsfs.util import ui
 from mitsfs.dex.series import Series, sanitize_series
 from mitsfs.core.settings import EXPORT_DIRECTORY
 
+indent = '   '
 
 def select_generic(candidates):
     '''
@@ -26,11 +27,36 @@ def select_generic(candidates):
     if len(candidates) == 0:
         print("Nothing found, Try again")
     for i, candidate in enumerate(candidates):
-        print(ui.Color.select(str(i + 1) + '.') + str(candidate))
+        print(ui.Color.select(indent + str(i + 1) + '. ') + str(candidate))
     n = ui.readnumber('? ', 0, len(candidates) + 1, 'select')
     if n is None or n == 0:
         return None
     return candidates[n - 1]
+
+
+def select_dict(candidates, upper=True):
+    '''
+    A useful generic selecter that displays a dictionary and lets you select
+    one of the keys
+
+    Parameters
+    ----------
+    candidates : dict
+        The dict to select from. Must have a usable str() implementation.
+
+    Returns
+    -------
+    object
+        The key selected.
+
+    '''
+    if len(candidates) == 0:
+        print("Nothing found, Try again")
+    for i, candidate in candidates.items():
+        print(ui.Color.select(indent + str(i) + '. ') + str(candidate))
+    return ui.readvalidate('? ', 
+                           validate=lambda x: not x or x in candidates, 
+                           upper=upper)
 
 
 def select_checkout(checkouts, show_members=False,
@@ -90,7 +116,7 @@ def select_edition(title):
             if book.outto:
                 outto = f' (out to {book.outto})'
             print(
-                ui.Color.select(str(i + 1) + '.') +
+                ui.Color.select(str(i + 1) + '. ') +
                 '%s %s' % (book.shelfcode, outto))
         n = ui.readnumber('? ', 0, len(books) + 1, 'select')
     if n is None or n == 0:

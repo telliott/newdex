@@ -34,13 +34,13 @@ class DexlineTest(unittest.TestCase):
         self.assertEqual('<<<H:-1', str(DexLine('<<<H').negate()))
         self.assertEqual((('a',), ('b',)), DexLine('a<b<<').key())
         self.assertEqual("DexLine('<<<')", repr(DexLine()))
-        m = DexLine('AUTHOR|AUTHOR<TITLE|TITLE<SERIES #99<D7')
+        m = DexLine('AUTHOR|AUTHOR<TITLE|TITLE<SERIES #99<@D7')
         self.assertEqual(
             (('AUTHOR', 'TITLE', 'AUTHOR|AUTHOR', 'TITLE', 'TITLE|TITLE'), m),
             m.sortkey())
         self.assertEqual(
             ('7', 'AUTHOR', 'SERIES 000099', ' 000099', 'TITLE'),
-            m.shelfkey('@D7'))
+            m.shelfkey('D'))
         m = DexLine('AUTHOR<TITLE<<P')
         self.assertEqual(('AUTHOR', 'TITLE'), m.shelfkey('P'))
         self.assertTrue(DexLine('A<B<<') < DexLine('C<D<<'))

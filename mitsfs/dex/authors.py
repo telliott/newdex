@@ -1,6 +1,30 @@
 import re
 from mitsfs.core import db
 
+def responsibility_types(db):
+    '''
+    Parameters
+    ----------
+    db : Database
+        database handle.
+
+    Returns
+    -------
+    types : dict
+        k/v pairs for the abbreviation and the responsibility (author,
+        editor, etc).
+
+    '''
+    types = {}
+    c = db.getcursor()
+    c.execute(
+        'select responsibility_type, description'
+        ' from title_responsibility_type'
+        )
+    for row in c.fetchall():
+        types[row[0]] = row[1]
+    
+    return types
 
 # tested in test_indexes.py
 class Authors(object):

@@ -3,6 +3,7 @@ import logging
 shelfcodes_global = None
 membership_types_global = None
 timewarps_global = None
+responsibility_types_global = None
 
 DATABASE_DSN = 'dbname=mitsfs host=localhost'
 BACKUP_DIRECTORY = '/tmp'

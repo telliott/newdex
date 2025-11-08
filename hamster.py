@@ -43,7 +43,6 @@ def no_book_header():
     print(f'{head:^{width}}')
     print('-' * width)
 
-
 def book_header(header='Book Menu'):
     '''
     Clears the screen and prints the header for the selected book'
@@ -212,10 +211,17 @@ def main_menu(line):
         no_book_header()
         print("Create a new title")
 
-        authors = None
-        while not authors:
-            authors = selecters.select_author(library)
-         
+        authors = []
+        while True:
+            author = selecters.select_author(library, create=True, single=True)
+            if not author and authors:
+                break
+            if not author:
+                continue
+            print("Select a role for this author:")
+            role = selecters.select_dict(library.responsibilities) or 'A'
+            authors.append((author, role))
+            
         titles = []
         while not titles:
             blank = ''
@@ -232,7 +238,7 @@ def main_menu(line):
                     continue
                 
             candidates = library.catalog.titles.complete(name,
-                                                         authors[0].name)
+                                                         authors[0][0].name)
             if name in candidates:
                 if not ui.readyes(f'{name} already exists. Continue? [yN] '):
                     continue
@@ -261,8 +267,8 @@ def main_menu(line):
         no_book_header()
         title = Title(library.db)
         title.create()
-        for author in authors:
-            title.add_author(author)
+        for (author, role) in authors:
+            title.add_author(author, role)
         for name, alt in titles:
             try: 
                 title.add_title(name, alt.upper() if alt else None)
@@ -648,17 +654,19 @@ def advanced_edit(line):
         '''Add an author to this book'''
         book_header()
         print('Add Author')
-        authors = selecters.select_author(library)
 
+        author = selecters.select_author(library, create=True, single=True)
+        if not author:
+            return
+        
         messages = []
-        if authors:
-            for author in authors:
-                try:
-                    title.add_author(author)
-                except exceptions.DuplicateEntry:
-                    messages.append(f'{author} is already attached')
-                    continue
-            library.db.commit()
+        print("Select a role for this author:")
+        role = selecters.select_dict(library.responsibilities) or 'A'
+        try:
+            title.add_author(author, role)
+        except exceptions.DuplicateEntry:
+            messages.append(f'{author} is already attached')
+        library.db.commit()
 
         book_header()
         for message in messages:
@@ -669,8 +677,9 @@ def advanced_edit(line):
         print('Remove Author')
 
         author = selecters.select_generic(title.author_objects)
-        title.remove_author(author)
-        library.db.commit()
+        if author:
+            title.remove_author(author)
+            library.db.commit()
         book_header()
 
     def add_series(line):

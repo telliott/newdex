@@ -107,6 +107,11 @@ class IndexesTest(Case):
                0,
                len(list(library.shelfcodes.get_titles('L'))))
 
+            # test the responsibility index
+            self.assertEqual(4, len(library.responsibilities))
+            self.assertEqual('PUBLISHER', library.responsibilities['P'])
+            
+            
             # add an L copy of one of the books
             library.db.getcursor().selectvalue(
                 "insert into"

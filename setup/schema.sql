@@ -224,10 +224,10 @@ create table title_responsibility_type (
 grant select on title_responsibility_type to public;
 grant insert, update, delete on title_responsibility_type to libcomm;
 
-insert into title_responsibility_type values ('?', 'Unspecified');
-insert into title_responsibility_type values ('A', 'Author');
-insert into title_responsibility_type values ('E', 'Editor');
-insert into title_responsibility_type values ('P', 'Publisher');
+insert into title_responsibility_type values ('A', 'AUTHOR');
+insert into title_responsibility_type values ('E', 'EDITOR');
+insert into title_responsibility_type values ('P', 'PUBLISHER');
+insert into title_responsibility_type values ('T', 'TRANSLATOR');
 
 
 create table title_responsibility (

@@ -310,17 +310,23 @@ class Title(dexline.DexLine, db.Entry):
         FieldTuple (string)
             Tuple of the authors attached to this title, in order.
         '''
-        authors = self.cursor.fetchlist(
+        authors = self.cursor.execute(
             "select"
-            "  concat_ws('=', entity_name, alternate_entity_name)"
+            "  concat_ws('=', entity_name, alternate_entity_name), "
+            "  title_responsibility_type.description"
             " from"
             "  title_responsibility"
             "  natural join entity"
+            "  join title_responsibility_type"
+            "  on title_responsibility.responsibility_type = "
+            "     title_responsibility_type.responsibility_type"
             " where title_id = %s"
             " order by order_responsibility_by", (self.id,))
-
-        return utils.FieldTuple(authors)
-
+            
+        return utils.FieldTuple([author[0] if author[1] == 'AUTHOR' 
+                                 else f'{author[0]} ({author[1]})' 
+                                 for author in authors])
+    
     @property
     @db.cached
     def author_objects(self):
@@ -343,7 +349,7 @@ class Title(dexline.DexLine, db.Entry):
 
         return [Author(self.db, i) for i in authors]
 
-    def add_author(self, author, responsibility_type='?'):
+    def add_author(self, author, responsibility_type='A'):
         '''
         Adds an author to this title
 
@@ -352,7 +358,7 @@ class Title(dexline.DexLine, db.Entry):
         author : Author
             The author object to add.
         responsibility_type : str, optional
-            Need to work on this. The default is '?'.
+            Need to work on this. The default is 'A'.
 
         Raises
         ------
