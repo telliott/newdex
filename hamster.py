@@ -187,7 +187,8 @@ def main_menu(line):
         for name, alt in titles:
             title.add_title(name.upper(), alt.upper() if alt else None)
         
-        title.add_series(*series)
+        if series:
+            title.add_series(*series)
 
         if shelfcode:
             book = Book(library.db, title=title.id,
