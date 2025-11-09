@@ -38,6 +38,8 @@ class DexlineTest(unittest.TestCase):
         self.assertEqual(
             (('AUTHOR', 'TITLE', 'AUTHOR|AUTHOR', 'TITLE', 'TITLE|TITLE'), m),
             m.sortkey())
+        # This is somewhat messed up if we ever get a situation where there's
+        # multiple doublecodes attached to a shelfcode
         self.assertEqual(
             ('7', 'AUTHOR', 'SERIES 000099', ' 000099', 'TITLE'),
             m.shelfkey('D'))
