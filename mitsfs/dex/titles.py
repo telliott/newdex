@@ -358,7 +358,7 @@ class Title(dexline.DexLine, db.Entry):
         author : Author
             The author object to add.
         responsibility_type : str, optional
-            Need to work on this. The default is 'A'.
+            The default is 'A' (author)
 
         Raises
         ------

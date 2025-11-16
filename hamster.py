@@ -358,7 +358,10 @@ def edit_menu(line):
                                            ' Not changing'))
                     return
             author.name = new_name
-        author.alt_name = new_alt
+        
+        if new_alt:
+            author.alt_name = new_alt
+            
         no_book_header()
         print(f'Changed {old} to {author}')
         
