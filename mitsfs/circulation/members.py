@@ -502,7 +502,7 @@ class Member(db.Entry):
         c.execute('set role "speaker-to-postgres"')
         try:
             c.execute(
-                'update checkout_member set member_id=%s where member_id=%s',
+                'update checkout set member_id=%s where member_id=%s',
                 (self.id, other_id))
             c.execute(
                 'update membership set member_id=%s where member_id=%s',

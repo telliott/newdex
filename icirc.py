@@ -652,13 +652,14 @@ def starchamber(line):
 
         other_name = other.full_name
         member.merge(other)
-        member_header()
+        member_header(member, 'Star Chamber')
         print(f'Merged {other_name} into {member.full_name}')
 
     def menu_options():
         if not member.key_initials:
             return [
                 ('K', 'Key this member', key),
+                ('M', 'Merge another member into this one', merge),
                 ('Q', 'Back to Other Menu', None),
                 ]
         else:
@@ -666,6 +667,7 @@ def starchamber(line):
                 ('D', 'De-key this member', dekey),
                 ('A', 'Add this member to a committee', add_to_committee),
                 ('R', 'Remove this member from a committee', remove_committee),
+                ('M', 'Merge another member into this one', merge),
                 ('Q', 'Back to Other Menu', None),
                 ]
 
