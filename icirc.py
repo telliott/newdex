@@ -69,7 +69,8 @@ def member_header(member, title='Member Menu'):
     # length of the fields and padding the rest. Don't forget to strip
     # out any ansi terminal colors!
     name_len = ui.len_color_str(member)
-    membership_head = 'Membership: ' + member.membership.description
+    membership_head = 'Membership: ' + (member.membership.description 
+                                        if member.membership else 'None')
     membership_head_len = len(membership_head)
     keyholder = f' ({member.key_initials})' if member.key_initials else ''
     spaces = ' ' * max(1, width - name_len -
@@ -90,9 +91,10 @@ def member_header(member, title='Member Menu'):
     # middle, then putting the books in that
     balance = ui.money_str(member.balance)
     balance_len = len('Balance: ') + ui.len_color_str(balance)
-    expiry_len = ui.len_color_str(member.membership.expiry)
+    expiration= member.membership.expiry if member.membership else ''
+    expiry_len = ui.len_color_str(expiration)
     spaces = max(1, width - balance_len - expiry_len)
-    print(f'Balance: {balance}{books_out:^{spaces}}{member.membership.expiry}')
+    print(f'Balance: {balance}{books_out:^{spaces}}{expiration}')
     print('-' * width)
     if library.inventory:
         print(ui.Color.warning('INVENTORY IS UNDERWAY. PROCEED WITH CAUTION'))
