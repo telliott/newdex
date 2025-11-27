@@ -123,8 +123,9 @@ class Checkouts(list):
             if checkout.book.visible:
                 title = checkout.book.title.seriestxt + ': ' + title
 
-            title = (' ' * 6) + title + \
-                ' < ' + checkout.book.shelfcode.code
+            title = (' ' * 3) + title + \
+                ' < ' + (checkout.book.shelfcode.code
+                         if checkout.book.shelfcode else '?')
 
             if not show_members:
                 title = title[:width]
