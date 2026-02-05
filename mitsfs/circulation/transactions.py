@@ -116,7 +116,8 @@ class Transaction(db.Entry):
                         'L': 'LHE',
                         'M': 'Membership',
                         'R': 'Reimbursement',
-                        'V': 'Void'
+                        'V': 'Void',
+                        'O': 'Other'
                         }
         return descriptions[self.transaction_type]        
         
