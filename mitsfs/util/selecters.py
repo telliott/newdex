@@ -231,6 +231,8 @@ def select_series(library, create=True, single=False):
             if ui.readyes(f'{name} does not exist. Create? [yN] '):
                 selection = Series(library.db, series_name=name)
                 selection.create()
+            else:
+                continue
         else:
             series_list = [Series(library.db, i) for i in candidates]
            # if there's only one and it's an exact match, adopt it
