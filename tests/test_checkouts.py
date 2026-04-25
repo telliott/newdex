@@ -113,7 +113,10 @@ class DexDBTest(Case):
             # check in the overdue book
             c2.checkin()
             tx = get_transactions(library.db, c2.member_id)
-            self.assertEqual(1, len(tx))
+            
+            #no overdue fines right now
+            #self.assertEqual(1, len(tx))
+            self.assertEqual(0, len(tx))
 
             # check out book 3, which we will lose
             c3 = Checkout(library.db, None, member_id=thor.id,
@@ -124,7 +127,9 @@ class DexDBTest(Case):
 
             # one new transaction here, because it's not overdue
             tx = get_transactions(library.db, c2.member_id)
-            self.assertEqual(2, len(tx))
+            #no overdue fines right now
+            #self.assertEqual2, len(tx))
+            self.assertEqual(1, len(tx))
 
             # retroactively check out book 3, which we will lose
             checkout_timestamp = today - datetime.timedelta(weeks=5)
@@ -138,12 +143,16 @@ class DexDBTest(Case):
             # since this was overdue, should have both an overdue transaction
             # and a lost book transaction
             tx = get_transactions(library.db, thor.id)
-            self.assertEqual(4, len(tx))
+            #no overdue fines right now
+            #self.assertEqual4, len(tx))
+            self.assertEqual(2, len(tx))
 
             # Whoops! We found book 4
             c4.checkin()
             tx = get_transactions(library.db, thor.id)
-            self.assertEqual(5, len(tx))
+            #no overdue fines right now
+            #self.assertEqual(5, len(tx))
+            self.assertEqual(3, len(tx))
             self.assertEqual(None, c4.lost)
 
             lost_tx = Transaction(library.db, thor.id, lost_tx_id)

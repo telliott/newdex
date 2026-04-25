@@ -403,17 +403,19 @@ class Checkout(db.Entry):
                                               self.lost)
                 tx.void()
                 self.lost = None
-            else:
-                days = self.overdue_days(when)
-                if days:
-                    msgs.append('Book is overdue %d days' % (days,))
-                    fine = transactions.OverdueTransaction(self.db,
-                                                           self.member_id,
-                                                           self.id, days=days,
-                                                           book=self.title)
-                    fine.create()
-                    msgs.append('FINE: %s added to balance' % (
-                        ui.money_str(fine.amount),))
+            # No overdue fines for now
+            # else:
+            #     days = self.overdue_days(when)
+                
+            #     if days:
+            #         msgs.append('Book is overdue %d days' % (days,))
+            #         fine = transactions.OverdueTransaction(self.db,
+            #                                                self.member_id,
+            #                                                self.id, days=days,
+            #                                                book=self.title)
+            #         fine.create()
+            #         msgs.append('FINE: %s added to balance' % (
+            #             ui.money_str(fine.amount),))
         self.checkin_stamp = when
         self.checkin_user = self.get_logger()
 
