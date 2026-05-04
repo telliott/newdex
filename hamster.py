@@ -60,11 +60,14 @@ def book_header(header='Book Menu'):
     outlist = []
 
     for book in sorted(title.books, key=lambda x: x.shelfcode.code):
+        signed = ''
+        if book.signed:
+            signed = ' (signed)'
         if book.out:
-            outlist += [ui.Color.warning(f'{book.shelfcode.code}'
+            outlist += [ui.Color.warning(f'{book.shelfcode.code}{signed}'
                                          f' ({book.outto})')]
         else:
-            outlist += [ui.Color.good(book.shelfcode.code)]
+            outlist += [ui.Color.good(f'{book.shelfcode.code}{signed}')]
     shelfcodes = ', '.join(outlist)
 
     spaces = ' ' * max(1, width - len(name) - ui.len_color_str(shelfcodes))
@@ -170,14 +173,8 @@ def main_menu(line):
 
         if shelfcode: 
             double = None
-            series_visible = False
             if shelfcode.is_double:
                 double = ui.read("Double value: ")
-    
-            if series:
-                series_visible = ui.readyes('Is the series name'
-                                            ' visible on the spine? [yN] ')
-    
             review = ui.readyes('Review copy? [yN] ')
 
         no_book_header()
@@ -193,7 +190,8 @@ def main_menu(line):
         if shelfcode:
             book = Book(library.db, title=title.id,
                     shelfcode=shelfcode,
-                    doublecrap=double, review=review, visible=series_visible)
+                    doublecrap=double, review=review, 
+                    visible=series[3])
             book.create()
 
         library.db.commit()
@@ -582,7 +580,7 @@ def book_menu(line):
         if book:
             book.withdraw()
             book_header()
-            print('Edition withdrawn')
+            print('Edition withdrawn')            
 
     book_header()
 
@@ -730,6 +728,20 @@ def advanced_edit(line):
             title.merge_title(other_book)
         book_header()
 
+    def mark_signed(line):
+        '''mark an edition as signed'''
+        book = selecters.select_edition(title)
+        if book:
+            book.sign()
+            book_header()
+    
+    def mark_not_signed(line):
+        '''mark an edition as signed'''
+        book = selecters.select_edition(title)
+        if book:
+            book.unsign()
+            book_header()
+
     def menu_options():
         menu = [('T', 'Add Title', add_title)]
         if len(title.titles) > 1:
@@ -740,6 +752,8 @@ def advanced_edit(line):
         menu.append(('S', 'Add Series', add_series))
         if title.series:
             menu.append(('V', 'Remove Series', remove_series))
+        menu.append(('+', 'Mark Signed', mark_signed))
+        menu.append(('-', 'Mark Not Signed', mark_not_signed))
 
         menu.append(('M', 'Merge Another Book', merge_title))
         menu.append(('Q', 'Back to Book Menu', None))

@@ -390,6 +390,7 @@ create table book (
        doublecrap text,
        withdrawn boolean not null default false,
        review boolean not null default false,
+       signed boolean not null default false,
        book_comment text,
        book_created timestamp with time zone default current_timestamp not null,
        book_created_by varchar(64) default current_user not null,

@@ -127,7 +127,12 @@ class TitleTest(Case):
                         shelfcode=library.shelfcodes['L'])
             book.create()
             self.assertEqual('L,S:2', str(title.codes))
-
+            
+            book.sign()
+            self.assertTrue(book.signed)
+            book.unsign()
+            self.assertFalse(book.signed)
+            
             self.assertEqual(f'{thor_name}|{loki_name}={loki_alt}'
                              f'<TITLE 1=TITLE ONE|TITLE 2'
                              f'<@{series_name} 3'

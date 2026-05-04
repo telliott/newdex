@@ -24,7 +24,8 @@ class Book(db.Entry):
     doublecrap = db.Field('doublecrap')
     review = db.Field('review')
     withdrawn = db.Field('withdrawn')
-
+    signed = db.Field('signed')
+    
     # probably vestigial
     comment = db.Field('book_comment')
 
@@ -92,6 +93,19 @@ class Book(db.Entry):
 
     def withdraw(self):
         self.withdrawn = True
+
+    def sign(self):
+        '''
+        Note that a book is signed by the author
+
+        Returns
+        -------
+        None
+        '''
+        self.signed = True
+
+    def unsign(self):
+        self.signed = False
 
     def __str__(self):
         return '%s<%s<%s<%s' % (

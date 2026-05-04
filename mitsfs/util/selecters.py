@@ -113,11 +113,14 @@ def select_edition(title):
     else:
         for i, book in enumerate(books):
             outto = ''
+            signed = ''
             if book.outto:
                 outto = f' (out to {book.outto})'
+            if book.signed:
+                signed = ' (signed)'
             print(
                 ui.Color.select(str(i + 1) + '. ') +
-                '%s %s' % (book.shelfcode, outto))
+                '%s%s%s' % (book.shelfcode, signed, outto))
         n = ui.readnumber('? ', 0, len(books) + 1, 'select')
     if n is None or n == 0:
         return None
